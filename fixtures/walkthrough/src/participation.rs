@@ -39,7 +39,6 @@ fn input(session_id: i64, employee_id: i64, key: &str, status: Status) -> NewAtt
         import_key: key.into(),
     }
 }
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run(
     services: &Services,
     client: &tokio_postgres::Client,
@@ -268,6 +267,31 @@ pub(crate) async fn run(
             .await?;
         tx.commit().await?;
     }
+    // A disposable fault trigger revokes Create as the reservation commits.
+    // Publication must re-prove authority on its own transaction and refuse.
+    client.batch_execute(&format!(r#"
+        CREATE FUNCTION walkthrough_pt2_revoke_create() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.owner_id = 'people/training' THEN
+            UPDATE principal_capabilities SET is_allowed=false
+              WHERE tenant_id={} AND user_id={} AND capability='people.training.evidence.manage';
+          END IF;
+          RETURN NEW;
+        END $$;
+        CREATE TRIGGER walkthrough_pt2_revoke_create AFTER INSERT ON base_artifacts
+          FOR EACH ROW EXECUTE FUNCTION walkthrough_pt2_revoke_create();
+    "#, manager.tenant(), manager.user())).await?;
+    let publication = training.attach(manager, COMPANY, fact.id, b"%PDF-1.7\nreservation proof").await;
+    client.batch_execute("DROP TRIGGER walkthrough_pt2_revoke_create ON base_artifacts; DROP FUNCTION walkthrough_pt2_revoke_create()").await?;
+    refused("Create revoked between reservation and publication", publication)?;
+    grants.set_direct(admin, MANAGER, EVIDENCE_MANAGE, Some(true)).await?;
+    let reserved: i64 = client.query_one("SELECT count(*) FROM base_artifacts WHERE owner_id='people/training' AND ready_at IS NULL AND purged_at IS NULL", &[]).await?.get(0);
+    if reserved != 1 || !required(training.evidence(manager, COMPANY, fact.id).await)?.is_empty() { return Err(Error::Internal); }
+    client.execute("UPDATE base_artifacts SET expires_at=created_at+interval '1 microsecond' WHERE owner_id='people/training' AND ready_at IS NULL", &[]).await?;
+    let recovered = required(training.purge(manager, COMPANY).await)?;
+    if recovered.purged.len() != 1 || !recovered.failed.is_empty() { return Err(Error::Internal); }
+    println!("unpublished reservation stayed tracked and purged; no evidence row was linked");
+
     refused(
         "non-PDF attach",
         training
