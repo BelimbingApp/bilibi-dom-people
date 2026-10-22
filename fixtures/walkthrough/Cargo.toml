@@ -23,6 +23,7 @@ bilibi-person.workspace = true
 bilibi-tenancy.workspace = true
 bilibi-user.workspace = true
 bilibi-walkthrough-fixture = { path = "../../../../../fixtures/walkthrough" }
+bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true

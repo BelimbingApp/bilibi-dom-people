@@ -200,6 +200,8 @@ pub async fn run(url: &str) -> Result<()> {
     bilibi_walkthrough_fixture::install(&db).await?;
     let mut services = Services::default();
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
+    // What this program is made of, for Base Software's status and reviews.
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
     // Match the web host's documented development mode for this disposable
     // fixture; other environments retain the Platform's step-up enforcement.
