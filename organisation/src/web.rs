@@ -846,6 +846,7 @@ fn render(template: &impl Template) -> Result<Html> {
 }
 fn action(event: &str, label: &str, value: &str) -> Result<Html> {
     render(&Button {
+        button_type: "button",
         event,
         name: "value",
         value,
