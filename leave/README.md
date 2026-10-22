@@ -12,6 +12,8 @@ Open **People › Team › Leave approvals** (`/people/leave/requests`) to choos
 
 The four lists use shared FlexTables with column settings and compact rows. Bilimbi does not sort, filter or paginate these bounded lists. Request and cancellation events recheck `people.leave.self.view`; decisions recheck `people.leave.requests.approve` for the selected company. The facade checks again during the write. Every read resolves the account's current employee link; an unlinked account sees the unavailable state. Request retry keys and pending confirmations live only in the server's mounted page state. A confirmation never takes its target from the confirmation payload.
 
+For a fresh disposable database, run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin leave-pages`. It installs the Platform fixture and creates a linked employment, day and hour leave types, opening balances and a pending request through the owning services. Sign in as `manager@example.test` to request or cancel leave and as `admin@example.test` to decide independently. `staff@example.test` has self-service access without an employee link; `viewer@example.test` cannot open either page. All accounts use the Platform walkthrough password. This fixture is separate from the default walkthrough, which deliberately unlinks an account while proving the facade.
+
 ## Public API
 
 Resolve `Leave` from the registry as `people/leave.leave`

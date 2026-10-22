@@ -3702,3 +3702,9 @@ mod assessments;
 
 // PT1: the Training catalog proof block.
 mod training;
+
+// PL3: standalone fixture for My leave and Leave approvals browser proofs.
+mod leave_pages;
+pub async fn leave_pages(url: &str) -> Result<()> {
+    leave_pages::run(url).await
+}
