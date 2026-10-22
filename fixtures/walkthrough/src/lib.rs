@@ -4033,4 +4033,3 @@ mod attendance_pages;
 pub async fn attendance_pages(url: &str) -> Result<()> {
     attendance_pages::run(url).await
 }
-
