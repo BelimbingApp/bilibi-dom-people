@@ -13,9 +13,9 @@ use bilibi_ui::{
         LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
         PageFuture, PageRequest,
     },
-    params, BuiltinColumn, Button, Choice, ConfirmDialog, EmptyState, Field, FlashMap, FlexRow,
-    FlexTable, Form, Html, InputKind, ListColumns, ListSpec, ListState, StatusKind, Tab,
-    TableEmpty, Tabs, NO_FLASH,
+    params, BuiltinColumn, Button, ButtonVariant, Choice, ConfirmDialog, EmptyState, Field,
+    FlashMap, FlexRow, FlexTable, Form, Html, InputKind, ListColumns, ListSpec, ListState,
+    StatusKind, Tab, TableEmpty, Tabs, NO_FLASH,
 };
 use jiff::civil::{Date, Time};
 use serde_json::Value;
@@ -329,6 +329,7 @@ impl State {
                         let mut date = Field::named("effective_until")
                             .id(format!("end-date-{}", r.id))
                             .label(format!("End date for {}", r.code))
+                            .wrapper_class("mb-0")
                             .kind(InputKind::Date)
                             .attr("required", "")
                             .attr("min", &r.effective_from);
@@ -339,9 +340,10 @@ impl State {
                         actions.push(&html(&Form {
                             id: &format!("allowance-end-{}", r.id),
                             event: "end_date",
+                            class: "flex items-center gap-2 ui-compact-controls",
                             body: fields,
                             actions: html(&Button {
-                                submit: true,
+                                button_type: "submit",
                                 body: Html::text("End"),
                                 ..Default::default()
                             })?,
@@ -693,6 +695,7 @@ impl State {
                     _ => format!("attendance-{}-{key}", self.area.key()),
                 })
                 .label(label)
+                .wrapper_class("mb-0")
                 .kind(kind)
                 .value(self.form.get(key).cloned().unwrap_or(default))
                 .attr("required", "")
@@ -870,18 +873,31 @@ impl State {
             body: html(&company_field)?,
             ..Default::default()
         })?;
-        let empty = html(&EmptyState::missing(
-            &if self.company.is_none() {
-                format!("No active company is available for {}.", self.area.noun())
-            } else {
-                format!("{} are unavailable for this company.", self.area.title())
-            },
-            if self.company.is_some() {
-                "The company's workforce is not current."
-            } else {
-                ""
-            },
-        ))?;
+        let empty_id = match (self.area, self.company.is_none()) {
+            (Area::Rules, true) => "attendance-rules-empty",
+            (Area::Rules, false) => "attendance-rules-unavailable",
+            (Area::Shifts, true) => "attendance-shifts-no-company",
+            (Area::Shifts, false) => "attendance-shifts-unavailable",
+            (Area::Locations, true) => "attendance-locations-no-company",
+            (Area::Locations, false) => "attendance-locations-unavailable",
+            (Area::Allowances, true) => "allowances-no-company",
+            (Area::Allowances, false) => "allowances-unavailable",
+        };
+        let empty = html(
+            &EmptyState::missing(
+                &if self.company.is_none() {
+                    format!("No active company is available for {}.", self.area.noun())
+                } else {
+                    format!("{} are unavailable for this company.", self.area.title())
+                },
+                if self.company.is_some() {
+                    "The company's workforce is not current."
+                } else {
+                    ""
+                },
+            )
+            .id(empty_id),
+        )?;
         let mut table = FlexTable::new(
             "attendance-settings-table",
             self.columns.flex_columns(),
@@ -903,6 +919,12 @@ impl State {
             )));
         }
         let confirmation = if let Some(pending) = &self.pending {
+            let detail = match pending {
+                Pending::End(_, date) => {
+                    format!("The effective end date will be {date}. This cannot be undone.")
+                }
+                _ => String::new(),
+            };
             let (consequence, confirm) = match pending {
                 Pending::Status(_, s) if s == "active" => ("Reactivate this record?", "Reactivate"),
                 Pending::End(_, _) => ("End this allowance rule on the selected date?", "End"),
@@ -911,7 +933,7 @@ impl State {
             html(&ConfirmDialog {
                 id: "attendance-settings-confirm",
                 consequence,
-                detail: "",
+                detail: &detail,
                 confirm,
                 working: "Updating…",
                 confirm_event: "confirm_change",
@@ -920,7 +942,54 @@ impl State {
         } else {
             Html::EMPTY
         };
-        View {flash,id:format!("attendance-{}-page",self.area.key()),title:if self.area==Area::Allowances {"Allowance rules"}else{"Attendance rules"},subtitle:match self.area{Area::Shifts=>"Shift templates planners assign on the roster.",Area::Locations=>"Places where clock events count as on site.",_=>""},tabs,company_form,has_company:self.company.is_some(),available:self.available,empty,fields:self.fields(),is_rules:self.area==Area::Rules,is_allowances:self.area==Area::Allowances,section:self.area.title(),table:html(&table)?,submit:html(&Button {submit:true,body:Html::text(match self.area {Area::Rules=>"Save rules",Area::Shifts=>"Add shift template",Area::Locations=>"Add clocking location",Area::Allowances=>"Add rule"}),..Default::default()})?,form_id:match self.area{Area::Rules=>"attendance-rules-form",Area::Shifts=>"attendance-shift-form",Area::Locations=>"attendance-location-form",Area::Allowances=>"allowance-rule-form"},hint:match self.area{Area::Shifts=>"An end at or before the start crosses midnight.",Area::Locations=>if self.rules.as_ref().is_some_and(|r|r.location_required){"This company requires clock events to carry coordinates inside an active location."}else{"Locations are recorded on clock events; the company does not require them."},Area::Allowances=>"Use a company code and explicit currency. A later version ends the code's open version the day before it starts; active versions cannot overlap.",_=>""},confirmation}.render().map_err(|_|Error::Internal)
+        View {
+            flash,
+            id: format!("attendance-{}-page", self.area.key()),
+            title: if self.area == Area::Allowances { "Allowance rules" } else { "Attendance rules" },
+            subtitle: match self.area {
+                Area::Shifts => "Shift templates planners assign on the roster.",
+                Area::Locations => "Places where clock events count as on site.",
+                _ => "",
+            },
+            tabs,
+            company_form,
+            has_company: self.company.is_some(),
+            available: self.available,
+            empty,
+            fields: self.fields(),
+            is_rules: self.area == Area::Rules,
+            is_allowances: self.area == Area::Allowances,
+            section: self.area.title(),
+            table: html(&table)?,
+            submit: html(&Button {
+                button_type: "submit",
+                variant: if matches!(self.area, Area::Rules | Area::Allowances) { ButtonVariant::Primary } else { ButtonVariant::Secondary },
+                body: Html::text(match self.area {
+                    Area::Rules => "Save rules",
+                    Area::Shifts => "Add shift template",
+                    Area::Locations => "Add clocking location",
+                    Area::Allowances => "Add rule",
+                }),
+                ..Default::default()
+            })?,
+            form_id: match self.area {
+                Area::Rules => "attendance-rules-form",
+                Area::Shifts => "attendance-shift-form",
+                Area::Locations => "attendance-location-form",
+                Area::Allowances => "allowance-rule-form",
+            },
+            hint: match self.area {
+                Area::Shifts => "An end at or before the start crosses midnight.",
+                Area::Locations => if self.rules.as_ref().is_some_and(|r| r.location_required) {
+                    "This company requires clock events to carry coordinates inside an active location."
+                } else {
+                    "Locations are recorded on clock events; the company does not require them."
+                },
+                Area::Allowances => "Use a company code and explicit currency. A later version ends the code's open version the day before it starts; active versions cannot overlap.",
+                _ => "",
+            },
+            confirmation,
+        }.render().map_err(|_| Error::Internal)
     }
 }
 impl LiveState<Scope, Error> for State {
