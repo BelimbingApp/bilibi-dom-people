@@ -145,7 +145,10 @@ impl From<NotCurrent> for OrganisationError {
     }
 }
 
-fn as_text<S: serde::Serializer>(value: &Date, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+fn as_text<S: serde::Serializer>(
+    value: &Date,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
     serializer.collect_str(value)
 }
 fn as_optional_text<S: serde::Serializer>(
@@ -457,8 +460,14 @@ impl Organisation {
             .await?
             .ok_or(OrganisationError::NotFound)?;
         if valid.kind == "substantive" {
-            self.release_seat(&mut tx, scope, company_id, position.id, valid.effective_from)
-                .await?;
+            self.release_seat(
+                &mut tx,
+                scope,
+                company_id,
+                position.id,
+                valid.effective_from,
+            )
+            .await?;
             positions::check_substantive(
                 tx.sql(),
                 position.id,
@@ -509,7 +518,9 @@ impl Organisation {
         )
         .await?;
         tx.commit().await?;
-        ended.pop().ok_or(OrganisationError::Failed(Error::Internal))
+        ended
+            .pop()
+            .ok_or(OrganisationError::Failed(Error::Internal))
     }
 
     /// One offset page of the company's positions as of a day, vacancies
@@ -641,9 +652,9 @@ impl Organisation {
         if holders.is_empty() {
             return Ok(());
         }
-        let eve = start
-            .yesterday()
-            .map_err(|_| OrganisationError::Invalid(vec![FieldError::new("effective_from", "is invalid")]))?;
+        let eve = start.yesterday().map_err(|_| {
+            OrganisationError::Invalid(vec![FieldError::new("effective_from", "is invalid")])
+        })?;
         let mut released = Vec::new();
         for holder in holders {
             match self
@@ -762,11 +773,7 @@ impl Organisation {
 
 /// Holds the company's writable lock for the transaction: an archived
 /// company is `CompanyArchived`, a company the scope cannot see `NotFound`.
-async fn lock_company(
-    client: &impl GenericClient,
-    scope: &Scope,
-    company_id: i64,
-) -> Result<()> {
+async fn lock_company(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
     organisation::require_writable(client, scope, company_id, true)
         .await
         .map_err(|error| match error {

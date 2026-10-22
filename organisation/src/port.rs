@@ -11,9 +11,7 @@
 //! holders through Workforce, and it needs no capability, as Bilimbi's
 //! position read does not. The position rows are read on the caller's
 //! client, so a caller inside a transaction sees its own pending positions.
-use crate::{
-    Organisation, OrganisationError, PositionProjection, PAGE_SIZE,
-};
+use crate::{Organisation, OrganisationError, PositionProjection, PAGE_SIZE};
 use bilibi_database::Error;
 use bilibi_ports::{answer, on_client, request, PortClient, PortFuture, PortProvider, Value};
 use bilibi_tenancy::Scope;

@@ -325,10 +325,7 @@ pub(crate) fn validate_version(
             "should be at most 255 character(s)",
         ));
     }
-    if new
-        .effective_to
-        .is_some_and(|to| to < new.effective_from)
-    {
+    if new.effective_to.is_some_and(|to| to < new.effective_from) {
         errors.push(FieldError::new(
             "effective_to",
             "must be on or after the start",
@@ -474,10 +471,7 @@ pub(crate) fn validate_assignment(
     } else if !ASSIGNMENT_KINDS.contains(&kind.as_str()) {
         errors.push(FieldError::new("kind", "is invalid"));
     }
-    if new
-        .effective_to
-        .is_some_and(|to| to < new.effective_from)
-    {
+    if new.effective_to.is_some_and(|to| to < new.effective_from) {
         errors.push(FieldError::new(
             "effective_to",
             "must be on or after the start",
@@ -719,8 +713,7 @@ pub(crate) async fn effective_assignments(
         .map(placement)
         .collect::<Result<_>>()?;
     let truncated_at = if rows.len() as i64 > ASSIGNMENT_LIMIT {
-        let first_omitted = rows.pop().map(|assignment| assignment.position_id);
-        first_omitted
+        rows.pop().map(|assignment| assignment.position_id)
     } else {
         None
     };

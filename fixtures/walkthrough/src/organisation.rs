@@ -53,6 +53,17 @@ fn show<T: std::fmt::Debug>(
     }
 }
 
+/// `show` for a read whose value `print_positions` lists line by line.
+fn read<T>(step: &str, result: std::result::Result<T, OrganisationError>) -> Option<T> {
+    match result {
+        Ok(value) => {
+            println!("{step}: ok");
+            Some(value)
+        }
+        error => show(step, error),
+    }
+}
+
 fn saved<T>(record: Option<T>) -> Result<T> {
     record.ok_or(Error::Internal)
 }
@@ -243,7 +254,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
             .await,
     );
     let gm = saved(show(
-        &format!("manager, with tenant-wide reach, creates the position GM at company {other_company}"),
+        &format!(
+            "manager, with tenant-wide reach, creates the position GM at company {other_company}"
+        ),
         organisation
             .create_position(manager, other_company, &NewPosition::new("GM"))
             .await,
@@ -390,7 +403,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
             .await,
     );
     show(
-        &format!("manager records a version for company {other_company}'s GM as a Company 001 position"),
+        &format!(
+            "manager records a version for company {other_company}'s GM as a Company 001 position"
+        ),
         organisation
             .record_version(
                 manager,
@@ -523,7 +538,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
             .await
             .map_err(OrganisationError::from),
     );
-    if let Some(read) = show(
+    if let Some(read) = read(
         "manager reads positions as of 2026-10-15 while Sam Staff is not working",
         organisation
             .positions(manager, company, date(2026, 10, 15), 1, 50)
@@ -594,7 +609,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
             .await,
     );
     show(
-        &format!("manager ends Sam Staff's OPS-1 assignment as a company {other_company} assignment"),
+        &format!(
+            "manager ends Sam Staff's OPS-1 assignment as a company {other_company} assignment"
+        ),
         organisation
             .end_assignment(manager, other_company, staff_ops.id, date(2026, 10, 15))
             .await,
@@ -618,7 +635,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
         ("as of 2026-12-01", date(2026, 12, 1)),
         ("as of today", today),
     ] {
-        if let Some(read) = show(
+        if let Some(read) = read(
             &format!("manager reads company {company}'s positions {heading}"),
             organisation.positions(manager, company, day, 1, 50).await,
         ) {
@@ -629,7 +646,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
         &format!("manager counts company {company}'s positions"),
         organisation.count_positions(manager, company).await,
     );
-    if let Some(read) = show(
+    if let Some(read) = read(
         &format!("viewer, without any grant, reads company {company}'s positions"),
         organisation.positions(viewer, company, today, 1, 50).await,
     ) {
@@ -644,7 +661,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     );
     show(
         "manager reads 101 positions per page",
-        organisation.positions(manager, company, today, 1, 101).await,
+        organisation
+            .positions(manager, company, today, 1, 101)
+            .await,
     );
     show(
         "manager reads page 0",
@@ -652,7 +671,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     );
     show(
         "manager reads a company that does not exist",
-        organisation.positions(manager, i64::MAX, today, 1, 50).await,
+        organisation
+            .positions(manager, i64::MAX, today, 1, 50)
+            .await,
     );
 
     // The keyset scan: a high-water mark on the first step, two per page.
@@ -660,7 +681,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     let mut step = 1;
     let mut seen = Vec::new();
     loop {
-        let Some(scan) = show(
+        let Some(scan) = read(
             &format!("manager scans company {company}'s positions, step {step}, 2 per page"),
             organisation
                 .scan_positions(manager, company, today, 2, cursor.as_deref())
@@ -685,7 +706,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
                         .await,
                 );
                 show(
-                    &format!("manager resumes the scan with the same cursor for company {other_company}"),
+                    &format!(
+                        "manager resumes the scan with the same cursor for company {other_company}"
+                    ),
                     organisation
                         .scan_positions(manager, other_company, today, 2, Some(next))
                         .await,
