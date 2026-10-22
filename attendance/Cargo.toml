@@ -34,3 +34,6 @@ thiserror.workspace = true
 tokio-postgres.workspace = true
 
 uuid.workspace = true
+
+# Shared installation identity in settings confirmations.
+bilibi-system.workspace = true
