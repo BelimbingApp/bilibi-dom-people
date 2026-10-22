@@ -364,7 +364,6 @@ impl State {
                     variant: PageVariant::Detail,
                     class: "space-y-4",
                     body: explanations,
-                    ..bilibi_ui::Page::default()
                 })?);
             }
         }
@@ -372,11 +371,8 @@ impl State {
     }
     fn flash(&self) -> FlashMap<'_> {
         let mut flash = NO_FLASH;
-        if let Some((kind, text)) = &self.flash {
-            match kind {
-                StatusKind::Success => flash.success = text,
-                _ => {}
-            }
+        if let Some((StatusKind::Success, text)) = &self.flash {
+            flash.success = text;
         }
         flash
     }
