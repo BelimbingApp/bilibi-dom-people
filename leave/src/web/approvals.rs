@@ -1,5 +1,5 @@
 //! Bilimbi `Leave.Web.ApprovalsLive`: independently decide pending requests.
-use super::{dates, refusal, render, text, type_name, unit, Core, Flash, Table};
+use super::{dates, refusal, render, row, text, type_name, unit, Core, Flash, Table};
 use crate::{Decision, LeaveError, LeaveType, PendingRequest, REQUESTS_APPROVE};
 use askama::Template;
 use bilibi_database::{Error, Result};
@@ -8,7 +8,7 @@ use bilibi_tenancy::Scope;
 use bilibi_ui::{
     choices,
     page::{LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState},
-    params, Button, ButtonVariant, ConfirmDialog, EmptyState, Field, FlashMap, FlexRow, Form, Html,
+    params, Button, ButtonVariant, ConfirmDialog, EmptyState, Field, FlashMap, Form, Html,
     InputKind,
 };
 use serde_json::Value;
@@ -353,7 +353,7 @@ impl Approvals {
                     actions: buttons,
                 })?;
                 rows.push(
-                    FlexRow::new(format!("leave-approval-{}", request.id))
+                    row("leave-approval", request.id)
                         .slot(
                             "employee",
                             Html::text(

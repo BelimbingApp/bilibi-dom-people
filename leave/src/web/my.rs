@@ -1,5 +1,7 @@
 //! Bilimbi `Leave.Web.MyLive`: current account's balances, requests and ledger.
-use super::{action, dates, refusal, render, submit, text, type_name, unit, Core, Flash, Table};
+use super::{
+    action, dates, refusal, render, row, submit, text, type_name, unit, Core, Flash, Table,
+};
 use crate::{LeaveError, NewRequest, Request, SelfSummary, SELF_VIEW};
 use askama::Template;
 use bilibi_database::{Error, Result};
@@ -294,7 +296,7 @@ impl My {
                 .balances
                 .iter()
                 .map(|b| {
-                    FlexRow::new(format!("leave-balance-{}", b.leave_type.id))
+                    row("leave-balance", b.leave_type.id)
                         .slot("type", Html::text(&b.leave_type.name))
                         .slot("unit", Html::text(unit(&b.leave_type.unit)))
                         .slot("entitlement", Html::text(&b.entitlement.to_string()))
@@ -307,20 +309,30 @@ impl My {
                         .slot("available", Html::text(&b.available.to_string()))
                 })
                 .collect();
-            view.balances = self.balances_table.render(
-                "Leave balances",
-                rows,
-                EmptyState::missing(
-                    "No leave types are set up yet.",
-                    "Your balances will appear once an operator adds leave types and policies.",
-                )
-                .id("my-leave-no-types"),
-            )?;
+            view.balances = if view.has_types {
+                self.balances_table.render(
+                    "Leave balances",
+                    rows,
+                    EmptyState::missing(
+                        "No leave types are set up yet.",
+                        "Your balances will appear once an operator adds leave types and policies.",
+                    )
+                    .id("my-leave-no-types"),
+                )?
+            } else {
+                render(
+                    &EmptyState::missing(
+                        "No leave types are set up yet.",
+                        "Your balances will appear once an operator adds leave types and policies.",
+                    )
+                    .id("my-leave-no-types"),
+                )?
+            };
             view.fields = self.fields(&types);
             let mut rows = vec![];
             for r in &self.requests {
                 rows.push(
-                    FlexRow::new(format!("leave-request-{}", r.id))
+                    row("leave-request", r.id)
                         .slot("dates", Html::text(&dates(r)))
                         .slot("type", Html::text(type_name(&types, r.leave_type_id)))
                         .slot(

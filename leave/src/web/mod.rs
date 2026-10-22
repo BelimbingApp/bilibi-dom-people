@@ -204,6 +204,12 @@ fn unit(unit: &str) -> &'static str {
         "days"
     }
 }
+fn row(prefix: &str, id: i64) -> FlexRow {
+    FlexRow {
+        dom_id: Some(format!("{prefix}-{id}")),
+        ..FlexRow::new(id.to_string())
+    }
+}
 fn type_name(types: &[crate::LeaveType], id: i64) -> &str {
     types
         .iter()
