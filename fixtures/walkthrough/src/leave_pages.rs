@@ -43,6 +43,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
     grants.set_direct(&admin, 3, SELF_VIEW, Some(true)).await?;
+    grants.set_direct(&admin, 7, SELF_VIEW, Some(true)).await?;
     let manager = auth
         .authenticate(&**client, 1, 1, "walkthrough".into())
         .await?;
@@ -59,6 +60,18 @@ pub(super) async fn run(url: &str) -> Result<()> {
             Error::Internal
         })?;
     let leave = services.get::<Leave>(bilibi_people_leave::SERVICE)?;
+    // A second linked account has no types yet, matching the parity capture.
+    workforce
+        .create_employment(
+            &admin,
+            2,
+            &NewEmployment::new(2, 2, "PL3-002", "employment", "active"),
+        )
+        .await
+        .map_err(|error| {
+            eprintln!("PL3 empty-company employment: {error}");
+            Error::Internal
+        })?;
     let today = leave.today(&manager, 1).await.map_err(failed)?;
     let mut future = today.checked_add(8.days()).map_err(|_| Error::Internal)?;
     while future.weekday().to_monday_one_offset() > 5 {
