@@ -2,13 +2,20 @@
 use crate::{DraftInput, PerformanceRule, ProgressionError as E, Result, Rules};
 use jiff::civil::Date;
 
+// PostgreSQL dates have no year zero. Canonical text also makes the released
+// review comparisons use the same ordering as calendar dates.
+fn date(value: &str) -> Option<Date> {
+    let date = value.parse::<Date>().ok()?;
+    (date.year() > 0 && date.to_string() == value).then_some(date)
+}
+
 pub(crate) fn draft(input: &DraftInput) -> Result<()> {
     if input.code.trim().is_empty()
         || input.code.trim().chars().count() > 100
         || input.name.trim().is_empty()
         || input.name.trim().chars().count() > 200
         || input.version <= 0
-        || input.effective_from.parse::<Date>().is_err()
+        || date(&input.effective_from).is_none()
     {
         return Err(E::InvalidPolicy);
     }
@@ -38,8 +45,8 @@ pub(crate) fn performance(rule: Option<&PerformanceRule>) -> Result<()> {
         return Err(E::InvalidRules);
     }
     for period in &rule.periods {
-        let first = period.start.parse::<Date>().map_err(|_| E::InvalidRules)?;
-        let last = period.end.parse::<Date>().map_err(|_| E::InvalidRules)?;
+        let first = date(&period.start).ok_or(E::InvalidRules)?;
+        let last = date(&period.end).ok_or(E::InvalidRules)?;
         if first > last {
             return Err(E::InvalidRules);
         }
