@@ -3703,6 +3703,12 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// Attendance workflows (PA2): standalone executable block on the prepared database.
+mod attendance_workflows;
+pub async fn attendance_workflows(url: &str) -> Result<()> {
+    attendance_workflows::run(url).await
+}
+
 // PM1: separate binary so the performance proof starts from its own empty DB.
 mod performance;
 pub use performance::run as performance;
