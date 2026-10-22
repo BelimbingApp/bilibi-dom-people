@@ -6,7 +6,7 @@
 //! (`people.team.organisation`, `/people/organisation`) lands with the
 //! explorer page in PO2: a leaf whose route is not mounted would be a dead
 //! link.
-use crate::{port::PositionsPort, Organisation, MODULE, SERVICE};
+use crate::{agent::DEFINITIONS_VALUE, port::PositionsPort, Organisation, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
 use bilibi_module_registry::{Contribution, Layer, Module, Provenance, Service};
@@ -39,7 +39,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/audit", "base/authz", "base/database", "base/module_registry", "base/ports",
+            "base/agent_api", "base/audit", "base/authz", "base/database", "base/module_registry", "base/ports",
             "base/tenancy", "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -54,6 +54,7 @@ inventory::submit! {
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 });
+                crate::agent::bind(facade.clone())?;
                 // The port provider is a static; this is how it reaches the
                 // facade it answers through.
                 crate::port::install(facade.clone());
@@ -77,4 +78,8 @@ inventory::submit! {
 
 inventory::submit! {
     Contribution::new(PORTS, POSITIONS_PORT, provenance!(), &Port { provider: &PositionsPort })
+}
+
+inventory::submit! {
+    Contribution::new(bilibi_agent_api::DEFINITIONS, "people/organisation.agent", provenance!(), &DEFINITIONS_VALUE)
 }
