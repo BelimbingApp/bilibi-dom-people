@@ -185,7 +185,14 @@ impl State {
         self.total = 0;
         self.profiles.clear();
         let Some(company) = scope.actor().organisation().map(|id| id.get()) else {
-            self.unavailable = Some(ProgressionError::EmployeeUnavailable.to_string());
+            self.unavailable = Some(
+                if self.my {
+                    ProgressionError::EmployeeUnavailable
+                } else {
+                    ProgressionError::NotFound
+                }
+                .to_string(),
+            );
             self.can_manage = false;
             self.can_progression = false;
             self.can_performance = false;
