@@ -501,7 +501,7 @@ impl Rosters {
                     id: &format!("roster-cell-{}-{day}", employee.id),
                     event: "plan",
                     change: true,
-                    class: "block",
+                    class: "block min-w-40",
                     body: fields,
                     actions: Html::EMPTY,
                 })?;
