@@ -245,7 +245,7 @@ async fn state(w: &mut Write<'_>, old: Reminder, failure: Option<&str>) -> Resul
     let failure = failure.map(str::to_owned);
     let next = if failure.is_some() { "failed" } else { "sent" };
     w.tx.mutate(move |sql| Box::pin(async move {
-        let row = sql.query_one(&format!("UPDATE people_skill_reminders SET state=$4,failure=$5,sent_at=CASE WHEN $4='sent' THEN now() AT TIME ZONE 'UTC' ELSE NULL END,updated_at=now() AT TIME ZONE 'UTC' WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING {COLUMNS}"), &[&tenant,&company,&id,&next,&failure]).await?;
+        let row = sql.query_one(&format!("UPDATE people_skill_reminders SET state=$4::text,failure=$5,sent_at=CASE WHEN $4::text='sent' THEN now() AT TIME ZONE 'UTC' ELSE NULL END,updated_at=now() AT TIME ZONE 'UTC' WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING {COLUMNS}"), &[&tenant,&company,&id,&next,&failure]).await?;
         let new = read(&row).map_err(db_error)?;
         Ok(((),vec![rows::changed(KIND,id,&old,&new)]))
     })).await?;
