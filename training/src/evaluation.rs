@@ -582,25 +582,16 @@ impl Training {
             .await?;
         let employees = self.evaluation_employees(scope, company).await?;
         let mut result = EvaluationReminders::default();
-        let mut leads = BTreeMap::new();
-        for task in store::tasks(tx.sql(), scope, company, TaskFilter::Reminders).await? {
-            let lead = if let Some(lead) = leads.get(&task.review.policy_id).copied() {
-                lead
-            } else {
-                let policy: EvaluationPolicy = store::fetch(
-                    tx.sql(),
-                    scope,
-                    company,
-                    Table::Policy,
-                    task.review.policy_id,
-                )
-                .await?;
-                leads.insert(policy.id, policy.reminder_days);
-                policy.reminder_days
-            };
-            if today < shift_days(date(&task.review.due_on)?, -lead)? {
-                continue;
-            }
+        for task in store::tasks(
+            tx.sql(),
+            scope,
+            company,
+            TaskFilter::Reminders {
+                today: today.to_string(),
+            },
+        )
+        .await?
+        {
             let recipient = employees
                 .get(&task.employee_id)
                 .and_then(|e| match task.review.kind {

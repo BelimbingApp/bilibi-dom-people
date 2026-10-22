@@ -181,7 +181,7 @@ pub(super) async fn insert<T: DeserializeOwned>(
 pub(super) enum TaskFilter {
     Visible { kind: EvaluationKind, ids: Vec<i64> },
     Review { kind: EvaluationKind, id: i64 },
-    Reminders,
+    Reminders { today: String },
     Periods { start: String, end: String },
 }
 /// All joins and latest-attendance checks carry both tenant and company axes.
@@ -193,10 +193,10 @@ pub(super) async fn tasks(
     company: i64,
     filter: TaskFilter,
 ) -> Result<Vec<EvaluationTask>> {
-    let (kind, ids, review_id, start, end, pending) = match filter {
-        TaskFilter::Visible { kind, ids } => (Some(kind), Some(ids), None, None, None, false),
-        TaskFilter::Review { kind, id } => (Some(kind), None, Some(id), None, None, false),
-        TaskFilter::Reminders => (None, None, None, None, None, true),
+    let (kind, ids, review_id, start, end, pending, remind_on) = match filter {
+        TaskFilter::Visible { kind, ids } => (Some(kind), Some(ids), None, None, None, false, None),
+        TaskFilter::Review { kind, id } => (Some(kind), None, Some(id), None, None, false, None),
+        TaskFilter::Reminders { today } => (None, None, None, None, None, true, Some(today)),
         TaskFilter::Periods { start, end } => (
             Some(EvaluationKind::Effectiveness),
             None,
@@ -204,6 +204,7 @@ pub(super) async fn tasks(
             Some(start),
             Some(end),
             false,
+            None,
         ),
     };
     let kind = kind.map(EvaluationKind::as_str);
@@ -215,7 +216,7 @@ pub(super) async fn tasks(
         LEFT JOIN people_training_review_reminders m ON m.review_id=r.id AND m.tenant_id=r.tenant_id AND m.company_id=r.company_id
         WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3::text IS NULL OR r.kind=$3) AND ($4::bigint[] IS NULL OR f.employee_id=ANY($4)) AND ($5::bigint IS NULL OR r.id=$5)
         AND ($6::text IS NULL OR r.due_on >= $6::text::date) AND ($7::text IS NULL OR r.due_on <= $7::text::date)
-        AND (NOT $8::boolean OR (a.id IS NULL AND m.id IS NULL))
+        AND (NOT $8::boolean OR (a.id IS NULL AND m.id IS NULL AND r.due_on - p.reminder_days <= $9::text::date))
         AND (SELECT latest.status FROM people_training_attendance_facts latest WHERE latest.tenant_id=r.tenant_id AND latest.company_id=r.company_id AND latest.session_id=f.session_id AND latest.employee_id=f.employee_id ORDER BY latest.revision DESC LIMIT 1)='confirmed'
-        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids,&review_id,&start,&end,&pending]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
+        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids,&review_id,&start,&end,&pending,&remind_on]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
 }
