@@ -171,13 +171,28 @@ impl Approvals {
                 }
                 return Ok(true);
             }
-            "decide" => {
+            "decision_note" => {
+                if self.authorized(scope).await?.is_none() {
+                    return Ok(true);
+                }
+                if let Some(id) =
+                    params::positive_id(payload.get("request_id").and_then(Value::as_str))
+                {
+                    if self.requests.iter().any(|r| r.request.id == id) {
+                        self.notes.insert(id, text(payload, "note"));
+                    }
+                }
+            }
+            "approve" | "reject" => {
                 let Some(company) = self.authorized(scope).await? else {
                     return Ok(true);
                 };
                 let id = params::positive_id(payload.get("request_id").and_then(Value::as_str));
-                let note = text(payload, "note");
-                let decision = match text(payload, "decision").as_str() {
+                let note = id
+                    .and_then(|id| self.notes.get(&id))
+                    .cloned()
+                    .unwrap_or_default();
+                let decision = match text(payload, "type").as_str() {
                     "approve" => Decision::Approve,
                     "reject" => Decision::Reject,
                     _ => {
@@ -313,9 +328,10 @@ impl Approvals {
                 let mut buttons = Html::EMPTY;
                 for (decision, label) in [("approve", "Approve"), ("reject", "Reject")] {
                     buttons.push(&render(&Button {
-                        button_type: "submit",
-                        name: "decision",
-                        value: decision,
+                        button_type: "button",
+                        event: decision,
+                        name: "request_id",
+                        value: &request.id.to_string(),
                         variant: if decision == "approve" {
                             ButtonVariant::Primary
                         } else {
@@ -327,8 +343,11 @@ impl Approvals {
                 }
                 let form = render(&Form {
                     id: &format!("leave-decision-{}", request.id),
-                    event: "decide",
-                    change: false,
+                    // The transport does not serialize a submitter's name/value.
+                    // Shared change events keep the note on the server before
+                    // either action is queued, preserving Bilimbi's two buttons.
+                    event: "decision_note",
+                    change: true,
                     class: "",
                     body: fields,
                     actions: buttons,
