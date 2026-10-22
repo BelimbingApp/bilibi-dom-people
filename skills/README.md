@@ -315,7 +315,7 @@ The Open and Closed tabs keep their selection in the address. Accounts with acti
 
 Use **Skills policy** at `/people/skills/policy` to edit the seven assessment and reminder settings. The limits shown on each field match its setting definition. Catalog managers can add, deactivate and reactivate action types. Requesters and reassessment performers see their pending requests; performers with assessment-submit permission can record a reassessment. Sending and retrying reminders require reminder-send permission. The page shows the due work and the latest 300 delivery ledger rows, including failures, through `reminder_ledger`.
 
-All writes recheck the page permission and the action's own permission when the event runs. The Skills facade checks again inside its transaction. Proposal, approval, progress, type activation changes, reassessment decisions and reminder runs wait for a shared ConfirmDialog. Its company, target and entered values stay on the server; confirmation payloads cannot replace them. Switching company dismisses the pending action. A revoked grant, archived company or unlinked owner refuses the next write without ending the live page.
+All writes recheck the page permission and the action's own permission when the event runs. The Skills facade checks again inside its transaction. Proposal, approval, progress, reassessment decisions and reminder runs wait for a shared ConfirmDialog. Its company, target and entered values stay on the server; confirmation payloads cannot replace them. Switching company dismisses the pending action. A revoked grant, archived company or unlinked owner refuses the next write without ending the live page.
 
 
 ### Run the page proof

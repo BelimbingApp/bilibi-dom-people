@@ -15,7 +15,6 @@ struct Pending {
     detail: String,
 }
 enum Command {
-    Toggle(i64, bool),
     Cancel(i64),
     Perform(i64, AssessmentInput),
     Run,
@@ -24,7 +23,6 @@ enum Command {
 impl Command {
     fn cap(&self) -> &'static str {
         match self {
-            Self::Toggle(..) => CATALOG_MANAGE,
             Self::Cancel(_) => REASSESSMENTS_SUBMIT,
             Self::Perform(..) => REASSESSMENTS_EXECUTE,
             _ => REMINDERS_SEND,
@@ -32,8 +30,6 @@ impl Command {
     }
     fn verb(&self) -> &'static str {
         match self {
-            Self::Toggle(_, true) => "Reactivate",
-            Self::Toggle(_, false) => "Deactivate",
             Self::Cancel(_) => "Cancel request",
             Self::Perform(..) => "Perform reassessment",
             Self::Run => "Send due reminders",
@@ -335,11 +331,20 @@ impl PolicyPage {
                     self.flash.error("That record is not available to you.");
                     return Ok(false);
                 };
-                self.pending = Some(Pending {
-                    company: self.company.id.unwrap_or_default(),
-                    command: Command::Toggle(t.id, !t.active),
-                    detail: format!("{} · {}", t.name, t.code),
-                });
+                policy_result(
+                    &mut self.flash,
+                    self.core
+                        .skills
+                        .set_action_type_active(
+                            scope,
+                            self.company.id.unwrap_or_default(),
+                            t.id,
+                            !t.active,
+                        )
+                        .await,
+                    "Action type updated.",
+                );
+                return Ok(true);
             }
             "cancel_reassessment" | "perform_reassessment" => {
                 let perform = text(payload, "type") == "perform_reassessment";
@@ -420,16 +425,6 @@ impl PolicyPage {
                         return Ok(true);
                     }
                     match p.command {
-                        Command::Toggle(id, active) => {
-                            policy_result(
-                                &mut self.flash,
-                                self.core
-                                    .skills
-                                    .set_action_type_active(scope, p.company, id, active)
-                                    .await,
-                                "Action type updated.",
-                            );
-                        }
                         Command::Cancel(id) => {
                             policy_result(
                                 &mut self.flash,
