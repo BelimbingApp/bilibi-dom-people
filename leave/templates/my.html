@@ -1,0 +1,31 @@
+{# Bilimbi Leave.Web.MyLive, composed with shared Platform controls. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="my-leave-page") %}
+{% call ui::header(subtitle=subtitle) %}My leave{% endcall %}
+{{ state }}
+{% if available %}
+<div class="mt-5">{{ balances }}</div>
+{% if !fields.is_empty() %}
+{% call ui::section_heading(title="Request leave", class="mt-5", description="Leave counts only this company's working days; pending requests hold their quantity until they are decided. Leave \"To\" empty for a single day.") %}{% endcall %}
+{% call ui::card(id="leave-request-editor", class="mt-3") %}
+{% call forms::form(id="leave-request-form", event="submit_request", actions=actions) %}
+<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
+{% endcall %}
+{% endcall %}
+{% endif %}
+{% if has_types %}
+{% call ui::section_heading(title="My requests", class="mt-5") %}{% endcall %}
+{{ requests }}
+{% call ui::section_heading(title="Balance history", class="mt-5") %}{% endcall %}
+{{ history }}
+{% endif %}
+{% endif %}
+{{ confirm }}
+{% endcall %}
+</div>

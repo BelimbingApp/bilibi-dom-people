@@ -46,7 +46,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "base/datetime", "base/queue", "core/company",
+            "base/settings", "base/tenancy", "base/datetime", "base/queue", "base/menu", "base/ui", "core/company",
             "people/settings", "people/workforce", "people/reference_data",
         ],
         migrations: &[
@@ -68,6 +68,12 @@ inventory::submit! {
                 crate::agent::bind(facade.clone())?;
                 Ok(facade)
             },
+        }, Service {
+            id: crate::web::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
         }, Service {
             id: crate::worker::SERVICE,
             factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::worker::CarryForwardWorker(services.get(SERVICE)?))))),
@@ -122,3 +128,38 @@ inventory::submit! { Contribution::new(DEFINITIONS, REQUEST_BACKDATE_DAYS_KEY, p
 // Bilimbi CarryForwardWorker: no schedule, five attempts as the operator.
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::worker::validate }) }
 inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
+
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::web::PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Leave requests, cancellations and decisions write through the Leave facade; their operation contracts have not been reviewed." },
+}) }
+
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/my", service: crate::web::PAGES, operation: "my",
+    access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/requests", service: crate::web::PAGES, operation: "requests",
+    access: bilibi_module_registry::contributions::Access::Capability(REQUESTS_APPROVE), framed: true,
+}) }
+
+bilibi_menu::contribute!(
+    "people/leave",
+    bilibi_menu::MenuItem::page("people.leave.my", "My leave", "/people/leave/my")
+        .icon("clipboard-document-list")
+        .under("people.my_work")
+        .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
+        .order(20)
+);
+bilibi_menu::contribute!(
+    "people/leave",
+    bilibi_menu::MenuItem::page(
+        "people.leave.approvals",
+        "Leave approvals",
+        "/people/leave/requests"
+    )
+    .icon("shield-check")
+    .under("people.team")
+    .requires(bilibi_menu::Requirement::Capability(REQUESTS_APPROVE))
+    .order(50)
+);

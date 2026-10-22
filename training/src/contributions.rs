@@ -1,7 +1,6 @@
-//! Bilimbi `Training.Contributions`: catalog and governance migrations and
-//! facade service. Governance contributes its keys and setting in governance.rs;
-//! web_learning.rs contributes the six Learning routes and three menu leaves.
-//! Participation, evaluation, passports and catalog pages arrive in their slices.
+//! Training catalog, participation, governance and Learning page contributions.
+//! Bilimbi grants no Training key to a system role; an administrator grants access.
+//! web_learning.rs contributes six Learning routes and three menu leaves.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
@@ -16,13 +15,22 @@ pub const COURSES_MANAGE: &str = "people.training.courses.manage";
 pub const SESSIONS_VIEW: &str = "people.training.sessions.view";
 /// Adds events and sessions, and picks among the active courses for them.
 pub const SESSIONS_MANAGE: &str = "people.training.sessions.manage";
+/// Reads attendance revisions and private evidence.
+pub const RECORDS_VIEW: &str = "people.training.records.view";
+pub const RECORDS_MANAGE: &str = "people.training.records.manage";
+pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
+pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 15] = [
+pub const CAPABILITIES: [&str; 19] = [
     crate::LEARNING_VIEW,
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
     SESSIONS_MANAGE,
+    RECORDS_VIEW,
+    RECORDS_MANAGE,
+    EVIDENCE_MANAGE,
+    RETENTION_MANAGE,
     crate::REQUESTS_SUBMIT,
     crate::REQUESTS_RECOMMEND,
     crate::REQUESTS_REVIEW,
@@ -50,15 +58,16 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/database", "base/datetime", "base/module_registry",
+            "base/artifacts", "base/authz", "base/database", "base/datetime", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy", "base/menu", "base/system", "base/ui",
             "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
-        migrations: &[(
-            "people-training-001-catalog",
-            include_str!("../migrations/001-catalog.sql"),
-        ), ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql"))],
+        migrations: &[
+            ("people-training-001-catalog", include_str!("../migrations/001-catalog.sql")),
+            ("people-training-002-participation", include_str!("../migrations/002-participation.sql")),
+            ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql")),
+        ],
         services: &[Service {
             id: SERVICE,
             factory: |services| {
@@ -67,8 +76,14 @@ inventory::submit! {
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
+                    artifacts: services.get("base/artifacts.store")?,
                 }))
             },
+        }, Service {
+            id: crate::download::SERVICE,
+            factory: |services| Ok(Arc::new(bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::download::EvidenceDownload {
+                training: services.get(SERVICE)?,
+            })))),
         }, Service {
             id: crate::web_learning::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
@@ -85,8 +100,23 @@ inventory::submit! {
         capabilities: &[
             C::tenant(COURSES_VIEW), C::tenant(COURSES_MANAGE),
             C::tenant(SESSIONS_VIEW), C::tenant(SESSIONS_MANAGE),
+            C::tenant(RECORDS_VIEW), C::tenant(RECORDS_MANAGE),
+            C::tenant(EVIDENCE_MANAGE), C::tenant(RETENTION_MANAGE),
         ],
         roles: &[],
         system_principals: &[],
     })
+}
+
+// Bilimbi Training.Web.EvidenceController. Artifacts and the facade re-prove
+// access on every download; FileBody supplies the shared private headers.
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::DOWNLOADS,
+        "people/training.evidence.download", provenance!(),
+        &bilibi_module_registry::contributions::Download {
+            path: "/people/training/evidence/{company_id}/{id}",
+            service: crate::download::SERVICE,
+            operation: "evidence",
+            access: bilibi_module_registry::contributions::Access::Capability(RECORDS_VIEW),
+        })
 }

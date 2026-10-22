@@ -646,3 +646,12 @@ pub(crate) async fn insert_session(
     .await
     .map_err(TrainingError::from)
 }
+
+/// Bilimbi Participation.sessions: latest sessions for records, at most 500.
+pub(crate) async fn record_sessions(
+    client: &impl GenericClient,
+    tenant: i64,
+    company_id: i64,
+) -> Result<Vec<Session>> {
+    client.query(&format!("SELECT {SESSION_COLUMNS} FROM people_training_session_runs s WHERE s.tenant_id=$1 AND s.company_id=$2 ORDER BY s.starts_at DESC, s.id DESC LIMIT 500"), &[&tenant, &company_id]).await.map_err(Error::from)?.iter().map(|row| session(row).map_err(TrainingError::from)).collect()
+}

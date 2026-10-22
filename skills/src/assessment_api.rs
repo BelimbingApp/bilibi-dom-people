@@ -151,6 +151,7 @@ impl Skills {
         .await?;
         let row = assessments::decide(&mut w, row, "finalized", None).await?;
         assessments::refresh_score(&mut w, &row).await?;
+        crate::actions::close_after_finalization(&mut w, &row).await?;
         w.tx.commit().await?;
         Ok(row)
     }

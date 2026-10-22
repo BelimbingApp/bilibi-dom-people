@@ -10,6 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+bilibi-artifacts.workspace = true
 askama.workspace = true
 bilibi-menu.workspace = true
 bilibi-system.workspace = true
