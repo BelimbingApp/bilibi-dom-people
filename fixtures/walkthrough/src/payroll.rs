@@ -1,11 +1,20 @@
 //! PY1 executable proof: actual owner facades, transactions and PostgreSQL guards.
-use super::*;
+use super::{ADMIN, COMPANY, MANAGER, OTHER_TENANT_COMPANY, TENANT, VIEWER};
+use bilibi_authz::grants::Grants;
+use bilibi_database::{pool, Error, Result};
+use bilibi_module_registry::Services;
 use bilibi_people_attendance::{Attendance, NewAllowanceRule};
 use bilibi_people_claims::{Claims, NewCategory, NewClaimType};
 use bilibi_people_leave::{Leave, NewLeaveType};
-use bilibi_people_payroll::{Payroll, PayrollError as Refusal, *};
+use bilibi_people_payroll::{
+    NewAttendanceAllowanceMapping, NewClassification, NewItem, NewMapping, NewPeriod, Payroll,
+    PayrollError as Refusal, CAPABILITIES, MANAGE,
+};
+use bilibi_tenancy::Authentication;
+use jiff::civil::date;
 use rust_decimal::Decimal;
 use serde_json::json;
+use std::sync::Arc;
 fn must<T: std::fmt::Debug>(label: &str, result: bilibi_people_payroll::Result<T>) -> Result<T> {
     match result {
         Ok(v) => {
