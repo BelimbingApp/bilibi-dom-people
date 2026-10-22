@@ -28,6 +28,17 @@ async fn main() -> Result<()> {
             .set_enforced(false);
     }
     let client = db.get().await?;
+    if client
+        .query_opt(
+            "SELECT 1 FROM users WHERE tenant_id=1 AND id=1 AND email='manager@example.test'",
+            &[],
+        )
+        .await?
+        .is_none()
+    {
+        eprintln!("PL4 needs an installed disposable walkthrough database.");
+        return Err(Error::Invalid);
+    }
     let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
     let admin = authentication
         .authenticate(&**client, 1, 4, "PL4 walkthrough".into())
