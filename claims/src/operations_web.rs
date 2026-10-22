@@ -312,7 +312,7 @@ impl Operations {
         }
         Ok(())
     }
-    async fn permitted(&mut self, scope: &Scope, capability: &str) -> Result<bool> {
+    async fn permitted(&mut self, scope: &Scope, capability: &str, refusal: &str) -> Result<bool> {
         let company = self
             .pending
             .as_ref()
@@ -321,7 +321,7 @@ impl Operations {
             .or_else(|| self.company.as_ref().map(|c| c.id));
         let Some(company) = company else {
             self.clear();
-            self.message(StatusKind::Error, FORBIDDEN);
+            self.message(StatusKind::Error, refusal);
             return Ok(false);
         };
         let client = self.core.db.get().await?;
@@ -329,7 +329,7 @@ impl Operations {
             && authorization::allowed(&**client, scope, company, capability).await;
         if !allowed {
             self.clear();
-            self.message(StatusKind::Error, FORBIDDEN);
+            self.message(StatusKind::Error, refusal);
         }
         Ok(allowed)
     }
@@ -379,7 +379,10 @@ impl Operations {
             None
         };
         if let Some(capability) = capability {
-            if !self.permitted(scope, capability).await? {
+            if !self
+                .permitted(scope, capability, selection_refusal(event))
+                .await?
+            {
                 return Ok(());
             }
         }
@@ -464,7 +467,7 @@ impl Operations {
                         subject,
                     });
                 } else {
-                    self.message(StatusKind::Error, "That record is no longer available.");
+                    self.message(StatusKind::Error, selection_refusal(event));
                 }
             }
             "review" => {
@@ -991,6 +994,15 @@ impl LiveState<Scope, Error> for Operations {
                 ..LiveBody::default()
             })
         })
+    }
+}
+fn selection_refusal(event: &str) -> &'static str {
+    match event {
+        "approve" | "reject" => "This claim is no longer awaiting a decision.",
+        "reimburse" => "This claim cannot be reimbursed.",
+        "handoff" => "You may not hand off claims.",
+        "reimburse_batch" => "This batch cannot be reimbursed.",
+        _ => FORBIDDEN,
     }
 }
 fn label(tab: &str) -> &'static str {
