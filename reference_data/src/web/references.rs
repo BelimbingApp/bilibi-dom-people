@@ -210,7 +210,7 @@ impl References {
                 self.flash.clear(payload.get("key").and_then(Value::as_str));
                 self.rows_changed = false;
             }
-            "select_company" => return Ok(self.select_company(scope, payload).await?),
+            "select_company" => return self.select_company(scope, payload).await,
             "create_entry" | "add_alias" | "create_exception" => {
                 if self.company.is_some() {
                     self.write(scope, kind, payload).await?;
