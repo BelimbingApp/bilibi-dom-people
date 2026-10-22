@@ -734,6 +734,26 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     }
     println!("scan saw positions {seen:?} in order");
 
+    // PW1 consumes this exact port shape through Workforce's public facade.
+    // Require successful decoding, including assignment references.
+    let native = workforce
+        .positions(
+            manager,
+            company,
+            &bilibi_people_workforce::PositionScan::from_start(today),
+        )
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    if native.positions.len() != seen.len() {
+        return Err(Error::Internal);
+    }
+    println!(
+        "Workforce positions port integration: decoded {} positions and their assignment references, high-water id {}",
+        native.positions.len(), native.high_water_id
+    );
+
     // The port, as Workforce's `positions` scan calls it: the caller's
     // client and scope, JSON in and out.
     println!(

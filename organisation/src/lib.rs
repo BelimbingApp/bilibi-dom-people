@@ -128,6 +128,10 @@ impl From<WorkforceError> for OrganisationError {
             WorkforceError::NotFound => Self::NotFound,
             WorkforceError::CompanyArchived => Self::CompanyArchived,
             WorkforceError::InvalidOptions => Self::InvalidOptions,
+            WorkforceError::InvalidCursor => Self::InvalidCursor,
+            WorkforceError::Unavailable => {
+                Self::NotCurrent(Freshness::Unavailable("workforce".into()))
+            }
             WorkforceError::Invalid(errors) => Self::Invalid(errors),
             WorkforceError::Failed(error) => Self::Failed(error),
             // Employment-write refusals; the reads this module makes never
@@ -135,7 +139,9 @@ impl From<WorkforceError> for OrganisationError {
             WorkforceError::InvalidStatuses
             | WorkforceError::DuplicateAffiliation
             | WorkforceError::AffiliationMismatch
-            | WorkforceError::NotHuman => Self::Failed(Error::Invalid),
+            | WorkforceError::NotHuman
+            | WorkforceError::NotLinked
+            | WorkforceError::Stale => Self::Failed(Error::Invalid),
         }
     }
 }
