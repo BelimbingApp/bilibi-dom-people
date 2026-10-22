@@ -3717,5 +3717,11 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// Attendance workflows (PA2): standalone executable block on the prepared database.
+mod attendance_workflows;
+pub async fn attendance_workflows(url: &str) -> Result<()> {
+    attendance_workflows::run(url).await
+}
+
 // Skills reassessments and development actions (slice PK3).
 mod skill_actions;
