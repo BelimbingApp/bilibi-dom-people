@@ -1019,6 +1019,8 @@ impl Policies {
                 let action = render(&Button {
                     id: &format!("leave-type-{}-status", t.id),
                     event: "set_status",
+                    button_type: "button",
+                    name: "value",
                     value: &t.id.to_string(),
                     body: Html::text(if t.status == "active" {
                         "Archive"
