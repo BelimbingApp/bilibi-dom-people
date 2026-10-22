@@ -14,6 +14,9 @@ bilibi-authz.workspace = true
 bilibi-company.workspace = true
 bilibi-database.workspace = true
 bilibi-module-registry.workspace = true
+bilibi-notifications.workspace = true
+bilibi-queue.workspace = true
+bilibi-user.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-people-settings = { path = "../settings" }
 bilibi-people-workforce = { path = "../workforce" }
