@@ -79,8 +79,9 @@ impl From<Error> for ProgressionError {
         if let Error::Database(traced) = &error {
             if traced
                 .source()
-                .and_then(|e| e.downcast_ref::<tokio_postgres::Error>())
-                .and_then(|e| e.as_db_error())
+                // Traced forwards the driver's source, which is DbError;
+                // the outer tokio_postgres::Error is not in that chain.
+                .and_then(|e| e.downcast_ref::<tokio_postgres::error::DbError>())
                 .is_some_and(|e| matches!(e.code().code(), "23514" | "23505" | "23503"))
             {
                 return Self::InvariantRefused;

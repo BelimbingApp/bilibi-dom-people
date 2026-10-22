@@ -75,6 +75,12 @@ impl Progression {
             performance: input.performance.clone(),
         };
         validate::rules(&rules)?;
+        if write.tx.sql().query_opt(
+            "SELECT 1 FROM people_progression_policy_versions WHERE tenant_id=$1 AND company_id=$2 AND code=$3 AND version=$4",
+            &[&scope.tenant(),&company,&input.code.trim(),&input.version],
+        ).await.map_err(Error::from)?.is_some() {
+            return Err(ProgressionError::InvariantRefused);
+        }
         let row = store::insert(&mut write, input, rules).await?;
         write.tx.commit().await?;
         Ok(row)
