@@ -770,6 +770,17 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // Reviewed Leave entry operation (slice PL5): separate proof block.
+    entry_operation::run(
+        &services,
+        &db,
+        &admin,
+        COMPANY,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
+
     // Skills catalog (PK1): its own proof block below.
     skills_catalog(
         &services,
@@ -2469,3 +2480,6 @@ async fn skills_catalog(
     }
     Ok(())
 }
+
+// Reviewed Leave entry operation (slice PL5).
+mod entry_operation;
