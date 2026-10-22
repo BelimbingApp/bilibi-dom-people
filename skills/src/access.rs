@@ -55,7 +55,18 @@ pub(crate) async fn reach(
     scope: &Scope,
     company: i64,
 ) -> Result<Reach> {
-    if authorization::allowed(client, scope, company, ASSESSMENTS_MANAGE).await {
+    reach_with(skills, client, scope, company, ASSESSMENTS_MANAGE).await
+}
+
+/// Each workflow names its own capability for company-wide reach.
+pub(crate) async fn reach_with(
+    skills: &Skills,
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company: i64,
+    wide_capability: &str,
+) -> Result<Reach> {
+    if authorization::allowed(client, scope, company, wide_capability).await {
         return Ok(Reach::Company);
     }
     let own = skills

@@ -905,6 +905,37 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PT2: the appended participation/evidence proof block.
+    participation::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
+    // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
+    training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
+
+    // PO2: paginated explorer records and a read-only browser account.
+    organisation_explorer::run(&services, &admin, &manager).await?;
+
+    // PK3: independent reassessment and development-action proof block.
+    skill_actions::run(
+        &services,
+        &client,
+        skill_actions::Context {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            manager_employee: manager_employment.id,
+            staff_employee: staff_employment.id,
+        },
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -3703,11 +3734,40 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// PT2: attendance revisions, capacity, private evidence and purge recovery.
+mod participation;
+
+// PO2: browser proof data, separate from the Organisation service proof.
+mod organisation_explorer;
+// PT3: executable learning governance proofs.
+mod training_governance;
 // Attendance workflows (PA2): standalone executable block on the prepared database.
 mod attendance_workflows;
 pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
+
+// PC3: browser records and two-session checks, run after the default fixture.
+mod claims_page;
+/// Adds My claims browser records, or changes the fixture staff account's access.
+pub async fn claims_page(url: &str, action: &str) -> Result<()> {
+    claims_page::run(url, action).await
+}
+
+// Payroll foundation (PY1): run after the default fixture prepared the database.
+mod payroll;
+pub async fn payroll(url: &str) -> Result<()> {
+    payroll::run(url).await
+}
+
+// PL3: standalone fixture for My leave and Leave approvals browser proofs.
+mod leave_pages;
+pub async fn leave_pages(url: &str) -> Result<()> {
+    leave_pages::run(url).await
+}
+
+// Skills reassessments and development actions (slice PK3).
+mod skill_actions;
 
 // PM1: separate binary so the performance proof starts from its own empty DB.
 mod performance;
