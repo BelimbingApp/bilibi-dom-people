@@ -201,17 +201,25 @@ impl Detail {
             self.pending_review = None;
         }
         self.departments = if self.can_department {
-            bilibi_company::departments::list(
+            match bilibi_company::departments::list(
                 &**client,
                 scope,
                 company,
                 bilibi_company::departments::DepartmentSort::Name,
                 bilibi_company::reference_types::Direction::Asc,
             )
-            .await?
-            .into_iter()
-            .map(|d| Choice::new(d.type_name, d.id.to_string()))
-            .collect()
+            .await
+            {
+                Ok(rows) => rows
+                    .into_iter()
+                    .map(|d| Choice::new(d.type_name, d.id.to_string()))
+                    .collect(),
+                Err(Error::Forbidden | Error::Unauthorized | Error::NotFound) => {
+                    self.can_department = false;
+                    vec![]
+                }
+                Err(error) => return Err(error),
+            }
         } else {
             vec![]
         };
