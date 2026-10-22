@@ -494,6 +494,7 @@ impl MyClaims {
                 .attr("maxlength", "500"),
         ];
         for field in &mut fields {
+            field.wrapper_class = "mb-0".into();
             field.errors = self
                 .errors
                 .iter()
