@@ -167,7 +167,7 @@ impl List {
                 TABLES[index]
                     .1
                     .iter()
-                    .map(|(key, label)| BuiltinColumn::new(*key, *label))
+                    .map(|(key, label)| BuiltinColumn::new(key, label))
                     .collect(),
             )
             .map_err(|_| Error::Internal)?,
@@ -350,6 +350,17 @@ impl State {
                 .map_or(0, |c| c.id)
             }
         };
+        if self.company == 0 {
+            self.unavailable = Some(PerformanceError::Unavailable.to_string());
+            self.pending = None;
+            self.selected = None;
+            self.planning = None;
+            self.choices = None;
+            self.mine = None;
+            self.reviews.clear();
+            self.total = 0;
+            return Ok(());
+        }
         let client = self.service.db.get().await?;
         self.display = self
             .display_policy
@@ -657,7 +668,7 @@ impl State {
             let name = format!("record[{key}]");
             let value = payload
                 .get(&name)
-                .or_else(|| payload.get(&format!("{name}[]")));
+                .or_else(|| payload.get(format!("{name}[]")));
             if matches!(*key, "observation_ids" | "target_ids") {
                 let selected = match value {
                     None => vec![],
@@ -678,7 +689,7 @@ impl State {
                 let text = value.and_then(Value::as_str).unwrap_or("");
                 if text.chars().count() > 8_000 {
                     return Err(PerformanceError::Invalid(vec![FieldError::new(
-                        *key,
+                        key,
                         "is too long",
                     )]));
                 }
@@ -1153,6 +1164,7 @@ impl State {
             if let Some(options) = self.choices_for(key, id) {
                 field = field.kind(InputKind::Select).options(options);
                 if matches!(*key, "observation_ids" | "target_ids") {
+                    field.name.push_str("[]");
                     field = field.multiple().values(
                         value
                             .and_then(Value::as_array)

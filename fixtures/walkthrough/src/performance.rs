@@ -63,6 +63,9 @@ async fn db_refused(client: &tokio_postgres::Client, sql: &str, id: i64, step: &
 }
 
 pub async fn run(url: &str) -> Result<()> {
+    run_with_pages(url, false).await
+}
+pub(super) async fn run_with_pages(url: &str, pages: bool) -> Result<()> {
     bilibi_base::link();
     bilibi_core::link();
     bilibi_domains::link();
@@ -833,5 +836,8 @@ pub async fn run(url: &str) -> Result<()> {
     let count: i64 = client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=1 AND auditable_type LIKE 'people_performance_%'", &[]).await?.get(0);
     prove(count >= 25, "every performance mutation and pin is audited")?;
     println!("PM1 proof complete: {count} audited changes");
+    if pages {
+        super::performance_pages::verify(&services).await?;
+    }
     Ok(())
 }

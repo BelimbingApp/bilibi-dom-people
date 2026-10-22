@@ -1,12 +1,12 @@
 //! PM2 executable proof: real page mounts and live events over disposable data.
 use bilibi_authz::grants::Grants;
-use bilibi_database::{pool, Error, Result};
+use bilibi_database::{Db, Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_performance::{self as pm, Performance};
 use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::page::{LiveBody, LiveInput, LiveRequest, LiveState, PageRequest, PageService};
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 type Mounted = Box<dyn LiveState<Scope, Error>>;
 fn require(ok: bool, message: &str) -> Result<()> {
@@ -73,18 +73,10 @@ fn form(event_name: &str, pairs: &[(&str, String)]) -> Value {
 }
 
 pub async fn run(url: &str) -> Result<()> {
-    super::performance(url).await?;
-    let db = pool(url)?;
-    let modules = bilibi_module_registry::discover()?;
-    let mut services = Services::default();
-    services.provide("bootstrap.database", Arc::new(db.clone()))?;
-    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
-    services.install(&modules)?;
-    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
-        services
-            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
-            .set_enforced(false);
-    }
+    super::performance::run_with_pages(url, true).await
+}
+pub(super) async fn verify(services: &Services) -> Result<()> {
+    let db = services.get::<Db>("base/database.pool")?;
     let client = db.get().await?;
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
     let manager = auth
