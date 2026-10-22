@@ -745,6 +745,15 @@ pub(crate) async fn run(
             .await,
         TrainingError::AttendanceEmployeeUnavailable,
     )?;
+    users
+        .link_affiliation(
+            admin,
+            STAFF,
+            AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+
     // Current reporting lines and competing answers are rechecked under the company lock.
     let report = workforce
         .employment(manager, COMPANY, second.id)

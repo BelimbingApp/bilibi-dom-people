@@ -1,11 +1,7 @@
-//! What Training adds to the shared catalogs (Bilimbi
-//! `Bilimbi.People.Training.Contributions`): the module descriptor with its
-//! catalog and governance migrations and facade service, and catalog capabilities under
-//! the `people` Authz domain. Bilimbi grants no Training key to a system
-//! role: an administrator grants them. Governance contributes its keys and setting
-//! in `governance.rs`; evaluation keys, the `answer` verb and six settings
-//! live in `evaluation.rs`. Passport keys, the `generate` verb and menu
-//! leaves land with their slices beside this block.
+//! Training catalog, participation, governance, evaluation and Learning contributions.
+//! Mirrors Bilimbi Training.Contributions. No Training key is granted to a system role.
+//! web_learning.rs contributes six Learning routes and three menu leaves;
+//! evaluation.rs contributes its six capabilities, the answer verb and six settings.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
@@ -26,7 +22,8 @@ pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 24] = [
+pub const CAPABILITIES: [&str; 25] = [
+    crate::LEARNING_VIEW,
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
@@ -69,7 +66,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/artifacts", "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy", "base/ui",
+            "base/party_ids", "base/settings", "base/tenancy", "base/menu", "base/system", "base/ui",
             "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
@@ -95,6 +92,9 @@ inventory::submit! {
             factory: |services| Ok(Arc::new(bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::download::EvidenceDownload {
                 training: services.get(SERVICE)?,
             })))),
+        }, Service {
+            id: crate::web_learning::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
         }],
     }
 }

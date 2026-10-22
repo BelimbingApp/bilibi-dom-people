@@ -1,0 +1,4 @@
+{% import "forms.html" as forms %}
+{% call forms::form(id=id,event=event,actions=actions) %}
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{% endcall %}

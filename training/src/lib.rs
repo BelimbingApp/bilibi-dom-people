@@ -689,3 +689,6 @@ async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -
             _ => TrainingError::Unauthorized,
         })
 }
+
+mod web_learning;
+pub use web_learning::LEARNING_VIEW;

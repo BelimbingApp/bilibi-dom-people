@@ -1,0 +1,20 @@
+{# Bilimbi EmployeeWorkspace.Web.ShowLive; shared read-first facts. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+{% import "workspace.html" as workspace %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-employee-detail", variant=bilibi_ui::PageVariant::Detail) %}
+{% call ui::header(subtitle=subtitle) %}Employee workbench{% endcall %}
+{{ back }}
+{% if available %}
+{% call workspace::announce(kind="people/workforce", record_id=employee_id) %}{% endcall %}
+{{ identity }}
+{{ employment }}
+{{ profile }}
+{{ access }}
+{{ requests }}
+{% else %}{{ unavailable }}{% endif %}
+{% endcall %}
+{{ confirmation }}
+</div>

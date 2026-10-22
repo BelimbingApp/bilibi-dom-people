@@ -1,14 +1,8 @@
 # Training
 
-Module ID: `people/training`, crate `bilibi-people-training`. A company's
-course catalog, delivery events and session calendar, and later its
-attendance records, evidence, learning requests, plans, budgets,
-evaluations, passports and insights. Other People modules and the Training
-pages reach it only through this module's facade; none of them reads its
-tables. This README is the owner contract; the Bilimbi source it ports is
-[`training/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
+Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-PT1 and PT2 provide the catalog, attendance records and private evidence through `Training`. The Courses and Sessions & calendar pages land in PT6, and Training records in PT7. Learning requests, plans, budgets, evaluations, passports and insights follow in their own slices. Until the pages land, an administrator grants the eight available Training capabilities.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages below. The Courses and Sessions & calendar pages arrive in PT6, and Training records in PT7. Evaluation, passports and insights arrive in their own slices. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -132,7 +126,7 @@ role: an administrator grants them.
 | `people.training.evidence.manage` | Attaches PDF evidence |
 | `people.training.retention.manage` | Purges expired evidence, lists purge holds and retries cleanup |
 
-The ten governance keys and `people.training.currencies` are described below. The remaining 13 keys, the verbs `answer` and `generate`, the eight menu leaves and `people.training.evaluation.*` settings land with their slices.
+The ten governance keys and `people.training.currencies` are described below. The remaining keys, the verbs `answer` and `generate`, the remaining menu leaves and `people.training.evaluation.*` settings land with their slices.
 
 ## Walkthrough
 
@@ -184,7 +178,7 @@ The PT2 block in `fixtures/walkthrough/src/participation.rs` runs against the sa
 
 ## Learning requests, plans and budgets
 
-Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the learning pages are added in PT8.
+Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the six learning pages use these methods.
 
 For example, an employee creates a draft with `create_learning_request`, submits it with a reason, and their direct manager recommends it. HR reviews it before an approver reserves the cost. Every decision remains in `learning_histories`.
 
@@ -219,9 +213,36 @@ Migration `people-training-003-learning-governance` creates the six Bilimbi gove
 
 The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It creates records through these methods on a disposable database and fails if an expected transition or refusal differs.
 
+
+## Learning pages
+
+Employees can request learning, managers can recommend it and create plans, and independent reviewers can approve both. Budget operators set the accepted currencies and allocations.
+
+Open **My learning**, add a request, then submit it with a reason. The manager recommends it from **Team requests**. HR reviews it from **Learning requests & reviews**, and an approver records the final decision there. Each decision asks for confirmation and remains in History.
+
+| Address under `/people/training` | Task | Entry capability |
+| --- | --- | --- |
+| `/my` | Own learning requests | `people.training.learning.view` |
+| `/team` | Direct-report requests | `people.training.requests.recommend` |
+| `/plans` | Create team plans with up to 300 learning items; submit, cancel or amend | `people.training.plans.submit` |
+| `/requests` | HR request register and review or approval | `people.training.requests.view` |
+| `/plan-reviews` | Submitted plans and independent approval | `people.training.plans.view` |
+| `/budgets` | Company currencies, policy versions and totals for each currency and period | `people.training.budgets.view` |
+
+Task links appear only with their own grant. `learning.view` opens My learning without granting request submission: a reader without `requests.submit` sees the authorized task links and the reference's task guidance. Request, review, approval and budget controls each need their separate write grant.
+
+All registers use the shared FlexTable with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). The reference has no record sorting or search on these pages. History and plan items also use FlexTable. The company chooser defaults to the first company Workforce lets the account select; an explicitly unavailable company does not silently select another.
+
+The live owner re-reads company reach and capabilities before every event. A confirmation retains its record, action and reason on the server and rechecks the specific action's grant on confirmation. The facade repeats its checks under the company lock. Refusals stay on the page as error messages. Budget corrections retain the prior currency; plan amendments create a new draft. Every form preserves entered values on refusal.
+
+The page service is `people/training.learning_pages`, implemented in `src/web_learning.rs`. It declares the facade writes through `PageWrites::pending`, following the port plan. The My evaluations section belongs to the evaluation page slice (PT9).
+
+
+For a mounted-page refusal proof, prepare the disposable database with `cargo run -p bilibi-people-walkthrough`, then keep the Learning page open. With the same `DATABASE_URL` and `BILIBI_ENV=development`, run `cargo run -p bilibi-people-walkthrough --bin learning-control -- deny-submit`, then press the stale request control. `allow-submit` restores the grant. The command also supports `deny-budget-manage`, `allow-budget-manage`, `unlink-staff`, `relink-staff` and `archive-company-three`. Company 002 is already archived by an earlier proof; archiving Company 003 is permanent, so use it last. These commands call the owning facades and belong only on the disposable walkthrough database.
+
 ## Evaluation and effectiveness
 
-Employees evaluate completed sessions, and their current direct managers record what changed at work. The service follows Bilimbi `Training.Evaluation`; its pages follow in PT8 and PT9.
+Employees evaluate completed sessions, and their current direct managers record what changed at work. The service follows Bilimbi `Training.Evaluation`; My evaluations and Effectiveness follow in PT9.
 
 For example, publish a policy with a one-day evaluation deadline and checkpoints at 30 and 90 days. After a session ends, prepare its reviews. Each current learner with confirmed attendance receives an evaluation and two manager reviews. Every review keeps the published criteria and timing, even after settings change.
 

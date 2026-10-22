@@ -29,6 +29,7 @@ mod locations;
 mod rosters;
 mod rules;
 mod shifts;
+mod web;
 mod workflow;
 
 pub use adjustments::{AdjustmentRequest, NewAdjustment, PendingAdjustment};
