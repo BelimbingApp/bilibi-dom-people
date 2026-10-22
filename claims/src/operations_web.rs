@@ -390,7 +390,10 @@ impl Operations {
                 self.clear();
                 self.list
                     .apply_filters(&params::form_values(payload, "filters"));
+                // Bilimbi's company patch opens the awaiting-decision queue.
+                self.list.filters.insert("tab".into(), "submitted".into());
                 self.normalize();
+                self.columns = queue_columns(self.tab())?;
             }
             "grid" => {
                 self.columns.handle(&params::string_values(payload));
