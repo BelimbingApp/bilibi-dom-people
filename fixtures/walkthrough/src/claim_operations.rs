@@ -1,0 +1,149 @@
+//! PC5 browser records, created only through the Claims facade.
+use super::{COMPANY, MANAGER, STAFF, TENANT, VIEWER};
+use bilibi_authz::grants::Grants;
+use bilibi_database::{Error, Result};
+use bilibi_module_registry::Services;
+use bilibi_people_claims::{
+    Approval, Claims, NewCategory, NewClaimType, NewPolicy, NewRequest, Reimbursement, Rejection,
+    APPROVE, REIMBURSE, SUBMIT,
+};
+use bilibi_tenancy::Authentication;
+use jiff::civil::date;
+use rust_decimal::Decimal;
+
+pub(super) async fn run(services: &Services) -> Result<()> {
+    let auth = services.get::<Authentication>("base/tenancy.authentication")?;
+    let admin = auth.authenticated(TENANT, super::ADMIN).await?;
+    let manager = auth.authenticated(TENANT, MANAGER).await?;
+    let staff = auth.authenticated(TENANT, STAFF).await?;
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    // Viewer can read the queue but cannot pay, batch, or export.
+    grants
+        .set_direct(&admin, VIEWER, APPROVE, Some(true))
+        .await?;
+    grants
+        .set_direct(&admin, VIEWER, REIMBURSE, Some(false))
+        .await?;
+    grants.set_direct(&admin, STAFF, SUBMIT, Some(true)).await?;
+    let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
+    let check = |error| {
+        eprintln!("PC5 fixture: {error:?}");
+        Error::Internal
+    };
+    claims
+        .put_currencies(&manager, COMPANY, &["USD".into(), "EUR".into()])
+        .await
+        .map_err(check)?;
+    let category = claims
+        .create_category(
+            &manager,
+            COMPANY,
+            &NewCategory {
+                code: "operations-proof".into(),
+                name: "Operations proof".into(),
+            },
+        )
+        .await
+        .map_err(check)?;
+    let kind = claims
+        .create_claim_type(
+            &manager,
+            COMPANY,
+            &NewClaimType {
+                category_id: category.id,
+                code: "operations-proof".into(),
+                name: "Operations expense".into(),
+                receipt_requirement: "never".into(),
+                eligibility: None,
+            },
+        )
+        .await
+        .map_err(check)?;
+    claims
+        .create_policy(
+            &manager,
+            COMPANY,
+            &NewPolicy {
+                claim_type_id: kind.id,
+                effective_from: date(2025, 1, 1),
+                effective_to: None,
+                currency: "USD".into(),
+                per_claim_limit: None,
+                monthly_limit: None,
+                yearly_limit: None,
+                receipt_threshold: None,
+            },
+        )
+        .await
+        .map_err(check)?;
+    for (amount, status) in [
+        (11, "submitted"),
+        (12, "approved"),
+        (13, "rejected"),
+        (14, "reimbursed"),
+        (15, "batch"),
+        (16, "submitted"),
+    ] {
+        let request = claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    claim_type_id: kind.id,
+                    incurred_on: date(2025, 1, 15),
+                    amount: Decimal::new(amount, 0),
+                    currency: "USD".into(),
+                    description: Some("Browser interaction proof".into()),
+                    receipt_number: None,
+                    confirm_duplicate: false,
+                },
+            )
+            .await
+            .map_err(check)?;
+        if matches!(status, "approved" | "reimbursed" | "batch") {
+            claims
+                .approve_request(&manager, COMPANY, request.id, &Approval::default())
+                .await
+                .map_err(check)?;
+        }
+        if status == "rejected" {
+            claims
+                .reject_request(
+                    &manager,
+                    COMPANY,
+                    request.id,
+                    &Rejection {
+                        decision_reason: "Outside the policy".into(),
+                    },
+                )
+                .await
+                .map_err(check)?;
+        }
+        if status == "reimbursed" {
+            claims
+                .reimburse_request(
+                    &manager,
+                    COMPANY,
+                    request.id,
+                    &Reimbursement {
+                        payment_reference: Some("proof payment".into()),
+                    },
+                )
+                .await
+                .map_err(check)?;
+        }
+        println!(
+            "PC5 browser claim {}: {status}, amount {amount}",
+            request.id
+        );
+    }
+    let batch = claims
+        .create_handoff_batch(&manager, COMPANY, "USD")
+        .await
+        .map_err(check)?;
+    println!(
+        "PC5 browser batch {}: /people/claims/operations?company_id=1&tab=batches",
+        batch.id
+    );
+    Ok(())
+}

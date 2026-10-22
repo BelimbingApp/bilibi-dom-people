@@ -111,7 +111,7 @@ impl Action {
 }
 #[derive(Clone)]
 enum Subject {
-    Claim(QueueClaim),
+    Claim(Box<QueueClaim>),
     Batch(HandoffBatch),
     Currency(String),
 }
@@ -426,7 +426,7 @@ impl Operations {
                                     }
                         })
                         .cloned()
-                        .map(Subject::Claim)
+                        .map(|row| Subject::Claim(Box::new(row)))
                 };
                 if let (Some(subject), Some(c), Some(action)) = (subject, &self.company, action) {
                     self.selection = Some(Selection {
@@ -547,7 +547,7 @@ impl Operations {
     fn value(&self, key: &str) -> &str {
         self.values.get(key).map_or("", String::as_str)
     }
-    fn moment(&self, value: Option<&str>) -> Result<Html> {
+    fn moment(&self, id: String, value: Option<&str>) -> Result<Html> {
         let Some(instant) = value.and_then(|s| s.parse::<jiff::Timestamp>().ok()) else {
             return Ok(Html::text("—"));
         };
@@ -556,7 +556,16 @@ impl Operations {
             bilibi_datetime::Format::DateTime,
             bilibi_datetime::Precision::Minute,
         );
-        render(&Moment { shown })
+        render(&Moment {
+            id,
+            instant: bilibi_ui::flex_table::Instant::new(
+                &shown.iso,
+                &shown.text,
+                &shown.company,
+                &shown.utc,
+                shown.mode.as_str(),
+            ),
+        })
     }
     fn queue(&self) -> Result<Html> {
         let compact = self.columns.mode() == bilibi_ui::RowMode::Compact;
@@ -572,7 +581,8 @@ impl Operations {
                 } else if self.tab() == "approved" && self.can_reimburse {
                     actions.push(&action("reimburse", "Mark reimbursed", &r.id.to_string())?);
                 }
-                let mut paid = self.moment(r.reimbursed_at.as_deref())?;
+                let mut paid =
+                    self.moment(format!("claim-paid-{}", r.id), r.reimbursed_at.as_deref())?;
                 if let Some(reference) = &r.payment_reference {
                     paid.push(&Html::text(&format!(" · {reference}")));
                 }
@@ -674,7 +684,13 @@ impl Operations {
                         "total",
                         Html::text(&format!("{} {}", batch.total_amount, batch.currency)),
                     )
-                    .slot("created", self.moment(Some(&batch.created_at))?);
+                    .slot(
+                        "created",
+                        self.moment(
+                            format!("claim-batch-created-{}", batch.id),
+                            Some(&batch.created_at),
+                        )?,
+                    );
                 row.actions = actions;
                 Ok(row)
             })
@@ -746,14 +762,16 @@ impl Operations {
         };
         let fields = match selection.action {
             Action::Approve => vec![
-                field("approved_amount", "Approved amount", InputKind::Text).inputmode("decimal"),
-                field("decision_reason", "Reason", InputKind::Textarea).maxlength(500),
+                field("approved_amount", "Approved amount", InputKind::Text)
+                    .attr("inputmode", "decimal"),
+                field("decision_reason", "Reason", InputKind::Textarea).attr("maxlength", "500"),
             ],
             Action::Reject => vec![field("decision_reason", "Reason", InputKind::Textarea)
                 .required()
-                .maxlength(500)],
+                .attr("maxlength", "500")],
             _ => vec![
-                field("payment_reference", "Payment reference", InputKind::Text).maxlength(100),
+                field("payment_reference", "Payment reference", InputKind::Text)
+                    .attr("maxlength", "100"),
             ],
         };
         let title = match &selection.subject {
@@ -896,7 +914,7 @@ impl Operations {
                     .id("claim-operations-empty"),
             )?,
             heading: label(self.tab()),
-            batches: self.tab() == "batches",
+            description: if self.tab() == "batches" { "A batch groups approved claims of one currency for finance or payroll. Export it as a CSV, then mark it reimbursed once paid." } else { "" },
             waiting: self.waiting_table()?,
             table: if self.company.is_none() {
                 Html::EMPTY
@@ -972,7 +990,7 @@ struct View<'a> {
     tabs: Html,
     empty: Html,
     heading: &'a str,
-    batches: bool,
+    description: &'a str,
     waiting: Html,
     table: Html,
     truncated: bool,
@@ -996,9 +1014,10 @@ struct ClaimCell<'a> {
 }
 #[derive(Template)]
 #[template(
-    source = "<time datetime=\"{{ shown.iso }}\" data-hook=\"DateTime\" data-mode=\"{{ shown.mode.as_str() }}\" data-format=\"datetime\" data-precision=\"minute\" data-text-company=\"{{ shown.company }}\" data-text-utc=\"{{ shown.utc }}\" data-follow-shell=\"true\" class=\"tabular-nums\">{{ shown.text }}</time>",
+    source = "{% import \"flex_table.html\" as table %}{% call table::instant(id=id, i=instant) %}{% endcall %}",
     ext = "html"
 )]
 struct Moment {
-    shown: bilibi_datetime::Rendered,
+    id: String,
+    instant: bilibi_ui::flex_table::Instant,
 }

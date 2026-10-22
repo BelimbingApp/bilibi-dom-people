@@ -7,7 +7,7 @@
 {% call ui::header(subtitle="Decide claims, record reimbursement, and hand approved claims off.") %}Claim operations{% endcall %}
 {% if available %}
 {{ filters }}{{ tabs }}
-{% call ui::section_heading(id="claim-queue-heading", title=heading, description=if batches { "A batch groups approved claims of one currency for finance or payroll. Export it as a CSV, then mark it reimbursed once paid." } else { "" }) %}{% endcall %}
+{% call ui::section_heading(id="claim-queue-heading", title=heading, description=description) %}{% endcall %}
 {{ waiting }}{{ table }}
 {% if truncated %}<p class="mt-2 text-xs text-ink-muted">Showing the first 500 claims.</p>{% endif %}
 {% else %}{{ empty }}{% endif %}

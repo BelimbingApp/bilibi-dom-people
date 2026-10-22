@@ -3724,3 +3724,19 @@ mod payroll;
 pub async fn payroll(url: &str) -> Result<()> {
     payroll::run(url).await
 }
+
+// PC5: browser records for the five Claim operations queues.
+mod claim_operations;
+pub async fn claim_operations(url: &str) -> Result<()> {
+    bilibi_base::link();
+    bilibi_core::link();
+    bilibi_domains::link();
+    bilibi_extensions::link();
+    let db = pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    claim_operations::run(&services).await
+}
