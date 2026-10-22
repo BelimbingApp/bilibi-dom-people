@@ -379,6 +379,8 @@ pub async fn run(url: &str) -> Result<()> {
     let employment = workforce
         .employment(&manager, COMPANY, employee)
         .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
         .map_err(|_| Error::Internal)?;
     let inactive = workforce
         .update_employment(
