@@ -88,7 +88,7 @@ fn show<T: std::fmt::Debug>(
 }
 
 /// A record saved by a step the walkthrough cannot go on without.
-fn saved<T>(record: Option<T>) -> Result<T> {
+pub(crate) fn saved<T>(record: Option<T>) -> Result<T> {
     record.ok_or(Error::Internal)
 }
 
@@ -754,6 +754,22 @@ pub async fn run(url: &str) -> Result<()> {
         refused(&client, step, sql, manager_employment.id).await;
     }
 
+    // Leave (slice PL1): its own block, in `leave.rs`.
+    leave::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        MANAGER,
+        COMPANY,
+        OTHER_COMPANY,
+        manager_employment.id,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
+
     // ---- Organisation (PO1): positions, versions and assignments ----
     organisation::run(
         &services,
@@ -778,6 +794,9 @@ pub async fn run(url: &str) -> Result<()> {
     );
     Ok(())
 }
+
+// Leave (slice PL1).
+mod leave;
 
 // ---- Organisation (PO1): its own block, run from the end of `run` ----
 mod organisation;

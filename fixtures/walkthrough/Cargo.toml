@@ -28,6 +28,10 @@ jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
 
+# Leave (slice PL1).
+bilibi-people-leave = { path = "../../leave" }
+rust_decimal.workspace = true
+
 # Organisation (PO1): the block `src/organisation.rs` runs from the end of `run`.
 bilibi-audit.workspace = true
 bilibi-people-organisation = { path = "../../organisation" }
