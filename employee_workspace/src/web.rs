@@ -819,7 +819,7 @@ impl Employees {
         for error in &self.errors {
             summary.push(
                 format!("employment-{}", error.field),
-                bilibi_ui::forms::error_sentence(error.field, &error.message),
+                bilibi_ui::forms::error_sentence(&error.field.replace('_', " "), &error.message),
             );
         }
         let body = render(&EmploymentForm {
@@ -835,7 +835,11 @@ impl Employees {
                         .map(|e| e.message.clone())
                         .collect(),
                 ),
-            identity_actions: Html::EMPTY,
+            identity_actions: if self.person.is_none() {
+                action("cancel_add", "Cancel", "")?
+            } else {
+                Html::EMPTY
+            },
             selected: self.person.is_some(),
             fields,
             actions,
