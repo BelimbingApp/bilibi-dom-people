@@ -1385,6 +1385,31 @@ pub async fn attendance(url: &str) -> Result<()> {
         attendance.list_clocking_locations(&manager, COMPANY).await,
     );
 
+    // An open shift older than the maximum shift length reads as an
+    // exception while its row stays in progress.
+    let thirteen_hours_ago = Timestamp::now()
+        .checked_sub(jiff::Span::new().hours(13))
+        .map_err(|_| Error::Internal)?;
+    attendance_step(
+        "device clocks the manager in 13 hours ago, key m1",
+        attendance
+            .record_clock(
+                &manager,
+                COMPANY,
+                manager_employee,
+                &ClockInput::new("m1", EventType::In, "device", thirteen_hours_ago),
+            )
+            .await,
+    );
+    if let Some(days) = attendance_step(
+        &format!("manager lists employee #{manager_employee}'s days"),
+        attendance
+            .list_days(&manager, COMPANY, manager_employee)
+            .await,
+    ) {
+        print_days("the manager's days", &days);
+    }
+
     // The days as the operator and the employee see them.
     if let Some(days) = attendance_step(
         &format!("manager lists employee #{staff_employee}'s days"),

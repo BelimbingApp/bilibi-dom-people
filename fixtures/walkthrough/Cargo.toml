@@ -8,6 +8,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
+# `cargo run -p bilibi-people-walkthrough` is the Workforce walkthrough that
+# prepares the database; each later block is a binary under src/bin.
+default-run = "bilibi-people-walkthrough"
 
 [dependencies]
 bilibi-affiliation.workspace = true
