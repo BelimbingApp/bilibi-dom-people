@@ -356,10 +356,7 @@ impl Approvals {
                             ),
                         )
                         .slot("clock", Html::text(&clock_text(request)))
-                        .slot(
-                            "reason",
-                            Html::text(request.reason.as_deref().unwrap_or_default()),
-                        )
+                        .slot("reason", Html::text(&request.reason))
                         .slot("decision", form),
                 );
             }
