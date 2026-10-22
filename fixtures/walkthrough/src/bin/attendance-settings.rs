@@ -38,12 +38,12 @@ async fn main() -> Result<()> {
             for capability in [RULES_MANAGE, ALLOWANCES_MANAGE] {
                 grants.set_direct(&admin, 1, capability, Some(true)).await?;
             }
-            // A second account proves the allowance tab is withheld independently.
+            // The contractor is linked to Company 002 and proves the tab is withheld independently.
             grants
-                .set_direct(&admin, 2, RULES_MANAGE, Some(true))
+                .set_direct(&admin, 7, RULES_MANAGE, Some(true))
                 .await?;
             grants
-                .set_direct(&admin, 2, ALLOWANCES_MANAGE, Some(false))
+                .set_direct(&admin, 7, ALLOWANCES_MANAGE, Some(false))
                 .await?;
         }
         "revoke" => {
@@ -53,8 +53,15 @@ async fn main() -> Result<()> {
                     .await?;
             }
         }
+        "archive-company-two" => {
+            services
+                .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
+                .archive_company(&admin, 2, Some("PA3 archived-company browser proof"))
+                .await
+                .map_err(|_| Error::Invalid)?;
+        }
         _ => return Err(Error::Invalid),
     }
-    println!("PA3 fixture {mode}: manager has both settings permissions; viewer has rules only (except while revoked).");
+    println!("PA3 fixture {mode}: manager has both settings permissions; contractor has rules only (except while revoked).");
     Ok(())
 }
