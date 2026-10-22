@@ -864,6 +864,17 @@ pub async fn run(url: &str) -> Result<()> {
 
     references::run(&services, &grants, &client, &admin, &manager, &viewer).await?;
 
+    // PC2: requests, decisions, hand-off, transactional events and refusals.
+    claim_workflow::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -2519,6 +2530,8 @@ async fn skills_catalog(
     Ok(())
 }
 
+// PC2: the workflow proof lives in its own block.
+mod claim_workflow;
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
 
