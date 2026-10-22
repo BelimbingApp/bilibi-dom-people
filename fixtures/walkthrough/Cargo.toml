@@ -40,3 +40,6 @@ rust_decimal.workspace = true
 
 # Reference data (slice PD1).
 bilibi-people-reference-data = { path = "../../reference_data" }
+
+# Skills (PK1): the catalog proof block at the end of lib.rs.
+bilibi-people-skills = { path = "../../skills" }
