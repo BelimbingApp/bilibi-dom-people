@@ -325,7 +325,7 @@ impl Organisation {
     ) -> Result<Position> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         let valid = positions::validate_position(new).map_err(OrganisationError::Invalid)?;
         let mut tx = self
             .mutations
@@ -360,7 +360,7 @@ impl Organisation {
     ) -> Result<Position> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         let mut tx = self
             .mutations
             .begin(
@@ -403,7 +403,7 @@ impl Organisation {
     ) -> Result<PositionVersion> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         let valid = positions::validate_version(new).map_err(OrganisationError::Invalid)?;
         let mut tx = self
             .mutations
@@ -443,7 +443,7 @@ impl Organisation {
     ) -> Result<Assignment> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         let valid = positions::validate_assignment(new).map_err(OrganisationError::Invalid)?;
         if positions::find(&**client, company_id, position_id)
             .await?
@@ -464,10 +464,16 @@ impl Organisation {
             .ok_or(OrganisationError::NotFound)?;
         // Recheck working membership after acquiring the company lock so a
         // change while this write waited takes effect.
-        self.workforce
-            .employee(scope, company_id, valid.employee_id)
-            .await?
-            .require_current()?;
+        if valid.employee_id <= 0
+            || !self
+                .workforce
+                .working_employee_ids_on(tx.sql(), scope, company_id, &[valid.employee_id])
+                .await?
+                .require_current()?
+                .contains(&valid.employee_id)
+        {
+            return Err(OrganisationError::NotFound);
+        }
         if valid.kind == "substantive" {
             self.release_seat(
                 &mut tx,
@@ -505,7 +511,7 @@ impl Organisation {
     ) -> Result<Assignment> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         let mut tx = self
             .mutations
             .begin(
@@ -559,7 +565,7 @@ impl Organisation {
         page: i64,
         page_size: i64,
     ) -> Result<Vec<PositionProjection>> {
-        self.live_company(scope, company_id).await?;
+        self.live_company(client, scope, company_id).await?;
         if page < 1 || !(1..=MAX_PAGE_SIZE).contains(&page_size) {
             return Err(OrganisationError::InvalidOptions);
         }
@@ -599,7 +605,7 @@ impl Organisation {
         page_size: i64,
         cursor: Option<&str>,
     ) -> Result<PositionScan> {
-        self.live_company(scope, company_id).await?;
+        self.live_company(client, scope, company_id).await?;
         if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
             return Err(OrganisationError::InvalidOptions);
         }
@@ -635,13 +641,21 @@ impl Organisation {
     /// How many positions the company has, for an explorer's pagination.
     pub async fn count_positions(&self, scope: &Scope, company_id: i64) -> Result<i64> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.live_company(scope, company_id).await?;
+        self.live_company(&**client, scope, company_id).await?;
         positions::count(&**client, company_id).await
     }
 
     /// The company as Workforce exposes it: live, of the scope's tenant.
-    async fn live_company(&self, scope: &Scope, company_id: i64) -> Result<()> {
-        self.workforce.company(scope, company_id).await?;
+    async fn live_company(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<()> {
+        self.workforce
+            .company_on(client, scope, company_id)
+            .await?
+            .require_current()?;
         Ok(())
     }
 
@@ -664,18 +678,17 @@ impl Organisation {
         let eve = start.yesterday().map_err(|_| {
             OrganisationError::Invalid(vec![FieldError::new("effective_from", "is invalid")])
         })?;
-        let mut released = Vec::new();
-        for holder in holders {
-            match self
-                .workforce
-                .employee(scope, company_id, holder.employee_id)
-                .await
-            {
-                Ok(_) => {}
-                Err(WorkforceError::NotFound) => released.push((holder, eve)),
-                Err(error) => return Err(error.into()),
-            }
-        }
+        let ids: Vec<i64> = holders.iter().map(|holder| holder.employee_id).collect();
+        let working = self
+            .workforce
+            .working_employee_ids_on(tx.sql(), scope, company_id, &ids)
+            .await?
+            .require_current()?;
+        let released = holders
+            .into_iter()
+            .filter(|holder| !working.contains(&holder.employee_id))
+            .map(|holder| (holder, eve))
+            .collect::<Vec<_>>();
         if released.is_empty() {
             return Ok(());
         }
@@ -704,6 +717,7 @@ impl Organisation {
         let versions = positions::effective_versions(client, &ids, as_of).await?;
         let working = self
             .working_ids(
+                client,
                 scope,
                 company_id,
                 placements.iter().chain(substantive.iter()),
@@ -755,6 +769,7 @@ impl Organisation {
     /// the company now, through Workforce; a read that is not current refuses.
     async fn working_ids<'a>(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         assignments: impl Iterator<Item = &'a Assignment>,
@@ -770,13 +785,10 @@ impl Organisation {
         }
         let employees = self
             .workforce
-            .employees_by_ids(scope, company_id, &ids)
+            .working_employee_ids_on(client, scope, company_id, &ids)
             .await?
             .require_current()?;
-        Ok(employees
-            .iter()
-            .filter_map(|employee| employee.reference.stable_id.parse().ok())
-            .collect())
+        Ok(employees.into_iter().collect())
     }
 }
 

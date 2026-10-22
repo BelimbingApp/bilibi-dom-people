@@ -844,9 +844,31 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
         refused(client, step, sql, manager_ceo.id).await;
     }
 
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    // Leave exactly one pool connection free. A position read must use it
+    // throughout, including company and holder membership reads in Workforce.
+    let status = db.status();
+    let borrowed = status.size - status.available;
+    let reserve = status.max_size.saturating_sub(borrowed + 1);
+    let mut held = Vec::with_capacity(reserve);
+    for _ in 0..reserve {
+        held.push(db.get().await?);
+    }
+    let page = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        organisation.positions(manager, company, today, 1, 100),
+    )
+    .await
+    .map_err(|_| Error::Internal)?
+    .map_err(|_| Error::Internal)?;
+    if page.len() != seen.len() {
+        return Err(Error::Internal);
+    }
+    drop(held);
+    println!("position read with only one pool connection free: passed (company and holders use the caller's client)");
+
     // Hold only a read lock in a separate connection. Revoke the manager's
     // grant after the write queues on that lock, before allowing it to run.
-    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
     let mut locker = db.get().await?;
     let lock = locker.transaction().await?;
     let blocker: i32 = lock.query_one("SELECT pg_backend_pid()", &[]).await?.get(0);

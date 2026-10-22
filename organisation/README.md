@@ -52,7 +52,7 @@ substantive holder on the day). Reads apply the working rule at read time:
 an assignee who later leaves the company's working statuses is omitted from
 the holders and no longer occupies the position, while the assignment row
 stays as history. A page checks only its own holders through Workforce's
-`employees_by_ids`, never the whole workforce; a Workforce read that is not
+`working_employee_ids_on`, never the whole workforce; a Workforce read that is not
 current is `NotCurrent`. A page reads at most 500 effective assignments;
 past that bound the later positions of the page report
 `assignments_incomplete`.
@@ -96,9 +96,7 @@ drops the runtime registration: Organisation provides the optional port
 their own client and sealed scope, and a caller gets `PortError::Unavailable`
 when Organisation is not mounted. No edge runs from Workforce to
 Organisation. The provider runs the facade's own read: it proves the live
-company and filters holders through Workforce, needs no capability, and reads
-the position rows on the caller's client, so a caller inside a transaction
-sees its own pending positions. This documented shape is the whole contract.
+company and filters holders through Workforce, needs no capability, and runs all reads on the caller's client. Workforce's `company_on` and `working_employee_ids_on` keep both company and holder facts in that same view, without renting nested pool connections. This documented shape is the whole contract.
 
 - Request: `{"company_id": <integer>, "as_of": "<YYYY-MM-DD>"}` with an
   optional `"page_size"` (1 to 100, default 50) and **exactly one** of
@@ -187,6 +185,8 @@ cursor for another day, company or a tampered one, calls the port as
 Workforce will, and ends with PostgreSQL refusing an overlapping substantive
 holder, an overlapping version, an own or cross-company parent, an unknown
 kind, an end before the start and an unknown employment. It also queues a position write behind a company lock, revokes the grant through Authz, then proves that the queued write refuses without creating a position.
+
+The walkthrough also reserves every pool connection except one and proves that a position page can still read its company and holders.
 
 ## Dependencies
 
