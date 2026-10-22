@@ -1,0 +1,6 @@
+{% import "forms.html" as forms %}
+{% call forms::form(id="claim-decision-form", event="review", actions=actions) %}
+{% for field in fields %}
+{% call forms::input(field=field) %}{% endcall %}
+{% endfor %}
+{% endcall %}
