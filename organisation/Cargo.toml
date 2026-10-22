@@ -15,6 +15,7 @@ publish = false
 # The scan cursor's URL-safe transport; the version Core Agent Access, Core
 # User and Base Artifacts already build with.
 base64 = "0.23.1"
+bilibi-agent-api.workspace = true
 bilibi-audit.workspace = true
 bilibi-authz.workspace = true
 bilibi-company.workspace = true

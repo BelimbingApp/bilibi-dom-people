@@ -42,6 +42,23 @@ records; the schema is private.
 | `scan_positions(scope, company, as_of, page_size, cursor)` | none | One step of the high-water keyset scan (below), as a `PositionScan` |
 | `count_positions(scope, company)` | none | How many positions the company has, for an explorer's pagination |
 
+## Agent operations
+
+The three actions that have no page in Bilimbi are available as reviewed
+operations. Each requires `people.organisation.manage`; the person reviews
+the plan and approves the exact inputs before Bilibi commits it. The handler
+calls the Organisation facade, which rechecks the live permission and company
+lock in the commit transaction.
+
+| Key | Required input | Optional input | Result |
+| --- | --- | --- | --- |
+| `people.organisation.position.create` | `company_id`, `code` | `parent_id` | The new position |
+| `people.organisation.position.version` | `company_id`, `position_id`, `version`, `title`, `effective_from` | `effective_to` | The appended title version |
+| `people.organisation.position.parent` | `company_id`, `position_id` | `parent_id`; omit it to place the position at the company root | The moved position |
+
+The full schemas and instructions for choosing values are in
+[`position-guide.md`](position-guide.md).
+
 A `PositionProjection` is Bilimbi's `Workforce.Position`: `reference`
 (`people/native`, type `position`), `company_reference`, both company axes,
 `code`, `parent_reference` (absent at the root), the `title` and `version`

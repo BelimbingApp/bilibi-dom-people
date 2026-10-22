@@ -40,6 +40,8 @@ mod directory;
 mod employments;
 mod positions;
 mod read_result;
+mod workspace_directory;
+pub use workspace_directory::{DirectoryEmployee, EmploymentType};
 
 pub mod authorization;
 

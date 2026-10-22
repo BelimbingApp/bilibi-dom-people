@@ -1,0 +1,13 @@
+{# Employment dialog: choose the Core Person first, then employment facts. #}
+{% import "forms.html" as forms %}
+{% call forms::form(id="employment-person-picker", event="select_person", change=true, actions=identity_actions) %}
+{% call forms::combobox(combo=person) %}{% endcall %}
+{% endcall %}
+{{ summary }}
+{% if selected %}
+{% call forms::form(id="employment-create-form", event="create_employment", actions=actions) %}
+<div class="grid gap-x-4 sm:grid-cols-2">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
+{% endcall %}
+{% endif %}

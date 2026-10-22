@@ -154,11 +154,11 @@ fn as_optional_text<T: std::fmt::Display, S: serde::Serializer>(
 
 /// A validated event, with its local date in the company's time zone.
 pub(crate) struct Event {
-    key: String,
-    event_type: EventType,
-    source: String,
-    occurred_at: Timestamp,
-    timezone: String,
+    pub(crate) key: String,
+    pub(crate) event_type: EventType,
+    pub(crate) source: String,
+    pub(crate) occurred_at: Timestamp,
+    pub(crate) timezone: String,
     point: Option<(Decimal, Decimal)>,
     on_date: Date,
 }

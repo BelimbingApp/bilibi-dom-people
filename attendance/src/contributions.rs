@@ -1,8 +1,8 @@
 //! What Attendance adds to the shared catalogs (Bilimbi
 //! `Bilimbi.People.Attendance.Contributions`): the module descriptor with its
-//! migration and facade service, the five capabilities under the `people`
-//! Authz domain (and the `approve` verb Base does not declare), and the five
-//! company rule settings, each editable with `people.attendance.rules.manage`.
+//! migration and facade service, the six capabilities under the `people`
+//! Authz domain (and the `approve` and `record` verbs Base does not declare),
+//! and the five company rule settings, each editable with `people.attendance.rules.manage`.
 //! The menu leaves land with their pages (port plan rows PA3 to PA5).
 use crate::{Attendance, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
@@ -22,13 +22,16 @@ pub const ROSTER_MANAGE: &str = "people.attendance.roster.manage";
 pub const ADJUSTMENTS_APPROVE: &str = "people.attendance.adjustments.approve";
 /// Edits a company's allowance rules.
 pub const ALLOWANCES_MANAGE: &str = "people.attendance.allowances.manage";
+/// Records a clock event from a device or integration through a reviewed agent operation.
+pub const CLOCK_RECORD: &str = "people.attendance.clock.record";
 /// Every Attendance capability.
-pub const CAPABILITIES: [&str; 5] = [
+pub const CAPABILITIES: [&str; 6] = [
     SELF_VIEW,
     RULES_MANAGE,
     ROSTER_MANAGE,
     ADJUSTMENTS_APPROVE,
     ALLOWANCES_MANAGE,
+    CLOCK_RECORD,
 ];
 
 /// The company's attendance time zone (IANA), default `Etc/UTC`.
@@ -67,7 +70,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
+            "base/agent_api", "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy",
             "core/company", "people/settings", "people/workforce",
         ],
@@ -78,27 +81,29 @@ inventory::submit! {
         services: &[Service {
             id: SERVICE,
             factory: |services| {
-                Ok(Arc::new(Attendance {
+                let attendance = Arc::new(Attendance {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
-                }))
+                });
+                crate::agent_operations::bind(attendance.clone())?;
+                Ok(attendance)
             },
         }],
     }
 }
 
 // Bilimbi grants none of these to a system role; an administrator grants
-// them. `view` and `manage` are verbs Base declares; `approve` is not, and
-// the vocabulary refuses a key whose last segment no module declared.
+// them. `view` and `manage` are verbs Base declares; `approve` and `record`
+// are not, and the vocabulary refuses an undeclared last segment.
 inventory::submit! {
     Contribution::new(VOCABULARY, "people/attendance.vocabulary", provenance!(), &VocabularyContribution {
         domains: &["people"],
-        verbs: &["approve"],
+        verbs: &["approve", "record"],
         capabilities: &[
             C::tenant(SELF_VIEW), C::tenant(RULES_MANAGE), C::tenant(ROSTER_MANAGE),
-            C::tenant(ADJUSTMENTS_APPROVE), C::tenant(ALLOWANCES_MANAGE),
+            C::tenant(ADJUSTMENTS_APPROVE), C::tenant(ALLOWANCES_MANAGE), C::tenant(CLOCK_RECORD),
         ],
         roles: &[],
         system_principals: &[],

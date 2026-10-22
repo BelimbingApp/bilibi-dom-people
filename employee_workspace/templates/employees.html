@@ -1,0 +1,21 @@
+{# Bilimbi EmployeeWorkspace.Web.IndexLive, composed with shared Bilibi UI. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-employees", variant=bilibi_ui::PageVariant::List) %}
+{% call ui::header(subtitle=subtitle, actions=actions) %}Employees{% endcall %}
+{{ filters }}
+{% if has_company %}
+{{ employees }}
+{% call ui::card(id="employee-saved-views", title="Saved views", class="mt-5") %}
+{{ views }}
+{% call forms::form(id="people-save-view", event="save_view", actions=save_actions) %}
+{% call forms::input(field=view_name) %}{% endcall %}
+{% endcall %}
+{% endcall %}
+{% else %}{{ unavailable }}{% endif %}
+{% endcall %}
+{{ dialog }}{{ confirmation }}
+</div>

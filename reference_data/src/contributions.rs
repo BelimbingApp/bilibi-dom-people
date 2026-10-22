@@ -42,7 +42,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/menu", "base/module_registry",
-            "base/tenancy", "base/ui", "core/company", "people/settings", "people/workforce",
+            "base/ports", "base/tenancy", "base/ui", "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
             "people-reference-data-001-references",
@@ -125,3 +125,7 @@ bilibi_menu::contribute!(
     .requires(Requirement::Capability(MANAGE))
     .order(10)
 );
+
+inventory::submit! {
+    Contribution::new(bilibi_ports::PORTS, "people/reference_data.employment_types", provenance!(), &bilibi_ports::Port { provider: &crate::port::EmploymentTypes })
+}

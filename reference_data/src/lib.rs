@@ -21,6 +21,7 @@
 //! The page's `can_manage` only decides which controls render; see
 //! `README.md`.
 mod contributions;
+mod port;
 mod store;
 mod web;
 
@@ -117,8 +118,18 @@ impl ReferenceData {
     /// (Bilimbi `list_entries/2` narrowed to a kind); a blank kind lists none.
     pub async fn list(&self, scope: &Scope, company_id: i64, kind: &str) -> Result<Vec<Entry>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        known_company(&**client, scope, company_id).await?;
-        store::entries(&**client, scope.tenant(), company_id, Some(kind.trim())).await
+        Self::list_on(&**client, scope, company_id, kind).await
+    }
+
+    /// The same company configuration read on a caller's connection or transaction.
+    pub async fn list_on(
+        client: &(impl tokio_postgres::GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+        kind: &str,
+    ) -> Result<Vec<Entry>> {
+        known_company(client, scope, company_id).await?;
+        store::entries(client, scope.tenant(), company_id, Some(kind.trim())).await
     }
 
     /// Every entry of the company, ordered by kind and label.

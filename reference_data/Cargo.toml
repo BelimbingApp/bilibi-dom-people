@@ -16,6 +16,7 @@ bilibi-company.workspace = true
 bilibi-database.workspace = true
 bilibi-menu.workspace = true
 bilibi-module-registry.workspace = true
+bilibi-ports.workspace = true
 bilibi-people-settings = { path = "../settings" }
 bilibi-people-workforce = { path = "../workforce" }
 bilibi-tenancy.workspace = true
