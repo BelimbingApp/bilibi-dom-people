@@ -1074,11 +1074,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .await,
     )?;
     companies
-        .archive_company(
-            c.admin,
-            archive_company,
-            Some("PK2 archived-company proof"),
-        )
+        .archive_company(c.admin, archive_company, Some("PK2 archived-company proof"))
         .await
         .map_err(|error| {
             eprintln!("PK2 archive: {error:?}");
