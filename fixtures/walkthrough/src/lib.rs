@@ -812,6 +812,24 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    organisation::run(
+        &services,
+        &client,
+        organisation::Cast {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_user: MANAGER,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+            contractor_employment: contractor_employment.id,
+        },
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -828,6 +846,8 @@ pub async fn run(url: &str) -> Result<()> {
 
     // Claims assignment pickers include the pending employment PW1 created.
     claims::all_status_members(&services, &manager, COMPANY).await?;
+
+    references::run(&services, &grants, &client, &admin, &manager, &viewer).await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
@@ -1491,6 +1511,9 @@ async fn pw1(
 
 // Leave (slice PL1).
 mod leave;
+
+// Reference data (slice PD1).
+mod references;
 
 // ---- Skills catalog (PK1) --------------------------------------------------
 //
@@ -2483,6 +2506,9 @@ async fn skills_catalog(
 
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
+
+// ---- Organisation (PO1): its own block, run from the end of `run` ----
+mod organisation;
 
 // ---------------------------------------------------------------------------
 // Attendance core (port plan row PA1). Runs after `run` against the same
