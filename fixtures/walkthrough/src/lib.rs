@@ -754,6 +754,22 @@ pub async fn run(url: &str) -> Result<()> {
         refused(&client, step, sql, manager_employment.id).await;
     }
 
+    // Leave (slice PL1): its own block, in `leave.rs`.
+    leave::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        MANAGER,
+        COMPANY,
+        OTHER_COMPANY,
+        manager_employment.id,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -1424,3 +1440,6 @@ async fn pw1(
     );
     Ok(())
 }
+
+// Leave (slice PL1).
+mod leave;
