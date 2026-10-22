@@ -19,7 +19,7 @@
 //! window of at most 366 days, at most 500 rows, and the company's own zone
 //! (Base DateTime's `localization.timezone`) bounds its days.
 //!
-//! This slice (PT1 of the port plan) is the catalog facade; the Courses and
+//! The catalog and learning governance share this facade. The Courses and
 //! Sessions & calendar pages (PT6) and the menu leaves land with them.
 //! See `README.md`.
 mod catalog;

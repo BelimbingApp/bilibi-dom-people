@@ -98,7 +98,7 @@ fn period(from: &str, to: &str) -> Result<()> {
 }
 fn money(value: &str) -> Result<Decimal> {
     let amount = Decimal::from_str(value).map_err(|_| TrainingError::InvalidLearningValues)?;
-    if amount.is_sign_negative()
+    if amount < Decimal::ZERO
         || amount.scale() > 4
         || amount >= Decimal::from(100_000_000_000_000i64)
     {
@@ -188,7 +188,7 @@ impl Training {
     }
     async fn governance_currencies(
         &self,
-        client: &impl GenericClient,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company: i64,
     ) -> Result<Vec<String>> {
@@ -205,7 +205,7 @@ impl Training {
     }
     async fn currency_enabled(
         &self,
-        client: &impl GenericClient,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company: i64,
         currency: &str,
@@ -254,6 +254,7 @@ impl Training {
         fields(&mut data, &["reason"])?;
         period(&input.effective_from, &input.effective_to)?;
         let amount = money(&input.amount)?;
+        data["amount"] = json!(amount.to_string());
         let mut tx = self
             .mutations
             .begin(
@@ -341,7 +342,8 @@ impl Training {
             &["need", "objective", "expected_result", "currency"],
         )?;
         date(&input.proposed_on)?;
-        money(&input.estimated_cost)?;
+        let cost = money(&input.estimated_cost)?;
+        data["estimated_cost"] = json!(cost.to_string());
         let mut tx = self
             .mutations
             .begin(
@@ -906,7 +908,7 @@ fn learning_employee_error(error: WorkforceError) -> TrainingError {
     }
 }
 async fn spent(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     currency: &str,
