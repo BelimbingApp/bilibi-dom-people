@@ -15,9 +15,9 @@ use bilibi_ui::{
         PageFuture, PageRequest,
     },
     params, ActionLink, BuiltinColumn, Button, ButtonVariant, Card, Choice, ConfirmDialog,
-    EmptyState, Fact, Facts, Field, FlashMap, FlexRow, FlexTable, Form, Html, InputKind,
-    ListColumns, ListSpec, ListState, PageCounts, PageVariant, Pagination, SectionHeading,
-    StatusKind, TableEmpty, NO_FLASH,
+    EmptyState, ErrorSummary, Fact, Facts, Field, FlashMap, FlexRow, FlexTable, Form, Html,
+    InputKind, ListColumns, ListSpec, ListState, PageCounts, PageVariant, Pagination,
+    SectionHeading, StatusKind, TableEmpty, NO_FLASH,
 };
 use serde_json::Value;
 use std::{
@@ -105,6 +105,7 @@ struct State {
     standing: Option<Standing>,
     unavailable: Option<String>,
     flash: Option<(StatusKind, String)>,
+    draft_error: Option<String>,
 }
 impl State {
     fn new(
@@ -135,6 +136,7 @@ impl State {
             standing: None,
             unavailable: None,
             flash: None,
+            draft_error: None,
         };
         state.ensure_table(
             "progression-policies",
@@ -308,7 +310,10 @@ impl State {
             }
         }
         match event {
-            "clear-flash" | "clear_error" => self.flash = None,
+            "clear-flash" | "clear_error" => {
+                self.flash = None;
+                self.draft_error = None;
+            }
             "filter" | "filters" => {
                 self.pending = None;
                 self.list
@@ -344,6 +349,7 @@ impl State {
                 }
             }
             "draft" => {
+                self.draft_error = None;
                 self.values = params::form_values(payload, "policy");
                 let company = scope.actor().organisation().ok_or(Error::Invalid)?.get();
                 match self.draft_input() {
@@ -355,9 +361,15 @@ impl State {
                             self.flash =
                                 Some((StatusKind::Success, "Policy draft recorded.".into()));
                         }
-                        Err(error) => self.fail(error),
+                        Err(error) => {
+                            self.draft_error = Some(message(&error));
+                            self.fail(error);
+                        }
                     },
-                    Err(error) => self.fail(error),
+                    Err(error) => {
+                        self.draft_error = Some(message(&error));
+                        self.fail(error);
+                    }
                 }
             }
             _ => {}

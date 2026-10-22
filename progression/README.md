@@ -49,3 +49,5 @@ BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin progression
 ```
 
 See [Skills](../skills/README.md) and [Performance](../performance/README.md) for the evidence contracts, and the Platform's `scripts/domain-ci.sh` for mounted validation.
+
+For page interaction proofs, start with `cargo run -p bilibi-people-walkthrough --bin progression-pages -- prepare` on a fresh disposable database. It installs Performance’s example records and grants the manager policy access, the viewer read-only history, and staff both standing sections. Run the binary with `history` to add 26 drafts for pagination. Its `revoke-manage`, `restore-manage`, `performance-only`, `progression-only`, `both`, `neither`, `deny-evidence` and `restore-evidence` commands exercise current permission changes through Authz. These records exist only in the disposable walkthrough database.

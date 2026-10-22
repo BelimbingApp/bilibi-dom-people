@@ -80,7 +80,7 @@ impl State {
                 let r = bilibi_datetime::DisplayContext::anonymous().render(
                     instant,
                     bilibi_datetime::Format::DateTime,
-                    bilibi_datetime::Precision::Second,
+                    bilibi_datetime::Precision::Minute,
                 );
                 render(&Publication {
                     value: bilibi_ui::Instant::new(
@@ -209,6 +209,11 @@ impl State {
             ]),
         ];
         let mut body = Html::EMPTY;
+        if let Some(message) = &self.draft_error {
+            let mut summary = ErrorSummary::new("progression-draft-errors");
+            summary.push("policy_code", message);
+            body.push(&render(&summary)?);
+        }
         for field in fields {
             body.push(&render(&field)?);
         }
@@ -225,12 +230,17 @@ impl State {
             })?,
             ..Form::default()
         })?;
-        card(
-            "progression-draft-section",
-            "Draft a policy version",
-            "",
-            form,
-        )
+        render(&bilibi_ui::Page {
+            id: "progression-draft-page",
+            variant: PageVariant::Form,
+            body: card(
+                "progression-draft-section",
+                "Draft a policy version",
+                "",
+                form,
+            )?,
+            ..bilibi_ui::Page::default()
+        })
     }
     fn my_standing(&self) -> Result<Html> {
         let mut body = Html::EMPTY;
