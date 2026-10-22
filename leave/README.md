@@ -12,7 +12,7 @@ settings, and the facade for the leave year, request rules, types, policy
 versions, `grant_entitlements`, `record_entry` and `balances`. PL2 adds
 `submit_request`, `decide_request`, `cancel_request`, the self reads,
 `carry_forward`, `carry_forward_skipped`, `enqueue_carry_forward` with the
-`people-leave/carry-forward` worker, and `requested_type_ids`; PL5 exposes
+`people-leave/carry-forward` worker, and `requested_type_ids`. PL5 exposes
 `record_entry` as the agent operation `people.leave.entry.record`.
 
 ## Public API
@@ -129,3 +129,14 @@ too fine, wrong type, archived type, another company's employee), balances
 with a pending request standing in as one SQL row, and PostgreSQL refusing
 an edited or deleted entry, a negative entitlement, an unknown entry type, a
 second live request on the same morning slot and a cross-company employee.
+
+
+## Reviewed entry operation
+
+`people.leave.entry.record` records opening balances and adjustments through the same validation as `Leave::record_entry`. Discover its input schema and the `people.leave.entry` guide through Base Agent API. The full workflow and retry rules are in [the entry guide](entry-guide.md).
+
+The input takes `company_id`, `employee_id` (employment ID), `leave_type_id`, `entry_type` (`opening` or `adjustment`), `quantity` (exact decimal string), `occurred_on` (ISO date), `source`, `entry_key` and an optional `note`. Unknown fields are refused. The result is the existing `LedgerEntry` shape, with quantity as a string and dates in ISO format. The review includes company and employee names, the leave type and unit, the derived leave year, normalized quantity and note, and whether the entry will be created or returned.
+
+The handler calls the facade on the plan's `MutationTransaction`; it never commits a separate transaction. Leave serializes its reviews and writes with a transaction advisory lock per tenant and company, taken before the Core company lock. This keeps the reviewed type, year rules and entry key stable until the owner commits. The facade then rechecks company access, writable status, current employment and entry rules under the company lock. Identical retries add no ledger mutation. A failure in any operation of a multi-operation plan rolls back the entry and its audit capture together.
+
+The PL5 block in `fixtures/walkthrough/src/entry_operation.rs` uses the real operation registry and plan service. It shows discovery, direct-write refusal, a preview without ledger writes, opening and negative adjustment commits, identical retries, malformed input and reserved sources, cross-company and cross-tenant refusals, a conflicting second operation rolling back the whole plan, competing plans from separate sessions, permission revocation and an archived type after review. It checks ledger and captured-mutation counts without exposing plan codes or session tokens.
