@@ -90,4 +90,4 @@ Base Events limits payloads to 64 KiB and arrays to 100 entries. Approval return
 
 `fixtures/walkthrough` holds the disposable-database Payroll proof. Run its default binary first, then `cargo run -p bilibi-people-walkthrough --bin payroll`. Then run `cargo run -p bilibi-people-walkthrough --bin payroll_calculation`. The proofs create records through public facades and check exact values, canonical digest, concurrent retries, reviewer exclusions, event publication, grant revocation and PostgreSQL guards. Use only a disposable database.
 
-PY1 contributes no page or menu leaf. Setup and Attendance mapping pages follow in PY4. PY2 supplies contribution intake, exact calculation, independent decisions and events; private documents follow in PY3, then run pages in PY5. No Platform change is required.
+PY1 contributes no page or menu leaf. Setup and Attendance mapping pages follow in PY4. PY2 supplies contribution intake, exact calculation, independent decisions and events; private documents are being added in PY3, then run pages in PY5. No Platform change is required.
