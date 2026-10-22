@@ -20,14 +20,9 @@ title in place. Substantive assignments cannot overlap for one position;
 acting and concurrent cover can. Both interval ends are inclusive, and
 PostgreSQL exclusion constraints enforce the non-overlap rules even for
 concurrent writers. Parent links are company-bound and cycle-checked under
-the company lock. Every write authorizes `people.organisation.manage` for the
-scope's signed-in actor and the target company at the moment it runs,
-through the Workforce `Authorization` helpers. After acquiring the company lock, every write rechecks its grant, and `assign` checks working membership again (a system scope, a grant
-revoked while a page stays open, or a company outside the actor's reach is
-`Unauthorized`), then holds the company's writable lock inside its mutation
-transaction (an archived company is `CompanyArchived`). The reads need no
-capability, as Bilimbi's do: they expose only a live company of the scope's
-tenant, and only position codes, titles and holder references.
+the company lock.
+
+Every write checks `people.organisation.manage` through the Workforce authorization helpers, using the signed-in account and the target company. Inside its mutation transaction, it locks the company and checks the grant again. A revoked grant or a company outside the account's reach returns `Unauthorized`; an archived company returns `CompanyArchived`. `assign` checks working membership after taking the lock, so a change while it waited takes effect. Reads need no capability, matching Bilimbi: they expose only a live company of the scope's tenant, with position codes, titles and holder references.
 
 ## Public API
 
