@@ -130,7 +130,7 @@ impl State {
         let mut view = View {
             flash: self.flash.map(),
             available: self.setup.is_some(),
-            company: self.company_field("payroll-company-id"),
+            company: self.company_field("payroll-company_company_id"),
             withheld: !self.can_manage,
             policy: Html::EMPTY,
             classifications: Html::EMPTY,
@@ -565,7 +565,7 @@ impl State {
             format!("{ns}[{key}]")
         };
         let mut field = Field::named(name)
-            .id(format!("payroll-{event}-{key}"))
+            .id(field_id(event, key))
             .label(label)
             .wrapper_class("mb-0")
             .value(self.value(event, key, ""));
@@ -624,7 +624,7 @@ impl State {
         if let Some(draft) = self.drafts.get(event) {
             let mut summary = ErrorSummary::new(format!("{id}-errors"));
             for error in &draft.errors {
-                let field_id = format!("payroll-{event}-{}", error.field);
+                let field_id = field_id(event, error.field);
                 let label = fields
                     .iter()
                     .find(|f| f.id == field_id)
@@ -675,4 +675,18 @@ pub(super) fn item_name(items: &[crate::Item], id: i64) -> String {
 }
 fn currency_options(currencies: &[String]) -> Vec<(String, String)> {
     currencies.iter().map(|c| (c.clone(), c.clone())).collect()
+}
+
+// Phoenix's original form prefixes remain the stable focus/error targets.
+fn field_id(event: &str, key: &str) -> String {
+    let prefix = match event {
+        "save_settings" => "payroll-settings",
+        "create_classification" => "payroll-classification",
+        "create_item" => "payroll-item",
+        "create_period" => "payroll-period",
+        "create_mapping" => "payroll-mapping",
+        "create_run" => "payroll-run",
+        _ => "payroll-attendance-mapping",
+    };
+    format!("{prefix}_{key}")
 }
