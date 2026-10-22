@@ -754,9 +754,33 @@ pub async fn run(url: &str) -> Result<()> {
         refused(&client, step, sql, manager_employment.id).await;
     }
 
+    // Claims (slice PC1): currencies, catalog, policies and assignments, on
+    // the employments created above.
+    claims::run(
+        &services,
+        &client,
+        claims::Accounts {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            contractor: &contractor,
+            staff_user: STAFF,
+        },
+        TENANT,
+        COMPANY,
+        OTHER_COMPANY,
+        manager_employment.id,
+        staff_employment.id,
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test is now linked to Sam Staff's affiliation with Company 001.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
 }
+
+// Slice blocks, each its own module, added at the end so parallel slices
+// do not clash on merge.
+mod claims;
