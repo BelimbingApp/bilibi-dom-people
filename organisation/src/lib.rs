@@ -37,6 +37,7 @@
 //! its first page (`paging.rs`).
 //!
 //! See `README.md`.
+mod agent;
 mod contributions;
 mod paging;
 mod port;
@@ -312,6 +313,65 @@ pub struct Organisation {
 }
 
 impl Organisation {
+    /// Commits the position creation on a reviewed operation's transaction.
+    pub(crate) async fn create_position_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        new: &NewPosition,
+    ) -> Result<Position> {
+        lock_company(tx.sql(), scope, company_id).await?;
+        let valid = positions::validate_position(new).map_err(OrganisationError::Invalid)?;
+        if let Some(parent) = valid.parent_id {
+            positions::find(tx.sql(), company_id, parent)
+                .await?
+                .ok_or(OrganisationError::NotFound)?;
+        }
+        positions::check_code(tx.sql(), company_id, &valid.code).await?;
+        positions::insert_position(tx, company_id, valid).await
+    }
+
+    /// Commits a parent change on a reviewed operation's transaction.
+    pub(crate) async fn set_parent_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        position_id: i64,
+        parent_id: Option<i64>,
+    ) -> Result<Position> {
+        lock_company(tx.sql(), scope, company_id).await?;
+        let position = positions::find(tx.sql(), company_id, position_id)
+            .await?
+            .ok_or(OrganisationError::NotFound)?;
+        if let Some(parent) = parent_id {
+            positions::find(tx.sql(), company_id, parent)
+                .await?
+                .ok_or(OrganisationError::NotFound)?;
+        }
+        positions::reject_cycle(tx.sql(), company_id, position.id, parent_id).await?;
+        positions::update_parent(tx, position, parent_id).await
+    }
+
+    /// Commits a title version on a reviewed operation's transaction.
+    pub(crate) async fn record_version_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        position_id: i64,
+        new: &NewVersion,
+    ) -> Result<PositionVersion> {
+        lock_company(tx.sql(), scope, company_id).await?;
+        let position = positions::find(tx.sql(), company_id, position_id)
+            .await?
+            .ok_or(OrganisationError::NotFound)?;
+        let valid = positions::validate_version(new).map_err(OrganisationError::Invalid)?;
+        positions::check_version(tx.sql(), position.id, &valid).await?;
+        positions::insert_version(tx, position.id, valid).await
+    }
+
     /// Creates a stable position identity in one live company
     /// (`people.organisation.manage`): a code unique in the company (trimmed;
     /// "can't be blank", "should be at most 255 character(s)", "has already
