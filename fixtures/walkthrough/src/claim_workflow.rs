@@ -283,6 +283,62 @@ pub(crate) async fn run(
             .await,
         ClaimsError::ClaimTypeNotAssigned,
     )?;
+    saved(
+        "temporarily remove policy currency",
+        claims
+            .put_currencies(manager, COMPANY, &["EUR".into()])
+            .await,
+    )?;
+    refuses(
+        "removed currency closes new claims",
+        claims.submit_request(&staff, COMPANY, &input).await,
+        ClaimsError::CurrencyNotAllowed,
+    )?;
+    saved(
+        "restore policy currencies",
+        claims
+            .put_currencies(manager, COMPANY, &["USD".into(), "EUR".into()])
+            .await,
+    )?;
+    let assignment = saved(
+        "assignment covering expense date only",
+        claims
+            .create_assignment(
+                manager,
+                COMPANY,
+                &bilibi_people_claims::NewAssignment {
+                    code: "workflow-assigned".into(),
+                    name: "Expense-date assignment".into(),
+                    effective_from: date(2025, 1, 1),
+                    effective_to: Some(date(2025, 1, 31)),
+                },
+            )
+            .await,
+    )?;
+    saved(
+        "assign claim type and employee",
+        claims
+            .set_assignment_members(manager, COMPANY, assignment.id, &[types[2]], &[employees.1])
+            .await,
+    )?;
+    let assigned = saved(
+        "assignment uses expense date rather than today",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    claim_type_id: types[2],
+                    receipt_number: None,
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    saved(
+        "withdraw assignment proof",
+        claims.withdraw_request(&staff, COMPANY, assigned.id).await,
+    )?;
     let first = saved(
         "submit staff claim",
         claims.submit_request(&staff, COMPANY, &input).await,
@@ -358,6 +414,20 @@ pub(crate) async fn run(
             .await,
         invalid(),
     )?;
+    refuses(
+        "own rejection",
+        claims
+            .reject_request(
+                &staff,
+                COMPANY,
+                first.id,
+                &Rejection {
+                    decision_reason: "Own rejection".into(),
+                },
+            )
+            .await,
+        ClaimsError::OwnClaim,
+    )?;
     saved(
         "approve staff claim for 80 with reason",
         claims
@@ -371,6 +441,13 @@ pub(crate) async fn run(
                 },
             )
             .await,
+    )?;
+    refuses(
+        "own individual reimbursement",
+        claims
+            .reimburse_request(&staff, COMPANY, first.id, &Reimbursement::default())
+            .await,
+        ClaimsError::OwnClaim,
     )?;
     refuses(
         "approved claim cannot withdraw",
@@ -391,8 +468,40 @@ pub(crate) async fn run(
             )
             .await,
     )?;
+    let limited_policy = saved(
+        "read policy before version change",
+        claims.policies(manager, COMPANY).await,
+    )?
+    .into_iter()
+    .find(|p| p.claim_type_id == types[0])
+    .ok_or(Error::Internal)?;
+    saved(
+        "end expense-date policy",
+        claims
+            .end_policy(manager, COMPANY, limited_policy.id, date(2025, 1, 31))
+            .await,
+    )?;
+    saved(
+        "create next policy version",
+        claims
+            .create_policy(
+                manager,
+                COMPANY,
+                &NewPolicy {
+                    claim_type_id: types[0],
+                    effective_from: date(2025, 2, 1),
+                    effective_to: None,
+                    currency: "USD".into(),
+                    per_claim_limit: Some(amount(100)),
+                    monthly_limit: Some(amount(150)),
+                    yearly_limit: Some(amount(200)),
+                    receipt_threshold: None,
+                },
+            )
+            .await,
+    )?;
     refuses(
-        "yearly limit across months",
+        "yearly limit across months and policy versions",
         claims
             .submit_request(
                 &staff,
