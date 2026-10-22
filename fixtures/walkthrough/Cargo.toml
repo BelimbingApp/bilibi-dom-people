@@ -33,4 +33,7 @@ tokio-postgres.workspace = true
 
 # Attendance (port plan row PA1): the attendance core walkthrough block.
 bilibi-people-attendance = { path = "../../attendance" }
+
+# Leave (slice PL1).
+bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true

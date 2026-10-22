@@ -88,7 +88,7 @@ fn show<T: std::fmt::Debug>(
 }
 
 /// A record saved by a step the walkthrough cannot go on without.
-fn saved<T>(record: Option<T>) -> Result<T> {
+pub(crate) fn saved<T>(record: Option<T>) -> Result<T> {
     record.ok_or(Error::Internal)
 }
 
@@ -753,6 +753,22 @@ pub async fn run(url: &str) -> Result<()> {
     ] {
         refused(&client, step, sql, manager_employment.id).await;
     }
+
+    // Leave (slice PL1): its own block, in `leave.rs`.
+    leave::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        MANAGER,
+        COMPANY,
+        OTHER_COMPANY,
+        manager_employment.id,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test is now linked to Sam Staff's affiliation with Company 001.",
@@ -1481,3 +1497,6 @@ pub async fn attendance(url: &str) -> Result<()> {
     );
     Ok(())
 }
+
+// Leave (slice PL1).
+mod leave;
