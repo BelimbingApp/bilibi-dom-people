@@ -44,7 +44,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/menu", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy", "core/company",
+            "base/party_ids", "base/settings", "base/system", "base/tenancy", "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
         migrations: &[

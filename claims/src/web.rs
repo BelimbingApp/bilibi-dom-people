@@ -164,6 +164,7 @@ struct Operations {
     values: HashMap<String, String>,
     flash: Option<(StatusKind, String)>,
     display: bilibi_datetime::DisplayContext,
+    instance: Option<bilibi_system::Instance>,
 }
 impl Operations {
     fn new(core: Arc<Core>, query: &HashMap<String, String>) -> Result<Self> {
@@ -199,6 +200,7 @@ impl Operations {
             values: HashMap::new(),
             flash: None,
             display: bilibi_datetime::DisplayContext::anonymous(),
+            instance: None,
         };
         state.normalize();
         state.columns = queue_columns(state.tab())?;
@@ -260,6 +262,8 @@ impl Operations {
                 )
                 .await?;
         }
+        self.instance =
+            Some(bilibi_system::Instance::resolve(&self.core.claims.settings, &**client).await?);
         drop(client);
         self.rows.clear();
         self.batches.clear();
@@ -801,12 +805,19 @@ impl Operations {
             ..Button::default()
         })?;
         actions.push(&action("cancel", "Cancel", "")?);
+        let mut body = match &self.instance {
+            Some(instance) => instance
+                .banner("claim-operations-instance", "mb-4")
+                .map_err(|_| Error::Internal)?,
+            None => Html::EMPTY,
+        };
+        body.push(&render(&DecisionForm { fields, actions })?);
         render(&Modal {
             id: "claim-operations-reason",
             title: &title,
             cancel_event: "cancel",
             flash: Some(self.flash()),
-            body: render(&DecisionForm { fields, actions })?,
+            body,
             ..Modal::default()
         })
     }
@@ -872,10 +883,16 @@ impl Operations {
                 ),
                 _ => return Ok(Html::EMPTY),
             };
+        // ConfirmDialog has no banner slot. Keep its shared anatomy and include
+        // the authoritative installation notice in the confirmation detail.
+        let detail = self.instance.as_ref().map_or_else(
+            || detail.to_owned(),
+            |instance| format!("{} {detail}", instance.notice()),
+        );
         render(&ConfirmDialog {
             id: "claim-operations-confirm",
             consequence: &consequence,
-            detail,
+            detail: &detail,
             confirm,
             working,
             confirm_event: "confirm",
