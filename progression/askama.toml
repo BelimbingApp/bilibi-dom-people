@@ -1,1 +1,2 @@
+[general]
 dirs = ["templates", "../../../base/ui/templates"]
