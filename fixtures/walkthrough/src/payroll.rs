@@ -583,17 +583,19 @@ pub async fn run(url: &str) -> Result<()> {
     let unmapped = run.snapshot["unmapped_sources"]
         .as_array()
         .ok_or(Error::Internal)?;
+    let requested_key = requested_type.id.to_string();
+    let claim_key = claim_type.id.to_string();
     check(
         "archived leave with a pending request reported",
         unmapped.iter().any(|v| {
-            v["source_kind"] == "leave" && v["source_key"] == requested_type.id.to_string()
+            v["source_kind"] == "leave" && v["source_key"].as_str() == Some(requested_key.as_str())
         }),
     )?;
     check(
         "inactive claim with live request reported",
-        unmapped
-            .iter()
-            .any(|v| v["source_kind"] == "claims" && v["source_key"] == claim_type.id.to_string()),
+        unmapped.iter().any(|v| {
+            v["source_kind"] == "claims" && v["source_key"].as_str() == Some(claim_key.as_str())
+        }),
     )?;
     check(
         "only run currency items frozen",
