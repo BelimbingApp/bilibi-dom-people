@@ -27,3 +27,10 @@ bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
+
+# PT1: the Training catalog block (`src/training.rs`).
+bilibi-datetime.workspace = true
+bilibi-party-ids.workspace = true
+bilibi-people-training = { path = "../../training" }
+bilibi-settings.workspace = true
+serde_json.workspace = true

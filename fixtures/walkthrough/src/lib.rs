@@ -41,6 +41,9 @@ use bilibi_user::UserService;
 use jiff::civil::date;
 use std::{fmt::Display, sync::Arc};
 
+// Slice blocks, each its own module (PT1: the Training catalog).
+mod training;
+
 /// Tenant 1 (the platform operator), its primary company (001), its sibling
 /// Company 002, and tenant 2's private company.
 const TENANT: i64 = 1;
@@ -753,6 +756,9 @@ pub async fn run(url: &str) -> Result<()> {
     ] {
         refused(&client, step, sql, manager_employment.id).await;
     }
+
+    // PT1: the Training catalog, under the manager's and viewer's scopes.
+    training::run(&services, &client, &admin, &manager, &viewer).await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test is now linked to Sam Staff's affiliation with Company 001.",
