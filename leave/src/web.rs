@@ -1191,13 +1191,17 @@ fn form(
                 .map(|field| field.wrapper_class("mb-0"))
                 .collect(),
         })?,
-        actions: render(&Button {
-            id: &format!("{id}-submit"),
-            button_type: "submit",
-            variant: ButtonVariant::Primary,
-            disabled,
-            body: Html::text(label),
-            ..Button::default()
-        })?,
+        actions: if change {
+            Html::EMPTY
+        } else {
+            render(&Button {
+                id: &format!("{id}-submit"),
+                button_type: "submit",
+                variant: ButtonVariant::Primary,
+                disabled,
+                body: Html::text(label),
+                ..Button::default()
+            })?
+        },
     })
 }
