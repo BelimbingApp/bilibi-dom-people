@@ -1,6 +1,6 @@
 {% import "forms.html" as forms %}
 {{ summary }}
-{% call forms::form(id="organisation-assignment-form", event="review_assignment", actions=actions) %}
+{% call forms::form(id=id, event="review_assignment", actions=actions) %}
 {% for field in fields %}
 {% call forms::input(field=field) %}{% endcall %}
 {% endfor %}

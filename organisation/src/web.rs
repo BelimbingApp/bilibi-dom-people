@@ -656,7 +656,12 @@ impl Explorer {
                 bilibi_ui::forms::error_sentence(&e.field.replace('_', " "), &e.message),
             );
         }
+        let form_id = match selection {
+            Selection::Assign { position, .. } => format!("assign-position-{position}"),
+            Selection::End { assignment, .. } => format!("end-assignment-{assignment}"),
+        };
         let body = render(&AssignmentForm {
+            id: form_id,
             fields,
             summary: if summary.is_empty() {
                 Html::EMPTY
@@ -806,6 +811,7 @@ struct View<'a> {
 #[derive(Template)]
 #[template(path = "assignment_form.html")]
 struct AssignmentForm {
+    id: String,
     fields: Vec<Field>,
     summary: Html,
     actions: Html,
