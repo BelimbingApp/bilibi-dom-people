@@ -69,6 +69,9 @@ impl Payroll {
     }
     pub async fn run_output(&self, scope: &Scope, company: i64, run_id: i64) -> Result<RunOutput> {
         let mut c = self.db.get().await.map_err(Error::from)?;
+        // Authorization refreshes account metadata, so prove access before
+        // opening the read-only snapshot used for the output records.
+        self.authorize(&**c, scope, company, VIEW).await?;
         // One MVCC snapshot prevents a mixed pre/post-calculation output.
         let tx = (**c)
             .build_transaction()
@@ -76,7 +79,6 @@ impl Payroll {
             .read_only(true)
             .start()
             .await?;
-        self.authorize(&tx, scope, company, VIEW).await?;
         let run = store::get(&tx, scope, company, Kind::Run, run_id)
             .await?
             .ok_or(PayrollError::NotFound)?;
