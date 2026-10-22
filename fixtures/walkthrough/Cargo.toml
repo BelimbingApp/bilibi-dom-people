@@ -27,3 +27,7 @@ bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
+
+# Leave (slice PL1).
+bilibi-people-leave = { path = "../../leave" }
+rust_decimal.workspace = true
