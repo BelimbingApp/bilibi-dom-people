@@ -177,6 +177,13 @@ pub(super) async fn insert<T: DeserializeOwned>(
         .await?;
     decode(value)
 }
+/// Closed read shapes keep callers from loading unrelated review history.
+pub(super) enum TaskFilter {
+    Visible { kind: EvaluationKind, ids: Vec<i64> },
+    Review { kind: EvaluationKind, id: i64 },
+    Reminders,
+    Periods { start: String, end: String },
+}
 /// All joins and latest-attendance checks carry both tenant and company axes.
 /// A confirmed correction preserves the original obligation; a latest absent
 /// revision hides it until attendance is confirmed again (Bilimbi parity).
@@ -184,12 +191,22 @@ pub(super) async fn tasks(
     client: &impl GenericClient,
     scope: &Scope,
     company: i64,
-    kind: Option<EvaluationKind>,
-    ids: Option<&[i64]>,
-    review_id: Option<i64>,
+    filter: TaskFilter,
 ) -> Result<Vec<EvaluationTask>> {
+    let (kind, ids, review_id, start, end, pending) = match filter {
+        TaskFilter::Visible { kind, ids } => (Some(kind), Some(ids), None, None, None, false),
+        TaskFilter::Review { kind, id } => (Some(kind), None, Some(id), None, None, false),
+        TaskFilter::Reminders => (None, None, None, None, None, true),
+        TaskFilter::Periods { start, end } => (
+            Some(EvaluationKind::Effectiveness),
+            None,
+            None,
+            Some(start),
+            Some(end),
+            false,
+        ),
+    };
     let kind = kind.map(EvaluationKind::as_str);
-    let ids = ids.map(<[i64]>::to_vec);
     client.query("SELECT to_jsonb(r) || jsonb_build_object('due_on',to_char(r.due_on,'YYYY-MM-DD'),'employee_id',f.employee_id,'session_id',f.session_id,'criteria',CASE WHEN r.kind='evaluation' THEN p.criteria->'items' ELSE p.effectiveness_criteria->'items' END,'policy_version',p.version,'answer',to_jsonb(a),'reminder',CASE WHEN m.id IS NULL THEN NULL ELSE jsonb_build_object('available_on',to_char(m.available_on,'YYYY-MM-DD')) END) AS value
         FROM people_training_evaluation_reviews r
         JOIN people_training_attendance_facts f ON f.id=r.fact_id AND f.tenant_id=r.tenant_id AND f.company_id=r.company_id
@@ -197,6 +214,8 @@ pub(super) async fn tasks(
         LEFT JOIN people_training_evaluation_answers a ON a.review_id=r.id AND a.tenant_id=r.tenant_id AND a.company_id=r.company_id
         LEFT JOIN people_training_review_reminders m ON m.review_id=r.id AND m.tenant_id=r.tenant_id AND m.company_id=r.company_id
         WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3::text IS NULL OR r.kind=$3) AND ($4::bigint[] IS NULL OR f.employee_id=ANY($4)) AND ($5::bigint IS NULL OR r.id=$5)
+        AND ($6::text IS NULL OR r.due_on >= $6::text::date) AND ($7::text IS NULL OR r.due_on <= $7::text::date)
+        AND (NOT $8::boolean OR (a.id IS NULL AND m.id IS NULL))
         AND (SELECT latest.status FROM people_training_attendance_facts latest WHERE latest.tenant_id=r.tenant_id AND latest.company_id=r.company_id AND latest.session_id=f.session_id AND latest.employee_id=f.employee_id ORDER BY latest.revision DESC LIMIT 1)='confirmed'
-        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids,&review_id]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
+        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids,&review_id,&start,&end,&pending]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
 }

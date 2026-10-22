@@ -1,5 +1,9 @@
 //! Mirrors Bilimbi Training.Evaluation: operator maintenance and frozen summaries.
-use crate::{evaluation_store as store, evaluation_store::Table, *};
+use crate::{
+    evaluation_store as store,
+    evaluation_store::{Table, TaskFilter},
+    *,
+};
 use bilibi_module_registry::{Contribution, Provenance};
 use bilibi_people_workforce::Employee;
 use bilibi_settings::{Definition, Editor, ScopeKind, Setting, Validator, ValueType, DEFINITIONS};
@@ -468,7 +472,7 @@ impl Training {
                 .map(|(id, _)| *id)
                 .collect(),
         };
-        store::tasks(&**client, scope, company, Some(kind), Some(&ids), None).await
+        store::tasks(&**client, scope, company, TaskFilter::Visible { kind, ids }).await
     }
     /// Exact policy codes, bounded integers or explicit null. Answers are permanent.
     /// The signed-in employment is re-proved under lock on every write.
@@ -514,9 +518,10 @@ impl Training {
             tx.sql(),
             scope,
             company,
-            Some(review.kind),
-            None,
-            Some(review_id),
+            TaskFilter::Review {
+                kind: review.kind,
+                id: review_id,
+            },
         )
         .await?
         .into_iter()
@@ -577,20 +582,23 @@ impl Training {
             .await?;
         let employees = self.evaluation_employees(scope, company).await?;
         let mut result = EvaluationReminders::default();
-        for task in store::tasks(tx.sql(), scope, company, None, None, None)
-            .await?
-            .into_iter()
-            .filter(|t| t.answer.is_none() && t.reminder.is_none())
-        {
-            let policy: EvaluationPolicy = store::fetch(
-                tx.sql(),
-                scope,
-                company,
-                Table::Policy,
-                task.review.policy_id,
-            )
-            .await?;
-            if today < shift_days(date(&task.review.due_on)?, -policy.reminder_days)? {
+        let mut leads = BTreeMap::new();
+        for task in store::tasks(tx.sql(), scope, company, TaskFilter::Reminders).await? {
+            let lead = if let Some(lead) = leads.get(&task.review.policy_id).copied() {
+                lead
+            } else {
+                let policy: EvaluationPolicy = store::fetch(
+                    tx.sql(),
+                    scope,
+                    company,
+                    Table::Policy,
+                    task.review.policy_id,
+                )
+                .await?;
+                leads.insert(policy.id, policy.reminder_days);
+                policy.reminder_days
+            };
+            if today < shift_days(date(&task.review.due_on)?, -lead)? {
                 continue;
             }
             let recipient = employees
@@ -680,16 +688,7 @@ impl Training {
             .ok_or(TrainingError::EffectivenessReportNotConfigured)?;
         let employees = self.evaluation_employees(scope, company).await?;
         let mut first = next_period(tx.sql(), scope, company, months).await?;
-        let tasks = store::tasks(
-            tx.sql(),
-            scope,
-            company,
-            Some(EvaluationKind::Effectiveness),
-            None,
-            None,
-        )
-        .await?;
-        let mut frozen = 0;
+        let mut periods = Vec::new();
         while let Some(start) = first {
             let end = shift_days(
                 start
@@ -700,12 +699,33 @@ impl Training {
             if today <= shift_days(end, grace)? {
                 break;
             }
+            periods.push((start, end));
+            first = Some(shift_days(end, 1)?);
+        }
+        let (Some((range_start, _)), Some((_, range_end))) = (periods.first(), periods.last())
+        else {
+            return Ok(FrozenEffectivenessSummaries { frozen: 0 });
+        };
+        let tasks = store::tasks(
+            tx.sql(),
+            scope,
+            company,
+            TaskFilter::Periods {
+                start: range_start.to_string(),
+                end: range_end.to_string(),
+            },
+        )
+        .await?;
+        let frozen = periods.len();
+        for (start, end) in periods {
+            let start_text = start.to_string();
+            let end_text = end.to_string();
             let cohort: Vec<_> = tasks
                 .iter()
                 .filter(|t| {
                     employees.contains_key(&t.employee_id)
-                        && t.review.due_on >= start.to_string()
-                        && t.review.due_on <= end.to_string()
+                        && t.review.due_on >= start_text
+                        && t.review.due_on <= end_text
                 })
                 .collect();
             let disclosed = subjects(&cohort) >= minimum;
@@ -715,8 +735,6 @@ impl Training {
                 vec![]
             };
             store::insert::<EffectivenessSummary>(&mut tx,scope,company,Table::Summary,json!({"period_start":start.to_string(),"period_end":end.to_string(),"minimum_cohort":minimum,"status":if disclosed {"current"} else {"suppressed"},"groups":{"items":groups}})).await?;
-            frozen += 1;
-            first = Some(shift_days(end, 1)?);
         }
         if frozen > 0 {
             tx.commit().await?;
