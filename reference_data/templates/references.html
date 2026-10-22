@@ -1,0 +1,49 @@
+{#- One company's People references (Bilimbi
+    `ReferenceData.Web.IndexLive` render). The three tables are rendered by
+    src/web/references.rs through the shared FlexTable; this file lays out the
+    page, the company chooser, the add forms and the cards around the tables. -#}
+{%- import "components.html" as ui -%}
+{%- import "forms.html" as forms -%}
+{%- import "feedback.html" as feedback -%}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-references") %}
+{% call ui::header(subtitle=subtitle) %}People references{% endcall %}
+{%- if has_companies %}
+{% call forms::form(id="reference-company-picker", event="select_company", change=true, class="mt-4", actions=picker_actions) %}
+{% call forms::input(field=company_field) %}{% endcall %}
+{% endcall %}
+{%- endif %}
+{%- if !state.is_empty() %}
+<div class="mt-4">{{ state }}</div>
+{%- endif %}
+{%- if has_company %}
+{% call ui::card(id="reference-entries", title="Reference entries", inner_class="p-0", class="mt-5") %}{{ entries }}{% endcall %}
+{% call ui::card(id="reference-entry-editor", title="New reference", class="mt-5") %}
+{% call forms::form(id="reference-entry-form", event="create_entry", class="p-4", actions=entry_actions) %}
+<div class="grid gap-x-4 sm:grid-cols-3">
+{%- for field in entry_fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor -%}
+</div>
+{% endcall %}
+{% endcall %}
+{% call ui::card(id="reference-aliases", title="Aliases", inner_class="p-0", class="mt-5") %}{{ aliases }}{% endcall %}
+{%- if !alias_fields.is_empty() %}
+{% call ui::card(id="reference-alias-editor", title="New alias", class="mt-5") %}
+{% call forms::form(id="reference-alias-form", event="add_alias", class="p-4", actions=alias_actions) %}
+<div class="grid gap-x-4 sm:grid-cols-2">
+{%- for field in alias_fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor -%}
+</div>
+{% endcall %}
+{% endcall %}
+{%- endif %}
+{% call ui::card(id="reference-exceptions", title="Calendar exceptions", inner_class="p-0", class="mt-5") %}{{ exceptions }}{% endcall %}
+{% call ui::card(id="reference-exception-editor", title="New calendar exception", class="mt-5") %}
+{% call forms::form(id="reference-exception-form", event="create_exception", class="p-4", actions=exception_actions) %}
+<div class="grid gap-x-4 sm:grid-cols-2">
+{%- for field in exception_fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor -%}
+</div>
+{% endcall %}
+{% endcall %}
+{%- endif %}
+{% endcall %}
+</div>
