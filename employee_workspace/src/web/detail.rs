@@ -16,7 +16,7 @@ const UNAVAILABLE: &str = "This employee is unavailable in your company.";
 #[template(path = "employee.html")]
 struct View<'a> {
     flash: FlashMap<'a>,
-    id: String,
+    employee_id: String,
     available: bool,
     subtitle: String,
     back: Html,
@@ -835,7 +835,7 @@ impl Detail {
         };
         View {
             flash: self.flash(),
-            id: self.id.to_string(),
+            employee_id: self.id.to_string(),
             available: self.employee.is_some(),
             subtitle: self
                 .employee
