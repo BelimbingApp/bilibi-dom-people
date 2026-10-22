@@ -1,0 +1,19 @@
+{# Mirrors Bilimbi Training.Web.LearningLive; shared UI owns every control. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-learning", class="space-y-4") %}
+{% call ui::header(actions=header_actions) %}{{ title }}{% endcall %}
+{{ tabs }}
+{{ choose_task }}
+{{ toolbar }}
+{% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
+{% if read_only %}<p class="text-sm text-ink-muted">Read-only. Ask an operator to assign access for your learning task.</p>{% endif %}
+{{ currencies }}
+{{ table }}
+{{ pagination }}
+{{ entry }}
+{{ confirmation }}
+{% endcall %}
+</div>
