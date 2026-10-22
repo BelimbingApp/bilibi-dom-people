@@ -376,8 +376,8 @@ pub(crate) async fn list(
         .map_err(Into::into)
 }
 
-/// Queues filter before the bound, so an assessor's own oldest work cannot
-/// hide independent work further down the queue.
+/// Bilimbi bounds the oldest 200 candidates before rejecting work by the
+/// assessor or subject. Returned work is filtered to the actor before its bound.
 pub(crate) async fn queue_rows(
     client: &impl GenericClient,
     tenant: i64,
@@ -387,7 +387,7 @@ pub(crate) async fn queue_rows(
     own: Option<i64>,
     status: &str,
 ) -> Result<Vec<Assessment>> {
-    let sql=format!("SELECT {} FROM people_skill_assessments a WHERE tenant_id=$1 AND company_id=$2 AND status=$3 AND ($4::bigint[] IS NULL OR employee_id=ANY($4)) AND (($3 <> 'returned' AND assessor_user_id<>$5 AND ($6::bigint IS NULL OR employee_id<>$6)) OR ($3='returned' AND assessor_user_id=$5 AND NOT EXISTS (SELECT 1 FROM people_skill_assessments s WHERE s.tenant_id=$1 AND s.company_id=$2 AND s.supersedes_assessment_id=a.id))) ORDER BY id LIMIT 200",columns());
+    let sql=format!("SELECT {} FROM (SELECT a.* FROM people_skill_assessments a WHERE tenant_id=$1 AND company_id=$2 AND status=$3 AND ($4::bigint[] IS NULL OR employee_id=ANY($4)) AND ($3<>'returned' OR (assessor_user_id=$5 AND NOT EXISTS (SELECT 1 FROM people_skill_assessments s WHERE s.tenant_id=$1 AND s.company_id=$2 AND s.supersedes_assessment_id=a.id))) ORDER BY id LIMIT 200) candidates WHERE $3='returned' OR (assessor_user_id<>$5 AND ($6::bigint IS NULL OR employee_id<>$6)) ORDER BY id",columns());
     client
         .query(&sql, &[&tenant, &company, &status, &ids, &actor, &own])
         .await

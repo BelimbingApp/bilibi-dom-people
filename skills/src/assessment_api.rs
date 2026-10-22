@@ -212,8 +212,9 @@ impl Skills {
     }
 
     /// Oldest independent review work in reach, company-wide finalization
-    /// work, and the actor's returned work that has no correction. Each is
-    /// bounded to 200; a capability is rechecked for each decision bucket.
+    /// work, and the actor's returned work that has no correction. Each starts
+    /// with at most 200 candidates before independence filtering, as Bilimbi
+    /// does; a capability is rechecked for each decision bucket.
     pub async fn assessment_queue(
         &self,
         scope: &Scope,
