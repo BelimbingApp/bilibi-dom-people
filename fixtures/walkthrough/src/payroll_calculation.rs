@@ -138,7 +138,13 @@ pub async fn run(url: &str) -> Result<()> {
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    let employee = employees.first().ok_or(Error::Internal)?.id;
+    let employee = employees
+        .first()
+        .ok_or(Error::Internal)?
+        .reference
+        .stable_id
+        .parse::<i64>()
+        .map_err(|_| Error::Internal)?;
     let input = NewContribution {
         employee_id: employee,
         item_id: item.id,
