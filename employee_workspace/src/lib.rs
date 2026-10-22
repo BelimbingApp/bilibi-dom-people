@@ -23,6 +23,8 @@ pub enum WorkspaceError {
     Workforce(#[from] WorkforceError),
     #[error("This request has already been reviewed.")]
     AlreadyReviewed,
+    #[error("This record has changed. Refresh it and try again.")]
+    Stale,
     #[error("Invalid review")]
     InvalidReview,
 }
@@ -43,6 +45,14 @@ pub struct WorkProfile {
     pub work_location: Option<String>,
     pub work_arrangement: Option<String>,
     pub notes: Option<String>,
+}
+/// A stored People fact and its optimistic concurrency fence. An absent row
+/// starts at version zero; its first write creates version one.
+#[derive(Clone, Debug)]
+pub struct FactRecord<T> {
+    pub id: Option<i64>,
+    pub version: i64,
+    pub value: T,
 }
 /// Portal eligibility records a People decision; it does not create a login.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -157,6 +167,113 @@ impl EmployeeWorkspace {
         self.employee(scope, company_id, employee_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
         store::requests(&**client, scope, company_id, employee_id).await
+    }
+    pub async fn work_profile_record(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<FactRecord<WorkProfile>> {
+        self.employee(scope, company_id, employee_id).await?;
+        let client = self.db.get().await.map_err(Error::from)?;
+        store::profile_record(&**client, scope, company_id, employee_id).await
+    }
+    pub async fn access_record(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<FactRecord<Access>> {
+        self.employee(scope, company_id, employee_id).await?;
+        let client = self.db.get().await.map_err(Error::from)?;
+        store::access_record(&**client, scope, company_id, employee_id).await
+    }
+    /// Changes one inline fact under the employment lock. Checking the stored
+    /// version and merging here prevents a stale page overwriting another edit.
+    pub async fn update_work_profile(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        version: i64,
+        field: &str,
+        value: &str,
+    ) -> Result<WorkProfile> {
+        let mut client = self.db.get().await.map_err(Error::from)?;
+        let mut tx = self
+            .mutations
+            .begin(
+                &mut client,
+                scope.mutation_context("people.employee_workspace.put_work_profile"),
+            )
+            .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
+        self.workforce
+            .lock_employee(&tx, scope, company_id, employee_id)
+            .await?;
+        let current = store::profile_record(tx.sql(), scope, company_id, employee_id).await?;
+        if current.version != version {
+            return Err(WorkspaceError::Stale);
+        }
+        let mut profile = current.value;
+        match field {
+            "work_location" => profile.work_location = Some(value.into()),
+            "work_arrangement" => profile.work_arrangement = Some(value.into()),
+            "notes" => profile.notes = Some(value.into()),
+            _ => {
+                return Err(WorkforceError::Invalid(vec![
+                    bilibi_people_workforce::FieldError::new("field", "is invalid"),
+                ])
+                .into())
+            }
+        }
+        let profile = store::validate_profile(&profile)?;
+        let result = store::put_profile(&mut tx, scope, company_id, employee_id, profile).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub async fn update_access(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        version: i64,
+        field: &str,
+        value: &str,
+    ) -> Result<Access> {
+        let mut client = self.db.get().await.map_err(Error::from)?;
+        let mut tx = self
+            .mutations
+            .begin(
+                &mut client,
+                scope.mutation_context("people.employee_workspace.put_access"),
+            )
+            .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
+        self.workforce
+            .lock_employee(&tx, scope, company_id, employee_id)
+            .await?;
+        let current = store::access_record(tx.sql(), scope, company_id, employee_id).await?;
+        if current.version != version {
+            return Err(WorkspaceError::Stale);
+        }
+        let mut access = current.value;
+        match field {
+            "portal_enabled" if ["true", "false"].contains(&value) => {
+                access.portal_enabled = value == "true"
+            }
+            "reason" => access.reason = Some(value.into()),
+            _ => {
+                return Err(WorkforceError::Invalid(vec![
+                    bilibi_people_workforce::FieldError::new("field", "is invalid"),
+                ])
+                .into())
+            }
+        }
+        let access = store::validate_access(&access)?;
+        let result = store::put_access(&mut tx, scope, company_id, employee_id, access).await?;
+        tx.commit().await?;
+        Ok(result)
     }
     pub async fn put_work_profile(
         &self,

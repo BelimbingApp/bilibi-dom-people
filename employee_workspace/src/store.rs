@@ -107,6 +107,50 @@ pub(crate) async fn access(
 ) -> Result<Option<Access>> {
     one(client, scope, company, employee, "people_employee_accesses").await
 }
+async fn record<T: DeserializeOwned + Default>(
+    client: &impl GenericClient,
+    scope: &Scope,
+    company: i64,
+    employee: i64,
+    table: &'static str,
+) -> Result<FactRecord<T>> {
+    let raw = one::<Value>(client, scope, company, employee, table).await?;
+    match raw {
+        Some(raw) => Ok(FactRecord {
+            id: raw["id"].as_i64(),
+            version: raw["version"].as_i64().ok_or(Error::Internal)?,
+            value: decode(raw)?,
+        }),
+        None => Ok(FactRecord {
+            id: None,
+            version: 0,
+            value: T::default(),
+        }),
+    }
+}
+pub(crate) async fn profile_record(
+    client: &impl GenericClient,
+    scope: &Scope,
+    company: i64,
+    employee: i64,
+) -> Result<FactRecord<WorkProfile>> {
+    record(
+        client,
+        scope,
+        company,
+        employee,
+        "people_employee_workspace_profiles",
+    )
+    .await
+}
+pub(crate) async fn access_record(
+    client: &impl GenericClient,
+    scope: &Scope,
+    company: i64,
+    employee: i64,
+) -> Result<FactRecord<Access>> {
+    record(client, scope, company, employee, "people_employee_accesses").await
+}
 pub(crate) async fn requests(
     client: &impl GenericClient,
     scope: &Scope,
@@ -180,7 +224,7 @@ pub(crate) async fn put_profile(
         "people_employee_workspace_profiles",
     )
     .await?;
-    let value = write(tx, "INSERT INTO people_employee_workspace_profiles AS t (tenant_id,company_id,employee_id,work_location,work_arrangement,notes) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (company_id,employee_id) DO UPDATE SET work_location=EXCLUDED.work_location,work_arrangement=EXCLUDED.work_arrangement,notes=EXCLUDED.notes,updated_at=now() AT TIME ZONE 'UTC' WHERE t.tenant_id=EXCLUDED.tenant_id RETURNING to_jsonb(t)", vec![Box::new(scope.tenant()),Box::new(company),Box::new(employee),Box::new(value.work_location),Box::new(value.work_arrangement),Box::new(value.notes)], "people_employee_workspace_profile", old, false).await?;
+    let value = write(tx, "INSERT INTO people_employee_workspace_profiles AS t (tenant_id,company_id,employee_id,work_location,work_arrangement,notes) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (company_id,employee_id) DO UPDATE SET work_location=EXCLUDED.work_location,work_arrangement=EXCLUDED.work_arrangement,notes=EXCLUDED.notes,version=t.version+1,updated_at=now() AT TIME ZONE 'UTC' WHERE t.tenant_id=EXCLUDED.tenant_id RETURNING to_jsonb(t)", vec![Box::new(scope.tenant()),Box::new(company),Box::new(employee),Box::new(value.work_location),Box::new(value.work_arrangement),Box::new(value.notes)], "people_employee_workspace_profile", old, false).await?;
     Ok(decode(value)?)
 }
 pub(crate) async fn put_access(
@@ -191,7 +235,7 @@ pub(crate) async fn put_access(
     value: Access,
 ) -> Result<Access> {
     let old = previous(tx, scope, company, employee, "people_employee_accesses").await?;
-    let value = write(tx, "INSERT INTO people_employee_accesses AS t (tenant_id,company_id,employee_id,portal_enabled,reason) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (company_id,employee_id) DO UPDATE SET portal_enabled=EXCLUDED.portal_enabled,reason=EXCLUDED.reason,updated_at=now() AT TIME ZONE 'UTC' WHERE t.tenant_id=EXCLUDED.tenant_id RETURNING to_jsonb(t)", vec![Box::new(scope.tenant()),Box::new(company),Box::new(employee),Box::new(value.portal_enabled),Box::new(value.reason)], "people_employee_access", old, false).await?;
+    let value = write(tx, "INSERT INTO people_employee_accesses AS t (tenant_id,company_id,employee_id,portal_enabled,reason) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (company_id,employee_id) DO UPDATE SET portal_enabled=EXCLUDED.portal_enabled,reason=EXCLUDED.reason,version=t.version+1,updated_at=now() AT TIME ZONE 'UTC' WHERE t.tenant_id=EXCLUDED.tenant_id RETURNING to_jsonb(t)", vec![Box::new(scope.tenant()),Box::new(company),Box::new(employee),Box::new(value.portal_enabled),Box::new(value.reason)], "people_employee_access", old, false).await?;
     Ok(decode(value)?)
 }
 pub(crate) async fn insert_request(

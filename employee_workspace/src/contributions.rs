@@ -21,7 +21,8 @@ inventory::submit! {
             "base/party_ids", "base/tenancy", "base/ui", "core/affiliation",
             "core/company", "core/person", "people/settings", "people/workforce",
         ],
-        migrations: &[("people-employee-workspace-001-employee-workspace", include_str!("../migrations/001-employee-workspace.sql"))],
+        migrations: &[("people-employee-workspace-001-employee-workspace", include_str!("../migrations/001-employee-workspace.sql")),
+            ("people-employee-workspace-002-inline-versions", include_str!("../migrations/002-inline-versions.sql"))],
         services: &[
             Service { id: SERVICE, factory: |s| Ok(Arc::new(EmployeeWorkspace::new(
                 s.get::<Db>("base/database.pool")?.as_ref().clone(),
