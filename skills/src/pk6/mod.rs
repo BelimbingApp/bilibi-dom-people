@@ -453,6 +453,5 @@ fn record_facts(id: &str, fields: &[(&str, String)]) -> Result<Html> {
                 ..bilibi_ui::Fact::default()
             })
             .collect(),
-        ..bilibi_ui::Facts::default()
     })
 }
