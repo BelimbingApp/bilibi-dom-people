@@ -4027,3 +4027,7 @@ pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
 // PM1: separate binary so the performance proof starts from its own empty DB.
 mod performance;
 pub use performance::run as performance;
+
+// PG1: reuse the Performance fixture, then exercise progression through facades.
+mod progression;
+pub use progression::run as progression;

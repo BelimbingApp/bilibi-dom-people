@@ -132,7 +132,14 @@ impl Progression {
         id: i64,
         version: i32,
     ) -> Result<bilibi_people_skills::ProfileDetail> {
-        let detail = self.skills.get_profile(scope, company, id).await?;
+        let detail = self
+            .skills
+            .get_profile(scope, company, id)
+            .await
+            .map_err(|e| match e {
+                bilibi_people_skills::SkillsError::NotFound => ProgressionError::ProfileUnavailable,
+                other => other.into(),
+            })?;
         if detail.profile.status != "published" || detail.profile.version != version {
             return Err(ProgressionError::ProfileUnavailable);
         }
