@@ -396,11 +396,15 @@ pub async fn run(url: &str) -> Result<()> {
         source_reference: "fixture:source".into(),
         calculation_version: "1".into(),
         direction: "higher".into(),
-        rubric: None,
+        rubric: Some("   ".into()),
         precision: 2,
         interpretation: "Fixture interpretation".into(),
     };
     let definition = saved(performance.define_kpi(&manager, 1, &definition_input).await)?;
+    prove(
+        definition.rubric.is_none(),
+        "blank optional rubric stays absent",
+    )?;
     refused(
         performance
             .define_kpi(

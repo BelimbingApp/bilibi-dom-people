@@ -28,7 +28,11 @@ pub(crate) fn clean(input: &impl Serialize, required: &[&'static str]) -> Result
                     "should be at most 8000 character(s)",
                 ));
             }
-            *value = Value::String(text);
+            *value = if text.is_empty() && !required.contains(&key.as_str()) {
+                Value::Null
+            } else {
+                Value::String(text)
+            };
         }
     }
     for &field in required {
