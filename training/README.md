@@ -151,4 +151,6 @@ calendar window refusals, resolves `day_start` across a midnight gap
 (`America/Havana`, 1 November 2026), and ends with PostgreSQL refusing an
 event shrunk below its session, an oversized session, an unknown stored
 zone, a session ending when it starts, a zero capacity, a cross-company
-event and a duplicate code. See the repository README for how to run it.
+event and a duplicate code. Run it as the repository README says, with
+`BILIBI_ENV=development` set: the block grants capabilities through Base
+Authz, whose step-up the Platform enforces outside development mode.
