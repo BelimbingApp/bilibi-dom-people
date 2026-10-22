@@ -429,11 +429,16 @@ impl Workforce {
             .affiliation()
             .ok_or(WorkforceError::NotLinked)?
             .get();
+        // ProofClient only offers single-row reads; Settings needs ReadClient.
+        // Resolve configuration on a short separate checkout, refusing pool
+        // saturation rather than waiting while holding an Artifacts checkout.
+        let mut timeouts = self.db.timeouts();
+        timeouts.wait = Some(std::time::Duration::ZERO);
+        let settings_client = self.db.timeout_get(&timeouts).await.map_err(Error::from)?;
         let statuses = self
-            .working_statuses(scope, company_id)
-            .await?
-            .require_current()
-            .map_err(|_| WorkforceError::NotLinked)?;
+            .working_statuses_of(&**settings_client, scope, company_id)
+            .await?;
+        drop(settings_client);
         let row = client.query_opt(
             "SELECT me.id FROM people_workforce_employments me
              JOIN people_workforce_employments subject ON subject.tenant_id=me.tenant_id AND subject.company_id=me.company_id

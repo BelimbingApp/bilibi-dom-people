@@ -26,7 +26,7 @@ fn proof(label: &str, holds: bool) -> Result<()> {
     println!("PT5 proved: {label}");
     Ok(())
 }
-fn refused<T: std::fmt::Debug>(
+fn refused<T>(
     label: &str,
     result: bilibi_people_training::Result<T>,
     expected: TrainingError,
@@ -36,8 +36,12 @@ fn refused<T: std::fmt::Debug>(
             println!("PT5 refused {label}: {e}");
             Ok(())
         }
-        other => {
-            eprintln!("PT5 FAILED {label}: expected {expected:?}, got {other:?}");
+        Err(e) => {
+            eprintln!("PT5 FAILED {label}: expected {expected:?}, got {e:?}");
+            Err(Error::Internal)
+        }
+        Ok(_) => {
+            eprintln!("PT5 FAILED {label}: unexpectedly accepted");
             Err(Error::Internal)
         }
     }
