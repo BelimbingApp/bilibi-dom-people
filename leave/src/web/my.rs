@@ -1,6 +1,7 @@
 //! Bilimbi `Leave.Web.MyLive`: current account's balances, requests and ledger.
 use super::{
-    action, dates, refusal, render, row, submit, text, type_name, unit, Core, Flash, Table,
+    action, dates, quantity, refusal, render, row, submit, text, type_name, unit, Core, Flash,
+    Table,
 };
 use crate::{LeaveError, NewRequest, Request, SelfSummary, SELF_VIEW};
 use askama::Template;
@@ -299,14 +300,14 @@ impl My {
                     row("leave-balance", b.leave_type.id)
                         .slot("type", Html::text(&b.leave_type.name))
                         .slot("unit", Html::text(unit(&b.leave_type.unit)))
-                        .slot("entitlement", Html::text(&b.entitlement.to_string()))
-                        .slot("carried", Html::text(&b.carried_forward.to_string()))
-                        .slot("opening", Html::text(&b.opening.to_string()))
-                        .slot("adjustment", Html::text(&b.adjustment.to_string()))
-                        .slot("taken", Html::text(&b.taken.to_string()))
-                        .slot("balance", Html::text(&b.balance.to_string()))
-                        .slot("pending", Html::text(&b.pending.to_string()))
-                        .slot("available", Html::text(&b.available.to_string()))
+                        .slot("entitlement", Html::text(&quantity(b.entitlement)))
+                        .slot("carried", Html::text(&quantity(b.carried_forward)))
+                        .slot("opening", Html::text(&quantity(b.opening)))
+                        .slot("adjustment", Html::text(&quantity(b.adjustment)))
+                        .slot("taken", Html::text(&quantity(b.taken)))
+                        .slot("balance", Html::text(&quantity(b.balance)))
+                        .slot("pending", Html::text(&quantity(b.pending)))
+                        .slot("available", Html::text(&quantity(b.available)))
                 })
                 .collect();
             view.balances = if view.has_types {
@@ -337,7 +338,7 @@ impl My {
                         .slot("type", Html::text(type_name(&types, r.leave_type_id)))
                         .slot(
                             "quantity",
-                            Html::text(&format!("{} {}", r.quantity, unit(&r.unit))),
+                            Html::text(&format!("{} {}", quantity(r.quantity), unit(&r.unit))),
                         )
                         .slot("status", Html::text(&r.status))
                         .slot(
@@ -370,7 +371,7 @@ impl My {
                         .slot("entry", Html::text(&e.entry_type))
                         .slot(
                             "quantity",
-                            Html::text(&format!("{} {}", e.quantity, unit(&e.unit))),
+                            Html::text(&format!("{} {}", quantity(e.quantity), unit(&e.unit))),
                         )
                         .slot("note", Html::text(e.note.as_deref().unwrap_or_default()))
                 })

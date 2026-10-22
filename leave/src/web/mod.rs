@@ -197,6 +197,9 @@ fn text(payload: &Value, key: &str) -> String {
         .unwrap_or_default()
         .to_owned()
 }
+fn quantity(value: rust_decimal::Decimal) -> String {
+    format!("{value:.2}")
+}
 fn unit(unit: &str) -> &'static str {
     if unit == "hour" {
         "hours"

@@ -1,5 +1,5 @@
 //! Bilimbi `Leave.Web.ApprovalsLive`: independently decide pending requests.
-use super::{dates, refusal, render, row, text, type_name, unit, Core, Flash, Table};
+use super::{dates, quantity, refusal, render, row, text, type_name, unit, Core, Flash, Table};
 use crate::{Decision, LeaveError, LeaveType, PendingRequest, REQUESTS_APPROVE};
 use askama::Template;
 use bilibi_database::{Error, Result};
@@ -369,7 +369,11 @@ impl Approvals {
                         .slot("dates", Html::text(&dates(request)))
                         .slot(
                             "quantity",
-                            Html::text(&format!("{} {}", request.quantity, unit(&request.unit))),
+                            Html::text(&format!(
+                                "{} {}",
+                                quantity(request.quantity),
+                                unit(&request.unit)
+                            )),
                         )
                         .slot(
                             "reason",
