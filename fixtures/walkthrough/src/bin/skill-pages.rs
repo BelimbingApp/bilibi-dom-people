@@ -179,6 +179,21 @@ async fn main() -> Result<()> {
     let html = event(
         &mut page,
         &manager,
+        json!({
+            "type": "create_action", "action[employee_id]": employee.to_string(),
+            "action[skill_id]": skill.id.to_string(), "action[action_type_id]": kind.id.to_string()
+        }),
+    )
+    .await?;
+    check(
+        html.contains("Check the entered values.")
+            && html.contains("Starting level (manual) is invalid.")
+            && !html.contains("id=\"skills-confirm\""),
+        "incomplete manual gaps show field errors before confirmation",
+    )?;
+    let html = event(
+        &mut page,
+        &manager,
         json!({"type":"approve_action","id":action.id.to_string()}),
     )
     .await?;

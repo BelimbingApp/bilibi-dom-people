@@ -231,6 +231,11 @@ fn form_with_class(
         if f.kind.is_hidden() {
             f.id = format!("{id}-{}", f.name);
         }
+        f.errors = f
+            .errors
+            .iter()
+            .map(|error| bilibi_ui::error_sentence(&f.label, error))
+            .collect();
         for error in &f.errors {
             summary.push(&f.id, error);
         }
