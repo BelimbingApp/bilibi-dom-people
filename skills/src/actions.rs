@@ -223,9 +223,10 @@ pub(crate) async fn propose(
                 mandatory,
                 reason,
             } => {
-                let reason = text(reason, 1000, true)
-                    .map_err(|_| SkillsError::ReasonRequired)?
-                    .unwrap_or_default();
+                if reason.trim().is_empty() {
+                    return Err(SkillsError::ReasonRequired);
+                }
+                let reason = text(reason, 1000, true)?.unwrap_or_default();
                 if *employee_id <= 0
                     || !(0..=crate::MAX_LEVEL).contains(starting_level)
                     || !(0..=crate::MAX_LEVEL).contains(target_level)
