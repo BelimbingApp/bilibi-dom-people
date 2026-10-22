@@ -51,3 +51,6 @@ bilibi-agent-api.workspace = true
 bilibi-audit.workspace = true
 bilibi-people-organisation = { path = "../../organisation" }
 bilibi-ports.workspace = true
+
+# Employee Workspace (PE1): facade and directory interaction proof.
+bilibi-people-employee-workspace = { path = "../../employee_workspace" }

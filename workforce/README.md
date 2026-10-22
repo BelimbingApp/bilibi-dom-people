@@ -329,3 +329,9 @@ an edge.
 ## Assignment directory
 
 `employees_at_any_status(scope, company_id, employee_ids)` returns directory summaries for company assignment pickers. Pass `None` for the company list, or at most 1,000 positive IDs to validate members. It includes pending, probation, active, inactive and terminated employments. Names and work contacts still come through Core; private employment fields stay behind `employment` and its capability. Claims uses this read so assignments can cover employees before or after their working period. `employees`, `employees_by_ids` and `employee` continue to return only working staff.
+
+### Employee Workspace directory
+
+`directory_employees(scope, company_id)` returns all-status directory summaries as `DirectoryEmployee { id, employee, status, employment_type }`; it excludes private employment dates, Person ids and affiliation ids. Like the existing directory reads, it needs a visible live company and no separate employment-view grant. Employee Workspace authorizes `people.employees.view` before using it. `lock_employee(tx, scope, company_id, employee_id)` holds the company's writable lock and the named employment lock for a sibling's mutation; the sibling must authorize its own operation first.
+
+`employment_types(scope, company_id)` requires `people.workforce.employment.manage` and reads active choices through `people/reference_data.employment_types`. It returns `EmploymentType { code, label }` or `Unavailable` if Reference Data is absent, without a cyclic dependency from Workforce to Reference Data.
