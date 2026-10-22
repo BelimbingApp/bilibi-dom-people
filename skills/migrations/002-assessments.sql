@@ -199,6 +199,50 @@ CREATE TABLE people_skill_scores (
     CONSTRAINT people_skill_scores_gap CHECK ((gap = GREATEST((required_level - current_level), 0)))
 );
 
+CREATE INDEX people_skill_action_events_action_id_inserted_at_index ON people_skill_action_events USING btree (action_id, inserted_at);
+
+CREATE INDEX people_skill_action_events_tenant_id_company_id_index ON people_skill_action_events USING btree (tenant_id, company_id);
+
+CREATE UNIQUE INDEX people_skill_action_types_company_code_unique ON people_skill_action_types USING btree (company_id, code);
+
+CREATE INDEX people_skill_action_types_tenant_id_company_id_index ON people_skill_action_types USING btree (tenant_id, company_id);
+
+CREATE INDEX people_skill_actions_company_id_employee_id_skill_id_index ON people_skill_actions USING btree (company_id, employee_id, skill_id);
+
+CREATE UNIQUE INDEX people_skill_actions_one_per_assessment ON people_skill_actions USING btree (source_assessment_id) WHERE (source_assessment_id IS NOT NULL);
+
+CREATE UNIQUE INDEX people_skill_actions_request_key_unique ON people_skill_actions USING btree (company_id, request_key);
+
+CREATE INDEX people_skill_actions_tenant_id_company_id_status_due_on_index ON people_skill_actions USING btree (tenant_id, company_id, status, due_on);
+
+CREATE UNIQUE INDEX people_skill_assessment_decisions_once ON people_skill_assessment_decisions USING btree (assessment_id, decision);
+
+CREATE INDEX people_skill_assessment_decisions_tenant_id_company_id_index ON people_skill_assessment_decisions USING btree (tenant_id, company_id);
+
+CREATE UNIQUE INDEX people_skill_assessments_one_successor ON people_skill_assessments USING btree (supersedes_assessment_id) WHERE (supersedes_assessment_id IS NOT NULL);
+
+CREATE UNIQUE INDEX people_skill_assessments_request_key_unique ON people_skill_assessments USING btree (company_id, assessor_user_id, request_key);
+
+CREATE INDEX people_skill_assessments_subject_status_index ON people_skill_assessments USING btree (company_id, employee_id, skill_id, status);
+
+CREATE UNIQUE INDEX people_skill_assessments_subject_unique ON people_skill_assessments USING btree (id, company_id, employee_id, skill_id);
+
+CREATE INDEX people_skill_assessments_tenant_id_company_id_status_index ON people_skill_assessments USING btree (tenant_id, company_id, status);
+
+CREATE UNIQUE INDEX people_skill_reassessment_requests_one_open ON people_skill_reassessment_requests USING btree (company_id, employee_id, skill_id) WHERE ((status)::text = 'pending'::text);
+
+CREATE INDEX people_skill_reassessment_requests_status_index ON people_skill_reassessment_requests USING btree (tenant_id, company_id, status);
+
+CREATE UNIQUE INDEX people_skill_reminders_once ON people_skill_reminders USING btree (company_id, rule, employee_id, skill_id, action_id, period_key, recipient_user_id) NULLS NOT DISTINCT;
+
+CREATE INDEX people_skill_reminders_recipient_index ON people_skill_reminders USING btree (tenant_id, company_id, recipient_user_id);
+
+CREATE INDEX people_skill_scores_company_id_next_due_on_index ON people_skill_scores USING btree (company_id, next_due_on);
+
+CREATE UNIQUE INDEX people_skill_scores_subject_unique ON people_skill_scores USING btree (company_id, employee_id, skill_id);
+
+CREATE INDEX people_skill_scores_tenant_id_company_id_index ON people_skill_scores USING btree (tenant_id, company_id);
+
 ALTER TABLE people_skill_action_events
     ADD CONSTRAINT people_skill_action_events_action_id_fkey FOREIGN KEY (action_id) REFERENCES people_skill_actions(id) ON DELETE RESTRICT;
 
@@ -243,50 +287,6 @@ ALTER TABLE people_skill_reminders
 
 ALTER TABLE people_skill_scores
     ADD CONSTRAINT people_skill_scores_assessment_fkey FOREIGN KEY (assessment_id, company_id, employee_id, skill_id) REFERENCES people_skill_assessments(id, company_id, employee_id, skill_id) ON DELETE RESTRICT;
-
-CREATE INDEX people_skill_action_events_action_id_inserted_at_index ON people_skill_action_events USING btree (action_id, inserted_at);
-
-CREATE INDEX people_skill_action_events_tenant_id_company_id_index ON people_skill_action_events USING btree (tenant_id, company_id);
-
-CREATE UNIQUE INDEX people_skill_action_types_company_code_unique ON people_skill_action_types USING btree (company_id, code);
-
-CREATE INDEX people_skill_action_types_tenant_id_company_id_index ON people_skill_action_types USING btree (tenant_id, company_id);
-
-CREATE INDEX people_skill_actions_company_id_employee_id_skill_id_index ON people_skill_actions USING btree (company_id, employee_id, skill_id);
-
-CREATE UNIQUE INDEX people_skill_actions_one_per_assessment ON people_skill_actions USING btree (source_assessment_id) WHERE (source_assessment_id IS NOT NULL);
-
-CREATE UNIQUE INDEX people_skill_actions_request_key_unique ON people_skill_actions USING btree (company_id, request_key);
-
-CREATE INDEX people_skill_actions_tenant_id_company_id_status_due_on_index ON people_skill_actions USING btree (tenant_id, company_id, status, due_on);
-
-CREATE UNIQUE INDEX people_skill_assessment_decisions_once ON people_skill_assessment_decisions USING btree (assessment_id, decision);
-
-CREATE INDEX people_skill_assessment_decisions_tenant_id_company_id_index ON people_skill_assessment_decisions USING btree (tenant_id, company_id);
-
-CREATE UNIQUE INDEX people_skill_assessments_one_successor ON people_skill_assessments USING btree (supersedes_assessment_id) WHERE (supersedes_assessment_id IS NOT NULL);
-
-CREATE UNIQUE INDEX people_skill_assessments_request_key_unique ON people_skill_assessments USING btree (company_id, assessor_user_id, request_key);
-
-CREATE INDEX people_skill_assessments_subject_status_index ON people_skill_assessments USING btree (company_id, employee_id, skill_id, status);
-
-CREATE UNIQUE INDEX people_skill_assessments_subject_unique ON people_skill_assessments USING btree (id, company_id, employee_id, skill_id);
-
-CREATE INDEX people_skill_assessments_tenant_id_company_id_status_index ON people_skill_assessments USING btree (tenant_id, company_id, status);
-
-CREATE UNIQUE INDEX people_skill_reassessment_requests_one_open ON people_skill_reassessment_requests USING btree (company_id, employee_id, skill_id) WHERE ((status)::text = 'pending'::text);
-
-CREATE INDEX people_skill_reassessment_requests_status_index ON people_skill_reassessment_requests USING btree (tenant_id, company_id, status);
-
-CREATE UNIQUE INDEX people_skill_reminders_once ON people_skill_reminders USING btree (company_id, rule, employee_id, skill_id, action_id, period_key, recipient_user_id) NULLS NOT DISTINCT;
-
-CREATE INDEX people_skill_reminders_recipient_index ON people_skill_reminders USING btree (tenant_id, company_id, recipient_user_id);
-
-CREATE INDEX people_skill_scores_company_id_next_due_on_index ON people_skill_scores USING btree (company_id, next_due_on);
-
-CREATE UNIQUE INDEX people_skill_scores_subject_unique ON people_skill_scores USING btree (company_id, employee_id, skill_id);
-
-CREATE INDEX people_skill_scores_tenant_id_company_id_index ON people_skill_scores USING btree (tenant_id, company_id);
 
 CREATE FUNCTION people_skill_assessments_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -343,45 +343,12 @@ BEGIN
 END;
 $$;
 
-  CREATE TRIGGER people_skill_assessment_decisions_guard BEFORE UPDATE OR DELETE ON people_skill_assessment_decisions
-  FOR EACH ROW EXECUTE FUNCTION people_skill_append_only()
-  """)
-end
+CREATE TRIGGER people_skill_assessment_decisions_guard BEFORE UPDATE OR DELETE ON people_skill_assessment_decisions
+FOR EACH ROW EXECUTE FUNCTION people_skill_append_only();
 
-execute("""
-CREATE FUNCTION people_skill_scores_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-  source record;
-BEGIN
-  IF TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'skill score % is never deleted', OLD.id;
-  END IF;
-  SELECT * INTO source FROM people_skill_assessments WHERE id = NEW.assessment_id;
-  IF NOT FOUND OR source.status <> 'finalized'
-     OR source.tenant_id <> NEW.tenant_id OR source.company_id <> NEW.company_id
-     OR source.employee_id <> NEW.employee_id OR source.skill_id <> NEW.skill_id THEN
-    RAISE EXCEPTION 'a skill score mirrors a finalized assessment';
-  END IF;
-  IF NEW.profile_id <> source.profile_id OR NEW.required_level <> source.required_level
-     OR NEW.current_level <> source.assessed_level OR NEW.gap <> source.gap
-     OR NEW.criticality <> source.criticality OR NEW.mandatory <> source.mandatory
-     OR NEW.priority_score <> source.priority_score
-     OR NEW.assessed_on <> source.assessed_on
-     OR NEW.valid_until IS DISTINCT FROM source.valid_until
-     OR NEW.next_due_on <> source.next_due_on THEN
-    RAISE EXCEPTION 'a skill score copies its assessment';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+CREATE TRIGGER people_skill_action_events_guard BEFORE UPDATE OR DELETE ON people_skill_action_events
+FOR EACH ROW EXECUTE FUNCTION people_skill_append_only();
 
-  CREATE TRIGGER people_skill_action_events_guard BEFORE UPDATE OR DELETE ON people_skill_action_events
-  FOR EACH ROW EXECUTE FUNCTION people_skill_append_only()
-  """)
-end
-
-execute("""
 CREATE FUNCTION people_skill_scores_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

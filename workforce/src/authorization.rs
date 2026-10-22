@@ -153,6 +153,81 @@ pub struct SelfEmployee {
 pub type SelfWrite<'b, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'b>>;
 
 impl Workforce {
+    /// The signed-in account's employee at any employment status, or None
+    /// when unlinked. Re-proves the account on the supplied client, so sibling
+    /// workflows can refuse subject self-approval inside their transaction.
+    /// This is an identity read, not permission to act on the employee.
+    pub async fn linked_employee(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<Option<i64>> {
+        let company = summary(client, scope, company_id)
+            .await?
+            .filter(|c| !c.archived)
+            .ok_or(WorkforceError::NotFound)?;
+        let affiliation = match self.fresh_affiliation(client, scope).await {
+            Ok(id) => id,
+            Err(WorkforceError::NotLinked) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let statuses: Vec<String> = crate::EMPLOYEE_STATUSES
+            .iter()
+            .map(|s| (*s).into())
+            .collect();
+        Ok(crate::employments::by_affiliation(
+            client,
+            scope.tenant(),
+            company.id,
+            affiliation,
+            &statuses,
+        )
+        .await?
+        .map(|row| row.employment.id))
+    }
+
+    /// Locks a workflow subject at any employment status without exposing
+    /// private employment facts. Use before checking subject independence.
+    /// The company lock also serializes account relinking. The caller must
+    /// authorize its own capability, and the company must be writable.
+    pub async fn lock_employee_subject(
+        &self,
+        tx: &MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<()> {
+        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
+            .await?
+            .ok_or(WorkforceError::NotFound)?;
+        Ok(())
+    }
+
+    /// Locks a sibling workflow's subject before its own rows. The company
+    /// must be writable and the employee must still be working. Callers
+    /// authorize their own capability; this exposes no employment facts.
+    pub async fn lock_working_employee(
+        &self,
+        tx: &MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<()> {
+        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
+            .await?
+            .ok_or(WorkforceError::NotFound)?;
+        let statuses = self
+            .working_statuses_of(tx.sql(), scope, company_id)
+            .await?;
+        if !statuses.contains(&locked.status) {
+            return Err(WorkforceError::NotFound);
+        }
+        Ok(())
+    }
+
     /// The working employee the signed-in account is linked to in this
     /// company, resolved now (Bilimbi `self_employee/2`): the account is
     /// re-proved through Base Tenancy on this call, its affiliation facet

@@ -829,6 +829,20 @@ pub async fn run(url: &str) -> Result<()> {
     // Claims assignment pickers include the pending employment PW1 created.
     claims::all_status_members(&services, &manager, COMPANY).await?;
 
+    // Skills assessments (PK2): its own proof block at the end.
+    assessments::run(
+        &services,
+        &client,
+        assessments::Context {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            manager_employee: manager_employment.id,
+            staff_employee: staff_employment.id,
+        },
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -2483,3 +2497,6 @@ async fn skills_catalog(
 
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
+
+// Skills assessments (slice PK2).
+mod assessments;

@@ -325,3 +325,9 @@ an edge.
 ## Assignment directory
 
 `employees_at_any_status(scope, company_id, employee_ids)` returns directory summaries for company assignment pickers. Pass `None` for the company list, or at most 1,000 positive IDs to validate members. It includes pending, probation, active, inactive and terminated employments. Names and work contacts still come through Core; private employment fields stay behind `employment` and its capability. Claims uses this read so assignments can cover employees before or after their working period. `employees`, `employees_by_ids` and `employee` continue to return only working staff.
+
+## Workflow subject locks
+
+Sibling People workflows can call `lock_working_employee(tx, scope, company, employee)` before accepting evidence about a working employee. Review and finalization can use `lock_employee_subject` to lock an employee at any status. Both hold the writable company lock first and then the employment row, return no private facts, and leave authorization to the caller's own capability check. Lock the subject before the sibling's own rows.
+
+`linked_employee(client, scope, company)` re-proves the signed-in account and returns its employment id at any status, or `None` when unlinked. It is an identity read for subject independence checks, not permission to act. `self_employee` and self-service writes still require a working employee. The Skills assessment workflow uses these reads and locks to refuse self-decisions inside its deciding transaction.

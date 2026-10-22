@@ -6,11 +6,7 @@ profiles and the policy values that steer assessments. This README is the
 owner contract; the Bilimbi source it ports is
 [`skills/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/skills/docs/README.md).
 
-This is the catalog slice (PK1 of the port plan): migration 001 with its
-seven tables and guards, the seven policy settings, and the facade's
-category, skill, scale, profile, resolution and policy functions.
-Assessments (PK2), reassessment requests and development actions (PK3) and
-reminders (PK7) add their tables and functions beside these; the pages
+The catalog and assessment slices (PK1–PK2) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores and standing reads. Migration 002 also creates the reassessment, action and reminder tables from the same Bilimbi migration. Their writes follow in PK3 and PK7; the pages
 (`/people/skills`, `/people/skills/profiles/{id}`, `/assessments`,
 `/actions`, `/my`, `/policy`) and the menu leaves land in PK4–PK6.
 
@@ -176,3 +172,50 @@ or profile.
 `base/settings`, `base/tenancy`, `core/company`, `people/settings`,
 `people/workforce`; the Cargo manifest lists the same edges. PK7 adds
 `base/queue` for the reminder worker.
+
+## Assessments and standing (PK2)
+
+An assessor records evidence and a level. Another person verifies the assessment and finalizes it. Finalization updates the employee's score. **A correction is a new assessment**, so the original evidence and decisions remain available.
+
+For example, submit an assessment with an `AssessmentInput`, then pass its returned `id` to `review_assessment(..., ReviewDecision::Verify, None)` and `finalize_assessment` using an independent person's scope. To return it, use `ReviewDecision::Return` and a note. To correct returned or finalized work, submit new evidence with `supersedes_assessment_id` set to its id.
+
+The scope always supplies the assessor or decision maker. No caller can supply another account id or bypass reach. Capability keys below have the prefix `people.skills.`.
+
+| Function | Capability | Result and limits |
+| --- | --- | --- |
+| `submit_assessment(scope, company, &AssessmentInput)` | `assessments.submit` | `Assessment`: a working employee reached through the supervisor chain, or anyone with `assessments.manage`; never the signed-in employee |
+| `review_assessment(scope, company, id, decision, note)` | `assessments.review` | Pending work within the same reach becomes verified or returned; a return requires a note |
+| `finalize_assessment(scope, company, id)` | `assessments.approve` | Verified work becomes finalized and refreshes its subject's score; this capability has company-wide reach, as Bilimbi's does |
+| `assessable` | `assessments.submit` or `reassessments.submit` | Working employees within reach, sorted by name, excluding the signed-in employee |
+| `list_assessments(scope, company, &AssessmentFilters)` | `assessments.view` | Newest 200 within reach, optionally filtered by status, employee or skill; each `AssessmentView` includes `assessment`, `employee_name`, `skill_code` and `skill_name` |
+| `assessment_queue` | Any assessment view, submit, review or approve key | Oldest 200 per bucket: independent pending reviews within reach, independent verified work company-wide, and the actor's uncorrected returned submissions; review and finalize buckets require their respective grants |
+| `assessment_decisions` | `assessments.view` | The append-only trail in id order, only within reach |
+| `gaps` | `assessments.view` | Up to 500 scores within reach with a positive gap, ordered by mandatory first, descending priority, next due date and id |
+| `standing` | `self.view` | The signed-in working employee's scores (up to 500), actions other than proposed or cancelled (up to 500), and pending reassessment requests; re-proves the account link each call |
+| `coverage(scope, company, as_of)` | `assessments.view` and `assessments.manage` | Every active critical skill, its competent working holder count, the backup minimum and whether that minimum is met |
+
+**Neither the assessor nor the assessed employee may review or finalize the work.** The reviewer may also finalize it. Subject independence uses the account's current link, including an employee who has since stopped working. Workforce supplies `linked_employee`, `lock_employee_subject` and `lock_working_employee` so Skills can check this inside its company transaction without reading private Workforce tables. The lock order is Company → Employment → Assessment; the company lock also serializes employment changes and account relinking.
+
+### Submission snapshots and retries
+
+`AssessmentInput` accepts employee, skill, assessed level, evidence, optional assessment date (today in UTC when omitted), optional validity date, method, notes, request key and optional predecessor. Text is trimmed: evidence is required and at most 4,000 characters, request key required and at most 80, method at most 80, notes at most 2,000. An assessment cannot be in the future, and validity cannot precede it. The level must exist on the pinned scale.
+
+On the assessment date, Skills resolves the employee's substantive position and the one requirement profile that covers them. It snapshots the profile id, scale id, required level, criticality, weight and mandatory flag. No matching skill requirement, or ambiguous profiles, is `NoRequirement`. The gap is `max(required − assessed, 0)`. Priority is the gap multiplied by the company's policy value for that criticality. Zero gap is `meets` or `exceeds`; gaps of one, two or more are `minor_gap`, `major_gap` or `critical_gap`.
+
+The next review date is the explicit validity date, otherwise the assessment date plus the skill's interval or the policy default. Adding months clamps a month-end day to the target month's last day. Later catalog and policy changes do not change these snapshots.
+
+A request key is unique per company and assessor. A retry with the same employee, skill, level, assessment date and evidence returns the existing assessment with its current decision state and writes nothing. A change to any of those five facts is `KeyConflict`. Optional metadata follows Bilimbi's retry comparison and does not change the original row.
+
+### Corrections and current scores
+
+A predecessor must be returned or finalized work for the same company, employee and skill. Only its original assessor can correct returned work. Each assessment has at most one successor, including a successor still pending review.
+
+Finalization excludes every ancestor of every finalized correction, including returned assessments in the chain. From the remaining finalized assessments it chooses the newest assessment date, then the newest id. A backdated correction can therefore replace its newer predecessor. A pending or returned correction leaves the score alone. The score copies its chosen assessment exactly and carries its original profile version and scale in `ScoreView`.
+
+Standing reports `expired` after the validity date, `overdue` on or after the next review date, and `current` otherwise. Coverage counts scores at or above their own snapshotted requirement with validity on or after `as_of` (or no validity), and only for employees currently working. A due date alone does not expire coverage.
+
+### Database and proof
+
+`people-skills-002-assessments` creates assessments, decisions, scores, reassessment requests, action types, actions, action events and reminders. It preserves Bilimbi's constraints and guard triggers: immutable assessment facts, the allowed review/finalize transitions, independent assessor checks, one correction per predecessor, append-only decisions and action events, scores that mirror finalized work, and terminal request/action/reminder guards. The score guard also checks tenant and subject identity. All writes report their assessment, decision and score changes through `MutationBoundary` in the same transaction.
+
+The PK2 block in `fixtures/walkthrough/src/assessments.rs` creates records through the facades and stops on an unexpected result. Run the People walkthrough on a fresh disposable database to exercise submissions, five-fact retries, transitive supervisor reach, self-assessment and decision refusals, snapshot policy, correction chains, score ordering, expired standing, coverage, grant revocation and account unlinking. It also attempts forbidden SQL updates and deletes to prove the guards. Assessment and My skills pages belong to PK5; PK2 adds no route or menu leaf.
