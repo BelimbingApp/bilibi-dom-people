@@ -29,3 +29,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio-postgres.workspace = true
+
+# PA4: shared live page and menu components.
+askama.workspace = true
+bilibi-menu.workspace = true
+bilibi-ui.workspace = true
+uuid.workspace = true
