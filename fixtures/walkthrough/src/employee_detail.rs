@@ -43,6 +43,47 @@ pub(super) async fn run(
     ] {
         grants.set_direct(admin, MANAGER, key, Some(true)).await?;
     }
+    // Two first edits to an absent profile must not both claim version zero.
+    let mut absent = None;
+    for row in saved(workspace.employees(manager, COMPANY).await)? {
+        if saved(
+            workspace
+                .work_profile_record(manager, COMPANY, row.id)
+                .await,
+        )?
+        .id
+        .is_none()
+        {
+            absent = Some(row.id);
+            break;
+        }
+    }
+    let absent = absent.ok_or(Error::Internal)?;
+    let (a, b) = tokio::join!(
+        workspace.update_work_profile(
+            manager,
+            COMPANY,
+            absent,
+            0,
+            "notes",
+            "First concurrent edit"
+        ),
+        workspace.update_work_profile(
+            manager,
+            COMPANY,
+            absent,
+            0,
+            "notes",
+            "Second concurrent edit"
+        ),
+    );
+    prove(
+        matches!(
+            (&a, &b),
+            (Ok(_), Err(WorkspaceError::Stale)) | (Err(WorkspaceError::Stale), Ok(_))
+        ),
+        "concurrent first edits serialize and only one version-zero write succeeds",
+    )?;
     let old = saved(
         workspace
             .work_profile_record(manager, COMPANY, employee)

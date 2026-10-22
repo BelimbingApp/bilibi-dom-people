@@ -438,7 +438,7 @@ impl Detail {
             field: self.inline(key, label, value, version, editable),
             display: Html::text(if display.is_empty() { "—" } else { &display }),
             editor: render(
-                &Field::new(key)
+                &Field::named(key)
                     .id(format!("employee-{key}-choice"))
                     .label(label)
                     .kind(InputKind::Select)
@@ -895,6 +895,17 @@ impl Detail {
         {
             self.commits.clear_saved();
             self.error(WRITE_REFUSAL);
+            return;
+        }
+        if key == "employment_type" && !self.types.iter().any(|choice| choice.value == value) {
+            self.commits.put(
+                key,
+                CommitStatus::refusal(
+                    "Employment type",
+                    value,
+                    &["is not an active company choice"],
+                ),
+            );
             return;
         }
         let Some(company) = self.company else {
