@@ -28,7 +28,7 @@ inventory::submit! { Module {
         performance: services.get(bilibi_people_performance::SERVICE)?,
         skills: services.get(bilibi_people_skills::SERVICE)?,
     }))}, Service {id: PAGES, factory: |services| Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
-        services.get(SERVICE)?, services.get(bilibi_people_skills::SERVICE)?,
+        services.get(SERVICE)?, services.get(bilibi_people_skills::SERVICE)?, services.get("base/datetime.display")?,
     )))))}],
 }}
 inventory::submit! { Contribution::new(VOCABULARY, "people/progression.vocabulary", Provenance {module: MODULE, source: file!(), line: line!()}, &VocabularyContribution {

@@ -26,20 +26,27 @@ use std::{
 };
 
 pub(crate) struct Pages {
+    display: Arc<bilibi_datetime::DisplayPolicy>,
     progression: Arc<Progression>,
     skills: Arc<Skills>,
 }
 impl Pages {
-    pub(crate) fn new(progression: Arc<Progression>, skills: Arc<Skills>) -> Self {
+    pub(crate) fn new(
+        progression: Arc<Progression>,
+        skills: Arc<Skills>,
+        display: Arc<bilibi_datetime::DisplayPolicy>,
+    ) -> Self {
         Self {
             progression,
             skills,
+            display,
         }
     }
     fn state(&self, operation: &str, query: &HashMap<String, String>) -> Result<State> {
         State::new(
             self.progression.clone(),
             self.skills.clone(),
+            self.display.clone(),
             operation == "my",
             query,
         )
@@ -87,6 +94,8 @@ fn spec() -> Result<Arc<ListSpec>> {
     .map_err(|_| Error::Internal)
 }
 struct State {
+    display: Arc<bilibi_datetime::DisplayPolicy>,
+    clock: bilibi_datetime::DisplayContext,
     progression: Arc<Progression>,
     skills: Arc<Skills>,
     my: bool,
@@ -111,10 +120,13 @@ impl State {
     fn new(
         progression: Arc<Progression>,
         skills: Arc<Skills>,
+        display: Arc<bilibi_datetime::DisplayPolicy>,
         my: bool,
         query: &HashMap<String, String>,
     ) -> Result<Self> {
         let mut state = Self {
+            display,
+            clock: bilibi_datetime::DisplayContext::anonymous(),
             progression,
             skills,
             my,
@@ -193,6 +205,12 @@ impl State {
             return Ok(());
         }
         self.company = Some(company);
+        let client = self.progression.db.get().await?;
+        self.clock = self
+            .display
+            .display(&**client, scope, scope.actor().organisation(), "en")
+            .await?;
+        drop(client);
         if self.my {
             self.can_progression = self.progression.allowed(scope, company, SELF_VIEW).await;
             self.can_performance = self

@@ -77,7 +77,7 @@ impl State {
     fn detail(&self, policy: &Policy) -> Result<Html> {
         let publication = match policy.published_at.as_deref().and_then(|s| s.parse().ok()) {
             Some(instant) => {
-                let r = bilibi_datetime::DisplayContext::anonymous().render(
+                let r = self.clock.render(
                     instant,
                     bilibi_datetime::Format::DateTime,
                     bilibi_datetime::Precision::Minute,
