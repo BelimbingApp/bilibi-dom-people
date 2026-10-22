@@ -1,6 +1,6 @@
 # Attendance
 
-Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. Pages follow in PA3 to PA5. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
+Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. The roster planner, attendance approvals and self-service pages are available; settings pages follow in PA3. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
 
 ## Public API
 
@@ -66,8 +66,8 @@ All six live under the Authz domain `people` and are granted by an administrator
 | --- | --- |
 | `people.attendance.self.view` | My attendance, self-clocking and own requests |
 | `people.attendance.rules.manage` | Rules, shift templates, clocking locations |
-| `people.attendance.roster.manage` | Rosters (PA5) |
-| `people.attendance.adjustments.approve` | Adjustment decisions (PA5) |
+| `people.attendance.roster.manage` | Rosters |
+| `people.attendance.adjustments.approve` | Attendance approvals |
 | `people.attendance.allowances.manage` | Allowance rules (PA3) |
 | `people.attendance.clock.record` | Reviewed agent operation for a device or integration clock event |
 
@@ -138,8 +138,17 @@ Run PA2's executable proof after the default People walkthrough has created its 
 BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance-workflows
 ```
 
-It proves draft visibility and publication/removal, search and period bounds, retired shifts, request replay/conflict/duplicates/window/future refusals, approval and rejection, self-approval refusal, cancellation, location enforcement with adjustment exemption, allowance version closure/overlap/retirement/end refusals, revoked grants and account unlinking with an earlier scope, the four audit action kinds and PostgreSQL check constraints. PA3 and PA5 own the operator pages and their browser parity checks.
+It proves draft visibility and publication/removal, search and period bounds, retired shifts, request replay/conflict/duplicates/window/future refusals, approval and rejection, self-approval refusal, cancellation, location enforcement with adjustment exemption, allowance version closure/overlap/retirement/end refusals, revoked grants and account unlinking with an earlier scope, the four audit action kinds and PostgreSQL check constraints. PA3 owns the remaining settings pages and their browser parity checks.
 
+## Rosters and attendance approvals
+
+`/people/attendance/rosters` lets a roster planner choose a company, search employees and plan seven days from a chosen date. Drafts stay private until **Publish week** is confirmed. Publishing includes every unpublished change for that company and week, including employees hidden by search.
+
+`/people/attendance/approvals` shows the 200 oldest pending adjustment requests for a chosen company. Approve records the requested clock event; Reject needs a note. Both decisions require confirmation, and employees cannot decide their own requests.
+
+Both pages use shared FlexTables and recheck company access before each write. The Attendance facade checks permission again under the company lock.
+
+For a disposable browser proof, run `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance-pages`, then start `bilibi-web run` against that database. Sign in as `manager@example.test` with the Platform walkthrough password. Search for `PA5-002`: one employee is shown while the pending count remains two. Confirm Publish week to release both drafts. Attendance approvals starts with three requests; the manager can decide the staff requests, and `admin@example.test` can decide the manager request independently. `viewer@example.test` cannot open either page.
 
 ## My attendance
 

@@ -2,7 +2,7 @@
 
 Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
 
-Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`. Claim policies and Claim operations are delivered separately.
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`, and Claim operations at `/people/claims/operations`. Claim policies is delivered separately.
 
 ## Ownership
 
@@ -159,6 +159,21 @@ IDs are JSON integers. `reference` is the stable `CLM-{claim_id}` reference. The
 
 The appended PC2 block in `fixtures/walkthrough/src/claim_workflow.rs` runs on the same disposable database. It creates its own catalog and policies through the facade, submits and decides claims, groups currencies, checks CSV quoting and formula neutralisation, and verifies exact event payloads and ordered history. It also proves period limits, duplicate receipts, confirmed duplicates, own-claim refusals, batch rollback, grant revocation, account unlinking and relinking to an inactive employee. PostgreSQL refuses changes to the stored history and hand-off records.
 
+## Claim operations
+
+Open `/people/claims/operations` to decide claims, record payments, and group approved claims for hand-off. The Time and expenses menu shows Claim operations with `people.claims.approve`.
+
+Choose a company and one of five tabs: Awaiting decision, Approved, Reimbursed, Rejected, or Hand-off batches. Each tab is a `Tab::patch` link, so a copied address and Back restore the selected company and queue. The queues keep Bilimbi's 500-record bound and order. Every list uses `FlexTable` with `ListState` and `ListColumns`, including waiting currency totals and batch records.
+
+Approve and Reject open a reason dialog. Approval accepts an optional lower amount; the owner requires a reason for a reduction. Rejection always needs a reason. Mark reimbursed accepts an optional payment reference. Review opens `ConfirmDialog`; only its confirmation runs the write. Cancel and Escape discard it. The server holds the company, record, action and reviewed values; a confirmation payload cannot replace them. Changing company or tab discards an unfinished action.
+
+The Approved tab can create one hand-off batch per waiting currency. Hand-off batches lists stored batches, links directly to the authorized CSV download, and can mark the batch's remaining approved claims reimbursed. Without `people.claims.reimburse`, payment, batch and download controls are absent, and the batches tab says “Hand-off batches need the reimbursement permission.”
+
+Every write-shaped event rechecks the queue permission and the action's permission for the company. The Claims facade checks its permission again in the transaction. A revoked grant, stale claim, own claim or archived company returns a page message and closes the confirmation. Flash messages survive table and tab events until dismissed or replaced.
+
+For browser proof, first run the default People walkthrough on a disposable database. Initialize its stored Dev role with `BILIBI_ENV=development ./target/debug/bilibi-web seed-production`, then run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin claim-operations`. It creates separate records through the Claims facade and gives the fixture viewer queue access with reimbursement explicitly denied. Sign in as the fixture manager to exercise all five tabs, or as the viewer to check withheld controls.
+
+While a manager review is open, run the same fixture binary with `revoke-reimburse` or `revoke-approve` to prove that the next event refuses it. Restore the grant with `restore-reimburse` or `restore-approve`. These commands call Authz and refuse a database without the walkthrough accounts.
 
 ## My claims
 
