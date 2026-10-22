@@ -89,6 +89,12 @@ pub async fn run(url: &str) -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&bilibi_module_registry::discover()?)?;
+    // Match the Platform walkthrough's explicitly selected development mode.
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
     let grants = services.get::<Grants>("base/authz.grants")?;
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
