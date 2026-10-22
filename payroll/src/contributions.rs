@@ -35,7 +35,7 @@ inventory::submit! { Module {
         claims: s.get(bilibi_people_claims::SERVICE)?,
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
         events: s.get(bilibi_events::SERVICE)?,
-        artifacts: s.get(bilibi_artifacts::SERVICE)?,
+        artifacts: s.get("base/artifacts.store")?,
     })) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
         bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(
             Arc::new(crate::download::DocumentDownload { payroll: s.get(SERVICE)? })

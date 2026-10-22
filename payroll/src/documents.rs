@@ -210,7 +210,7 @@ impl Payroll {
     ) -> Result<Document> {
         let mut c = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**c, scope, company, MANAGE).await?;
-        let company_id = OrganisationId::new(company)?;
+        let company_id = OrganisationId::new(company).map_err(|_| PayrollError::NotFound)?;
         let owner = DocumentOwner {
             db: self.db.clone(),
         };
@@ -263,7 +263,7 @@ impl Payroll {
             .artifacts
             .for_owner(
                 scope,
-                OrganisationId::new(company)?,
+                OrganisationId::new(company).map_err(|_| PayrollError::NotFound)?,
                 &DocumentOwner {
                     db: self.db.clone(),
                 },
@@ -278,7 +278,7 @@ impl Payroll {
             .artifacts
             .for_owner(
                 scope,
-                OrganisationId::new(company)?,
+                OrganisationId::new(company).map_err(|_| PayrollError::NotFound)?,
                 &DocumentOwner {
                     db: self.db.clone(),
                 },
@@ -297,7 +297,7 @@ impl Payroll {
             .artifacts
             .for_owner(
                 scope,
-                OrganisationId::new(company)?,
+                OrganisationId::new(company).map_err(|_| PayrollError::NotFound)?,
                 &DocumentOwner {
                     db: self.db.clone(),
                 },
@@ -312,7 +312,7 @@ impl Payroll {
             .artifacts
             .for_owner(
                 scope,
-                OrganisationId::new(company)?,
+                OrganisationId::new(company).map_err(|_| PayrollError::NotFound)?,
                 &DocumentOwner {
                     db: self.db.clone(),
                 },
