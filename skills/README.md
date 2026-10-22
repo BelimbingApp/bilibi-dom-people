@@ -100,14 +100,7 @@ does not expose, and `position_of` finds the position an employee
 substantively holds. Without Organisation the scan is unavailable, only
 company targets are possible and nobody holds a position.
 
-**Seam (PK1).** The Workforce scan lands with the employment slice (PW1),
-which this slice does not depend on. `src/positions.rs` therefore answers
-today exactly what Bilimbi answers without Organisation: `position_options`
-is `PositionUnavailable`, `add_selector(Position)` and a publish with
-position targets are `PositionUnavailable`, `position_of` is `None`. PK4
-(the catalog page, which offers position targets) replaces the two function
-bodies with the Workforce scan, keeping the signatures; nothing else in the
-facade changes.
+Both reads use `Workforce::positions` and require every page to be current. They follow the returned cursor for at most 20 pages of 100 positions. Options use today in UTC; `position_of` uses the requested date and ignores acting assignments. Without Organisation, options are `PositionUnavailable` and `position_of` is `None`. Other holder-read failures remain typed refusals.
 
 ## Policy
 
@@ -167,8 +160,8 @@ keeps publish and policy; the manager builds the category `technical`, the
 skills `welding` and `forklift`, the scale `proficiency` (two versions) and
 the profile `operator`, meeting every refusal on the way (a bad code, a
 duplicate code, a level gap, duplicate level names, a level the scale lacks,
-a weight with three decimals, a position target while the scan is
-unavailable, a company target twice); the admin publishes `operator` from
+a weight with three decimals, a position target while Organisation is
+unmounted, a company target twice); the admin publishes `operator` from
 2026-01-01, is refused `supervisor` over it (`OverlappingProfile`), publishes
 `operator` version 2 from 2026-07-01 (version 1 ends 2026-06-30) and retires
 it on 2026-12-31; `requirements` answers version 1 on 2026-06-30, version 2
