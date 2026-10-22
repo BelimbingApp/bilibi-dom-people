@@ -64,3 +64,8 @@ bilibi-people-attendance = { path = "../../attendance" }
 
 # Attendance (PA1).
 bilibi-settings.workspace = true
+
+# PT1: the Training catalog block (`src/training.rs`).
+bilibi-datetime.workspace = true
+bilibi-party-ids.workspace = true
+bilibi-people-training = { path = "../../training" }

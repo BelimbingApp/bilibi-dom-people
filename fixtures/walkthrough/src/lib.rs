@@ -16,9 +16,9 @@
 //! the `Authorization` helpers what each account may reach, and ends with
 //! PostgreSQL refusing what the facade never attempts.
 //!
-//! A `bilibi-web run` against the same database then shows no People entry
-//! in the sidebar for any account: the People root has groups but no leaf
-//! yet, and Base Menu hides an empty container.
+//! A `bilibi-web run` against the same database lets the manager open
+//! People references under People > Settings. Training catalog pages follow
+//! in PT6; the Training facade is exercised by its block below.
 //!
 //! Never a product dependency, and never run against a real install: the
 //! Platform fixture refuses a database that already holds other accounts.
@@ -902,8 +902,11 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // PT1: the Training catalog, under the manager's and viewer's scopes.
+    training::run(&services, &client, &admin, &manager, &viewer).await?;
+
     println!(
-        "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
+        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
@@ -3696,3 +3699,6 @@ mod attendance_locks;
 
 // Skills assessments (slice PK2).
 mod assessments;
+
+// PT1: the Training catalog proof block.
+mod training;
