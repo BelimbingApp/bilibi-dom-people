@@ -711,3 +711,51 @@ pub(crate) async fn run(
     }
     Ok(())
 }
+
+/// After PW1 creates a pending employment, prove that it is assignable even
+/// though it is absent from Workforce's working-staff directory.
+pub(crate) async fn all_status_members(
+    services: &Services,
+    manager: &Scope,
+    company: i64,
+) -> Result<()> {
+    let claims = services.get::<Claims>(CLAIMS)?;
+    let employees = saved(show(
+        "Claims picker includes pending employments",
+        claims.assignable_employees(manager, company).await,
+    ))?;
+    let pending = employees
+        .iter()
+        .find(|employee| employee.employee_number == "E-003")
+        .ok_or(Error::Internal)?;
+    let assignment = saved(show(
+        "manager creates an assignment for pending staff",
+        claims
+            .create_assignment(
+                manager,
+                company,
+                &NewAssignment {
+                    code: "pending-staff".into(),
+                    name: "Pending staff".into(),
+                    effective_from: date(2027, 1, 1),
+                    effective_to: None,
+                },
+            )
+            .await,
+    ))?;
+    let types = claims
+        .claim_types(manager, company)
+        .await
+        .map_err(|_| Error::Internal)?;
+    let phone = types
+        .iter()
+        .find(|claim_type| claim_type.code == "phone")
+        .ok_or(Error::Internal)?;
+    saved(show(
+        "manager assigns a pending employee to Phone",
+        claims
+            .set_assignment_members(manager, company, assignment.id, &[phone.id], &[pending.id])
+            .await,
+    ))?;
+    Ok(())
+}

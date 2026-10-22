@@ -97,7 +97,7 @@ pub enum ClaimsError {
     CategoryNotFound,
     #[error("Claim type not found")]
     ClaimTypeNotFound,
-    /// An employee who is not a working employee of the company.
+    /// An employee who does not belong to the company.
     #[error("Employee not found")]
     EmployeeNotFound,
     #[error("This period overlaps another policy for the claim type.")]

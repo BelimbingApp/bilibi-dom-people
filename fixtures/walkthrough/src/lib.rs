@@ -804,6 +804,9 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // Claims assignment pickers include the pending employment PW1 created.
+    claims::all_status_members(&services, &manager, COMPANY).await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
