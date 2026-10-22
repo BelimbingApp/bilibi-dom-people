@@ -87,6 +87,28 @@ fn columns(id: &str, fields: &[(&str, &str)]) -> Result<ListColumns> {
     )
     .map_err(|_| Error::Internal)
 }
+fn queue_columns(tab: &str) -> Result<ListColumns> {
+    let mut fields = vec![
+        ("employee", "Employee"),
+        ("claim", "Claim"),
+        ("date", "Date"),
+        ("claimed", "Claimed"),
+    ];
+    if tab != "submitted" {
+        fields.push(("approved", "Approved"));
+    }
+    fields.push(("receipt", "Receipt"));
+    if matches!(tab, "approved" | "reimbursed") {
+        fields.push(("batch", "Batch"));
+    }
+    if tab == "rejected" {
+        fields.push(("reason", "Reason"));
+    }
+    if tab == "reimbursed" {
+        fields.push(("paid", "Paid"));
+    }
+    columns("claim-queue-table", &fields)
+}
 #[derive(Clone, Copy)]
 enum Action {
     Approve,
@@ -148,20 +170,7 @@ impl Operations {
         let mut state = Self {
             core,
             list: ListState::parse(query, spec()?).map_err(|_| Error::Internal)?,
-            columns: columns(
-                "claim-queue-table",
-                &[
-                    ("employee", "Employee"),
-                    ("claim", "Claim"),
-                    ("date", "Date"),
-                    ("claimed", "Claimed"),
-                    ("approved", "Approved"),
-                    ("receipt", "Receipt"),
-                    ("batch", "Batch"),
-                    ("reason", "Reason"),
-                    ("paid", "Paid"),
-                ],
-            )?,
+            columns: queue_columns("submitted")?,
             batches_columns: columns(
                 "claim-batches-list",
                 &[
@@ -192,6 +201,7 @@ impl Operations {
             display: bilibi_datetime::DisplayContext::anonymous(),
         };
         state.normalize();
+        state.columns = queue_columns(state.tab())?;
         Ok(state)
     }
     fn tab(&self) -> &str {
@@ -622,21 +632,7 @@ impl Operations {
                 Ok(item)
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut table = FlexTable::new(
-            "claim-queue-table",
-            self.columns
-                .flex_columns()
-                .into_iter()
-                .filter(|c| match c.id.as_str() {
-                    "approved" => self.tab() != "submitted",
-                    "batch" => matches!(self.tab(), "approved" | "reimbursed"),
-                    "reason" => self.tab() == "rejected",
-                    "paid" => self.tab() == "reimbursed",
-                    _ => true,
-                })
-                .collect(),
-            rows,
-        );
+        let mut table = FlexTable::new("claim-queue-table", self.columns.flex_columns(), rows);
         table.event = "grid";
         table.zoom = self.columns.zoom;
         table.suggestions = self.columns.flex_suggestions();
@@ -763,7 +759,14 @@ impl Operations {
         let fields = match selection.action {
             Action::Approve => vec![
                 field("approved_amount", "Approved amount", InputKind::Text)
-                    .attr("inputmode", "decimal"),
+                    .attr("inputmode", "decimal")
+                    .hint(match &selection.subject {
+                        Subject::Claim(row) => format!(
+                            "Leave blank to approve {} {}.",
+                            row.request.amount, row.request.currency
+                        ),
+                        _ => String::new(),
+                    }),
                 field("decision_reason", "Reason", InputKind::Textarea).attr("maxlength", "500"),
             ],
             Action::Reject => vec![field("decision_reason", "Reason", InputKind::Textarea)
@@ -940,6 +943,7 @@ impl LiveState<Scope, Error> for Operations {
                     self.clear();
                     self.list = ListState::parse(query, spec()?).map_err(|_| Error::Internal)?;
                     self.normalize();
+                    self.columns = queue_columns(self.tab())?;
                 }
                 LiveInput::Event(payload) => {
                     self.load(request.scope).await?;

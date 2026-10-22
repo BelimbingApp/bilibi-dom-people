@@ -8,7 +8,9 @@
 {% if available %}
 {{ filters }}{{ tabs }}
 {% call ui::section_heading(id="claim-queue-heading", title=heading, description=description) %}{% endcall %}
+{% call ui::card(role="region", labelledby="claim-queue-heading") %}
 {{ waiting }}{{ table }}
+{% endcall %}
 {% if truncated %}<p class="mt-2 text-xs text-ink-muted">Showing the first 500 claims.</p>{% endif %}
 {% else %}{{ empty }}{% endif %}
 {% endcall %}
