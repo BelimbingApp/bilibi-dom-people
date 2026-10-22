@@ -4108,3 +4108,9 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
+
+// PT5: independent passport, PDF, disclosure and current-authority proof block.
+mod training_passports;
+pub async fn training_passports(url: &str, action: &str) -> Result<()> {
+    training_passports::run(url, action).await
+}

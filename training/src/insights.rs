@@ -53,12 +53,8 @@ fn bounds(first: Date, last: Date) -> Result<(String, String)> {
 fn window(params: &HashMap<String, String>) -> Result<(String, String)> {
     let first = date(params.get("from"))?;
     let last = date(params.get("until"))?;
-    if last < first
-        || last
-            >= first
-                .checked_add(366.days())
-                .map_err(|_| TrainingError::InvalidInsightRange)?
-    {
+    let days = last.duration_since(first).as_secs() / 86_400;
+    if !(0..366).contains(&days) {
         return Err(TrainingError::InvalidInsightRange);
     }
     bounds(first, last)
