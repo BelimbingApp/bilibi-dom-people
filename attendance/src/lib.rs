@@ -21,6 +21,7 @@
 //!
 //! See `README.md`.
 mod access;
+mod agent_operations;
 mod clock;
 mod contributions;
 mod locations;
@@ -29,7 +30,7 @@ mod shifts;
 
 pub use clock::{ClockEvent, ClockInput, Day, DayStatus, EventType, DAYS_SHOWN};
 pub use contributions::{
-    ADJUSTMENTS_APPROVE, ADJUSTMENT_WINDOW_KEY, ALLOWANCES_MANAGE, CAPABILITIES,
+    ADJUSTMENTS_APPROVE, ADJUSTMENT_WINDOW_KEY, ALLOWANCES_MANAGE, CAPABILITIES, CLOCK_RECORD,
     LOCATION_REQUIRED_KEY, MAX_SHIFT_KEY, ROSTER_MANAGE, RULES_MANAGE, RULE_KEYS, SELF_CLOCK_KEY,
     SELF_VIEW, TIMEZONE_KEY,
 };
@@ -45,6 +46,7 @@ use bilibi_database::{Db, Error, MutationBoundary};
 use bilibi_people_workforce::{NotCurrent, Workforce, WorkforceError};
 use bilibi_settings::Settings;
 use bilibi_tenancy::Scope;
+use serde_json::Value;
 use std::sync::Arc;
 
 /// The module ID, Bilimbi's, kept because IDs are persisted data.
@@ -234,6 +236,43 @@ impl Attendance {
             )
             .await?;
         access::lock_company(&tx, scope, company_id).await?;
+        let recorded = self
+            .record_clock_locked(&mut tx, scope, company_id, employee_id, input)
+            .await?;
+        tx.commit().await?;
+        Ok(recorded)
+    }
+
+    /// Agent API's reviewed-write adapter: rechecks its capability after the
+    /// company lock, then records through this same facade and transaction.
+    pub(crate) async fn record_clock_for_agent(
+        &self,
+        tx: &mut bilibi_database::MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        input: &ClockInput,
+    ) -> Result<ClockEvent> {
+        access::lock_company(tx, scope, company_id).await?;
+        bilibi_people_workforce::authorization::authorize(
+            tx.sql(),
+            scope,
+            company_id,
+            CLOCK_RECORD,
+        )
+        .await?;
+        self.record_clock_locked(tx, scope, company_id, employee_id, input)
+            .await
+    }
+
+    async fn record_clock_locked(
+        &self,
+        tx: &mut bilibi_database::MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        input: &ClockInput,
+    ) -> Result<ClockEvent> {
         access::require_employee(&self.workforce, tx.sql(), scope, company_id, employee_id).await?;
         let company = access::current_company(&self.workforce, tx.sql(), scope, company_id).await?;
         // Resolve policy and active locations after taking the company lock:
@@ -248,8 +287,8 @@ impl Attendance {
             rules.location_required,
         )
         .await?;
-        let recorded = clock::write(
-            &mut tx,
+        clock::write(
+            tx,
             scope,
             company_id,
             employee_id,
@@ -257,9 +296,54 @@ impl Attendance {
             location,
             rules.max_shift_hours,
         )
+        .await
+    }
+
+    /// Validate the same facts the eventual write will use and return its
+    /// deterministic review summary. Commit rechecks them under the company lock.
+    pub(crate) async fn preview_clock_for_agent(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        input: &ClockInput,
+    ) -> Result<Value> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        bilibi_people_workforce::authorization::authorize(
+            &**client,
+            scope,
+            company_id,
+            CLOCK_RECORD,
+        )
         .await?;
-        tx.commit().await?;
-        Ok(recorded)
+        access::require_employee(&self.workforce, &**client, scope, company_id, employee_id)
+            .await?;
+        let company =
+            access::current_company(&self.workforce, &**client, scope, company_id).await?;
+        let rules = rules::read(&**client, &self.settings, scope, &company).await?;
+        let event = clock::normalize(input, &rules.timezone)?;
+        let location = locations::place(
+            &**client,
+            scope,
+            company_id,
+            event.point(),
+            rules.location_required,
+        )
+        .await?;
+        let point = event.point();
+        Ok(serde_json::json!({
+            "summary": "Record attendance clock event",
+            "company_id": company_id,
+            "employee_id": employee_id,
+            "event_type": event.event_type.as_str(),
+            "source": event.source,
+            "event_key": event.key,
+            "occurred_at": event.occurred_at.to_string(),
+            "timezone": event.timezone,
+            "clocking_location_id": location,
+            "latitude": point.map(|coordinates| coordinates.0.to_string()),
+            "longitude": point.map(|coordinates| coordinates.1.to_string()),
+        }))
     }
 
     /// The [`DAYS_SHOWN`] most recent days of the signed-in actor's own
