@@ -25,15 +25,25 @@
 //! ended, but not before a live claim incurred under it. An assignment is a
 //! named, effective-dated group of claim types and employees.
 //!
-//! Requests, decisions, reimbursement, hand-off and the events Finance reads
-//! land in the next slice (port plan row PC2); their tables are already here.
+//! Requests, decisions and hand-off preserve the employee lock, status history
+//! and transactional events consumed by other Domains.
 //!
 //! See `README.md`.
 mod assignments;
 mod catalog;
 mod contributions;
+mod downloads;
+mod handoff;
 mod money;
 mod policies;
+mod requests;
+mod workflow;
+
+pub use handoff::{HandoffBatch, HandoffExport, HandoffWaiting};
+pub use requests::{
+    Approval, NewRequest, QueueClaim, Reimbursement, Rejection, Request, RequestEvent,
+};
+pub use workflow::{REQUEST_APPROVED, REQUEST_REIMBURSED};
 
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{APPROVE, CAPABILITIES, CURRENCIES_KEY, MANAGE, REIMBURSE, SUBMIT};
@@ -107,6 +117,40 @@ pub enum ClaimsError {
     AlreadyEnded,
     #[error("Claims under this policy were incurred after that date.")]
     RequestsAfterEnd,
+    #[error("Choose a claim type that is open for claims.")]
+    ClaimTypeUnavailable,
+    #[error("This claim type is not assigned to you.")]
+    ClaimTypeNotAssigned,
+    #[error("The expense date cannot be in the future.")]
+    FutureIncurredOn,
+    #[error("No claim policy covers this type on the expense date.")]
+    NoEffectivePolicy,
+    #[error("Use the currency shown for this claim type.")]
+    CurrencyNotAllowed,
+    #[error("This claim needs a receipt number.")]
+    ReceiptRequired,
+    #[error("The amount is above the per-claim limit.")]
+    PerClaimLimitExceeded,
+    #[error("The amount would exceed this month's limit.")]
+    MonthlyLimitExceeded,
+    #[error("The amount would exceed this year's limit.")]
+    YearlyLimitExceeded,
+    #[error("This receipt number is already on one of your claims.")]
+    DuplicateReceipt,
+    #[error("You already claimed this type, date, and amount. Confirm it is a separate expense to submit.")]
+    PossibleDuplicate,
+    #[error("This claim is no longer withdrawable.")]
+    NotWithdrawable,
+    #[error("This claim is no longer in the right state for that action.")]
+    NotDecidable,
+    #[error("You cannot act on your own claim.")]
+    OwnClaim,
+    #[error("No approved claims in that currency are waiting.")]
+    NothingToHandOff,
+    #[error("No approved claims are left in this batch.")]
+    NothingToReimburse,
+    #[error("Invalid currency")]
+    InvalidCurrency,
     /// Refused values, in the words a form shows beside each field.
     #[error("Invalid input")]
     Invalid(Vec<FieldError>),
@@ -292,6 +336,7 @@ pub struct Claims {
     db: Db,
     mutations: Arc<MutationBoundary>,
     settings: Arc<Settings>,
+    events: Arc<bilibi_events::Events>,
     workforce: Arc<Workforce>,
 }
 
