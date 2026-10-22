@@ -281,6 +281,9 @@ impl State {
         })
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
+        self.today = jiff::Timestamp::now()
+            .to_zoned(jiff::tz::TimeZone::UTC)
+            .date();
         let c = self.core.db.get().await?;
         let cap = if self.operation == "attendance_mappings" {
             ATTENDANCE_MAPPINGS_MANAGE
@@ -566,7 +569,7 @@ impl State {
             .id(id)
             .label("Company")
             .kind(InputKind::Select)
-            .wrapper_class("mb-0 max-w-md")
+            .wrapper_class("mb-0")
             .options(
                 self.companies
                     .iter()

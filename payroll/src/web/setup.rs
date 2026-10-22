@@ -642,7 +642,11 @@ impl State {
             event,
             body,
             actions: submit(label)?,
-            class: "mt-3 grid gap-3 sm:grid-cols-2",
+            class: if event == "create" {
+                "mt-3 grid gap-3 sm:grid-cols-2"
+            } else {
+                "mt-3 flex flex-wrap items-end gap-3"
+            },
             change: false,
         })
     }
