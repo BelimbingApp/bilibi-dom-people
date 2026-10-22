@@ -119,7 +119,7 @@ Approval proves the employee is still working and ingests the proposed instant t
 
 ## Allowance rules
 
-Payroll reads the company-defined versions through `list_allowance_rules(scope, company)`, with no attendance capability required. Results include active and retired versions, sorted by code, newest effective start, then ID. `allowance_rule(scope, company, id)` reads one version. Neither read calculates or pays an allowance.
+Payroll reads the company-defined versions through `list_allowance_rules(scope, company)`, with no attendance capability required. Results include active and retired versions, sorted by code, newest effective start, then ID. `get_allowance_rule(scope, company, id)` reads one version. Neither read calculates or pays an allowance.
 
 `create_allowance_rule(scope, company, &NewAllowanceRule)`, `end_allowance_rule(scope, company, id, until)` and `retire_allowance_rule(scope, company, id)` require `people.attendance.allowances.manage`. Codes and names use the shift template's validation. A unit is 1 to 32 characters, begins with a letter and otherwise uses letters, digits, `_`, `.` or `-`. Currency is a company-supplied three-letter code, trimmed and uppercased. Values are positive decimals stored as `numeric(14,4)`, with PostgreSQL rounding to four decimal places. A value that rounds to zero or exceeds the stored range is refused before SQL.
 

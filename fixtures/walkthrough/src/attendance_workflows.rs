@@ -578,7 +578,9 @@ pub async fn run(url: &str) -> Result<()> {
     )?;
     let first_now = must(
         "read ended version",
-        attendance.allowance_rule(&manager, COMPANY, first.id).await,
+        attendance
+            .get_allowance_rule(&manager, COMPANY, first.id)
+            .await,
     )?;
     check(
         "inclusive automatic end",

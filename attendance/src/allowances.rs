@@ -149,7 +149,7 @@ impl Attendance {
             .collect()
     }
     /// Read one stored version of the company, with no attendance grant.
-    pub async fn allowance_rule(
+    pub async fn get_allowance_rule(
         &self,
         scope: &Scope,
         company_id: i64,
