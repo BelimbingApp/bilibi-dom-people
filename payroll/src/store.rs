@@ -219,7 +219,7 @@ pub(crate) async fn for_run<T: DeserializeOwned>(
     kind: Kind,
     run: i64,
 ) -> Result<Vec<T>> {
-    client.query(&format!("SELECT {} FROM {} t WHERE tenant_id=$1 AND company_id=$2 AND run_id=$3 ORDER BY {}",kind.projection(),kind.table(),if matches!(kind,Kind::Contribution) { "source_key" } else { "id" }), &[&scope.tenant(),&company,&run]).await?
+    client.query(&format!("SELECT {} FROM {} t WHERE tenant_id=$1 AND company_id=$2 AND run_id=$3 ORDER BY {}",kind.projection(),kind.table(),if matches!(kind,Kind::Contribution) { "source_key COLLATE \"C\"" } else { "id" }), &[&scope.tenant(),&company,&run]).await?
         .into_iter().map(|r| decode(r.get(0))).collect()
 }
 pub(crate) async fn one_for_run<T: DeserializeOwned>(

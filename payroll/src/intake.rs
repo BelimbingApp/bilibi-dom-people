@@ -144,6 +144,9 @@ impl Payroll {
         {
             return Err(PayrollError::Invalid(vec![FieldError::new("units","must be an exact decimal with at most six fractional digits and greater than zero and less than 100000000000000")]));
         }
+        if input.employee_id <= 0 {
+            return Err(PayrollError::IntakeUnavailable);
+        }
         let ids = self
             .workforce
             .working_employee_ids_on(tx.sql(), scope, company, &[input.employee_id])

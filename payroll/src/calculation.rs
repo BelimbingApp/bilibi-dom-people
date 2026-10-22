@@ -198,6 +198,9 @@ fn approved_payload(company: i64, run: &Run, calculation: &Calculation) -> Resul
         *sum = replay::add(*sum, value)?;
     }
     let components:Vec<_>=components.into_iter().map(|((code,direction),value)|json!({"code":code,"direction":direction,"amount":value.to_string()})).collect();
+    if components.len() > 100 {
+        return Err(PayrollError::ApprovalTooLarge);
+    }
     let period = &run.snapshot["period"];
     let payload = json!({"company_id":company,"run_id":run.id,"reference":period["code"],"currency":run.currency,"pay_on":period["pay_on"],"components":components});
     if serde_json::to_vec(&payload)

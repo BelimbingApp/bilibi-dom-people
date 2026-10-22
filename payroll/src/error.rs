@@ -50,7 +50,7 @@ pub enum PayrollError {
     #[error("The amount exceeds the exact decimal range. Reduce the units or rate.")]
     DecimalRange,
     #[error(
-        "The approved components exceed the event size limit. Split the pay items across runs."
+        "The approved components exceed the event limit of 100 components or 64 KiB. Use fewer pay items or directions in one run."
     )]
     ApprovalTooLarge,
     #[error(transparent)]
