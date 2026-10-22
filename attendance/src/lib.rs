@@ -28,6 +28,7 @@ mod contributions;
 mod locations;
 mod rosters;
 mod rules;
+mod settings_web;
 mod shifts;
 mod web;
 mod workflow;
