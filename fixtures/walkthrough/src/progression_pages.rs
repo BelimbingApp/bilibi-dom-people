@@ -1,11 +1,14 @@
 //! PG2 disposable page proof. Business records and grants use their owners.
+use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates, OrganisationId};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{pool, Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_performance as pm;
 use bilibi_people_progression as pg;
 use bilibi_people_skills as sk;
+use bilibi_person::{PersonInput, PersonKind, PersonService};
 use bilibi_tenancy::Authentication;
+use bilibi_user::UserService;
 use std::sync::Arc;
 
 pub async fn run(url: &str, command: &str) -> Result<()> {
@@ -23,6 +26,40 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
     let grants = services.get::<Grants>("base/authz.grants")?;
     match command {
         "prepare" => {
+            // Viewer has an own-company affiliation but no People employment.
+            // This keeps read-only history and missing-employment proofs separate.
+            let persons = services.get::<PersonService>(bilibi_person::SERVICE)?;
+            let person = persons
+                .create(
+                    &admin,
+                    &PersonInput {
+                        name: "PG2 policy reader".into(),
+                        kind: PersonKind::Human,
+                        email: None,
+                        phone: None,
+                    },
+                )
+                .await
+                .map_err(|_| Error::Internal)?;
+            let affiliations = services.get::<AffiliationService>(bilibi_affiliation::SERVICE)?;
+            let affiliation = affiliations
+                .create(
+                    &admin,
+                    &AffiliationInput {
+                        person_id: person.id,
+                        organisation_id: OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+                        title: None,
+                        work_email: None,
+                        work_phone: None,
+                        dates: EffectiveDates::new(None, None).map_err(|_| Error::Invalid)?,
+                    },
+                )
+                .await?;
+            services
+                .get::<UserService>("core/user.accounts")?
+                .link_affiliation(&admin, 2, affiliation.id)
+                .await
+                .map_err(|_| Error::Internal)?;
             for cap in [
                 pg::POLICY_VIEW,
                 pg::POLICY_MANAGE,
@@ -83,6 +120,12 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
                 )
                 .await?;
             println!("PG2 staff competency evidence permission: {command}");
+        }
+        "unlinked" => {
+            for cap in [pg::SELF_VIEW, pm::SELF_VIEW] {
+                grants.set_direct(&admin, 2, cap, Some(true)).await?;
+            }
+            println!("PG2 viewer can open standing but has no employment.");
         }
         "history" => {
             let manager = auth
