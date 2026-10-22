@@ -900,9 +900,12 @@ impl Employees {
                     .as_ref()
                     .map(|c| c.id.to_string())
                     .unwrap_or_default(),
-                self.companies
-                    .iter()
-                    .map(|c| Choice::new(&c.name, c.id.to_string()))
+                std::iter::once(Choice::new("Choose company", ""))
+                    .chain(
+                        self.companies
+                            .iter()
+                            .map(|c| Choice::new(&c.name, c.id.to_string())),
+                    )
                     .collect(),
             ),
         ];
