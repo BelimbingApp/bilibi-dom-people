@@ -6,7 +6,7 @@ profiles and the policy values that steer assessments. This README is the
 owner contract; the Bilimbi source it ports is
 [`skills/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/skills/docs/README.md).
 
-The catalog and assessment slices (PK1–PK2) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores and standing reads. Migration 002 also creates the reassessment, action and reminder tables from the same Bilimbi migration. Their writes follow in PK3 and PK7; the pages
+The catalog, assessments, reassessments and development actions (PK1–PK3) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores, standing reads and action events. Migration 002 also creates the reminder tables; their writes follow in PK7. The pages
 (`/people/skills`, `/people/skills/profiles/{id}`, `/assessments`,
 `/actions`, `/my`, `/policy`) and the menu leaves land in PK4–PK6.
 
@@ -18,9 +18,7 @@ were handed and an explicit platform company id. Every function first reads
 the company through Workforce (`Workforce::company`) and requires the read to
 be current: a missing, archived, sibling-tenant or malformed company id is
 `NotFound`, a stale or unavailable read `NotCurrent`. Results are typed
-records; the schema is private. Reads need no capability beyond seeing the
-company, as Bilimbi's do; every write names the capability it authorizes for
-the scope's signed-in actor when it runs.
+records; the schema is private. Catalog reads need only company access. Assessment, action and reassessment reads require the permissions listed below. Every write checks its permission again inside its transaction.
 
 | Function | Capability | Does |
 | --- | --- | --- |
@@ -76,7 +74,7 @@ verbs this module declares because Base does not.
 | Capability | Used by |
 | --- | --- |
 | `people.skills.catalog.view` | `/people/skills` and each profile page (PK4) |
-| `people.skills.catalog.manage` | catalog, scale, profile-draft and (PK3) action-type writes |
+| `people.skills.catalog.manage` | catalog, scale, profile-draft and action-type writes |
 | `people.skills.profiles.publish` | `publish_profile`, `retire_profile` |
 | `people.skills.assessments.view`, `.submit`, `.review`, `.approve`, `.manage` | PK2 |
 | `people.skills.reassessments.submit`, `.execute` | PK3 |
@@ -219,3 +217,63 @@ Standing reports `expired` after the validity date, `overdue` on or after the ne
 `people-skills-002-assessments` creates assessments, decisions, scores, reassessment requests, action types, actions, action events and reminders. It preserves Bilimbi's constraints and guard triggers: immutable assessment facts, the allowed review/finalize transitions, independent assessor checks, one correction per predecessor, append-only decisions and action events, scores that mirror finalized work, and terminal request/action/reminder guards. The score guard also checks tenant and subject identity. All writes report their assessment, decision and score changes through `MutationBoundary` in the same transaction.
 
 The PK2 block in `fixtures/walkthrough/src/assessments.rs` creates records through the facades and stops on an unexpected result. Run the People walkthrough on a fresh disposable database to exercise submissions, five-fact retries, transitive supervisor reach, self-assessment and decision refusals, snapshot policy, correction chains, score ordering, expired standing, coverage, grant revocation and account unlinking. It also attempts forbidden SQL updates and deletes to prove the guards. Assessment and My skills pages belong to PK5; PK2 adds no route or menu leaf.
+
+## Reassessment requests and development actions (PK3)
+
+Ask for an employee's skill to be assessed again, or plan an intervention and compare the result with a later assessment. Neither a request nor a completed intervention changes a score by itself.
+
+For example, propose an action from a current assessment gap with `ActionInput { source: ActionSource::Assessment(id), plan, request_key }`. Another person approves it. Its owner records the completed intervention and evidence with `complete_action`. When an independent finalizer finalizes an assessment dated on or after the intervention's completion day, the action closes in that same transaction.
+
+### Reassessment requests
+
+| Function | Permission | Behavior |
+| --- | --- | --- |
+| `request_reassessment(scope, company, employee, skill, reason)` | `reassessments.submit` | Working employee within assessment reach, active skill and an existing score; never the requester themselves. One pending request per employee and skill. Due today in UTC plus `reassessment_due_days`. |
+| `pending_reassessments` | `reassessments.submit` or `.execute` | Performers see all pending requests; requesters see their own. Oldest due first, at most 200, with employee and skill names. |
+| `cancel_reassessment` | `reassessments.submit` or `.execute` | Requester or performer may cancel a pending request. Terminal requests cannot change. |
+| `perform_reassessment(scope, company, id, input)` | `reassessments.execute` and `assessments.submit` | Creates a normal pending-review assessment and marks the request performed in one transaction. The request supplies employee, skill and key `reassessment:{id}`. Caller-supplied subject, key and predecessor are ignored. |
+
+Request reach is company-wide with `assessments.manage`, otherwise the current supervisor chain. Performers can execute a request company-wide, including outside their reporting chain, but cannot assess themselves. The submitted assessment follows the existing independent review and finalization rules. Performing a request leaves the current score untouched.
+
+### Action plans and permissions
+
+An `ActionPlan` names the action type, owner, coordinator, optional employee provider or provider name, objective, intervention, expected evidence, optional next steps, start date and due date. Start defaults to today in UTC. Due date is required and cannot precede start. Every named employee must be working in this company. A type with `requires_provider` needs an employee provider or a provider name.
+
+| Function | Permission | Behavior |
+| --- | --- | --- |
+| `list_action_types` | Company access | Active types first, then name and id. |
+| `create_action_type`, `set_action_type_active` | `catalog.manage` | Company-defined code, name and provider requirement; deactivation preserves existing actions. |
+| `action_people` | `actions.manage` | Current employees available as owner, coordinator or provider, sorted by name. |
+| `propose_action` | `actions.manage` | From a current finalized assessment gap or expired critical assessment, or `ActionSource::Manual` with employee, skill, levels 0–20, criticality, mandatory flag and reason. |
+| `revise_action` | `actions.manage` | Replaces a proposed action's plan; preserves its subject, source, levels, gap and priority snapshot. |
+| `approve_action` | `actions.approve` | Proposer and subject cannot approve. A future start becomes `scheduled`; otherwise `not_started`. |
+| `start_action`, `hold_action`, `complete_action`, `cancel_action`, `comment_action`, `link_action_reassessment` | `actions.manage` or `.update` | Managers can progress any action. With update alone, the account must still be linked to the working employee who owns it. |
+| `list_actions(scope, company, group)` | `actions.view` | Managers see every action; otherwise owned actions and actions for employees in the supervisor chain. Assessment-management permission does not widen action reach. |
+| `owned_actions(scope, company, group)` | `actions.update` | Actions owned by the signed-in working employee. |
+| `action_events` | `actions.view`, `.manage` or `.update` | Ordered append-only history of a visible action. |
+
+`ActionGroup::Open` includes proposed work and pending reassessments, ordered by mandatory first, descending priority, due date and id. `Closed` includes completed and cancelled work, newest updated first. Each list returns at most 300. `ActionView` adds skill, type, owner and coordinator names, plus finalized assessments available for explicit linking.
+
+An assessment can start only one action. It must still be the employee's current score source, with a positive gap or an expired critical validity date. Manual actions require an active skill and a reason. The action snapshots the employee's name, starting and target levels, criticality, mandatory flag, gap and current priority policy. Its explanation is retained even after policy changes.
+
+Proposal keys are unique per company. As in Bilimbi, a normalized retry compares only the objective and action type, returning the current action without another event. Changed objective or type is `KeyConflict`; other retry fields do not revise the saved plan.
+
+### Progress and results
+
+| Action | Allowed states | Result |
+| --- | --- | --- |
+| Start | `not_started`, `scheduled`, `on_hold` | `in_progress` |
+| Hold, with reason | `not_started`, `scheduled`, `in_progress` | `on_hold` |
+| Complete, with evidence and reassessment date today or later | `not_started`, `scheduled`, `in_progress`, `on_hold` | `pending_reassessment`; records completion time and evidence |
+| Cancel, with reason | Proposed or any open state, including pending reassessment | `cancelled` |
+| Comment, with optional evidence | Any visible state the caller may progress, including terminal work | Appends an event without rewriting the action |
+
+**Completion records the intervention; a finalized reassessment supplies its result.** The assessment must concern the same employee and skill, differ from the source assessment, and be dated on or after the intervention's UTC completion day. Meeting the action's target closes it as `closed_competent`; otherwise `further_action_required`. Improvement is post-level minus starting level and may be negative.
+
+PK3 automatically links matching pending actions when an assessment is finalized. This is part of finalization's authorized transaction and requires no extra action permission from the finalizer. Explicit `link_action_reassessment` remains available for eligible assessments finalized before the intervention was marked complete. A backdated assessment cannot close a later intervention.
+
+Every proposal, revision, approval, transition, comment and reassessment link appends an event with the acting account. The action and event changes are captured together through `MutationBoundary`. Terminal actions remain immutable; comments append new facts. Owner writes use Workforce's employment lock and fresh account-link proof inside the existing transaction, the same proof used by `with_self_employee_lock`.
+
+### Proof
+
+`fixtures/walkthrough/src/skill_actions.rs` creates the PK3 records through the public facades on the disposable walkthrough database. It exercises concurrent request uniqueness and proposal retries, provider and working-employee checks, manual and gap sources, independent approval, progress, both closure outcomes, negative improvement, backdated assessments, performer reach, supervisor visibility, grant revocation and account unlinking. It also attempts forbidden SQL updates and deletes against the event ledger and terminal records, and checks captured audit changes. Run it as part of `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough`. PK3 adds no page or menu item; PK5 and PK6 use these methods.
