@@ -8,6 +8,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
+# The Attendance block has its own binary; keep the default Workforce command.
+default-run = "bilibi-people-walkthrough"
 
 [dependencies]
 bilibi-affiliation.workspace = true
