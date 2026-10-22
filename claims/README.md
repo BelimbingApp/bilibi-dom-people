@@ -72,29 +72,11 @@ new claims without deleting anything.
 
 ## Assignments
 
-An assignment is a named, effective-dated group with the claim types it
-opens and the employees it covers. `set_assignment_members` replaces both
-lists together under the assignment's lock: every claim type must be one of
-the company's (`ClaimTypeNotFound`) and every employee one of the company's
-working employees as the Workforce read names them (`EmployeeNotFound`), at
-most 1,000 of each; `assignable_employees` offers that same list. Whether an
-employee is working is judged again when a claim is submitted. Bilimbi
-offered every employee of the company here, working or not; Workforce's
-employment reads at any status land in PW1, and a later slice may widen the
-picker.
+An assignment is a named, effective-dated group with the claim types it opens and the employees it covers. `set_assignment_members` replaces both lists together under the assignment's lock. Every claim type and employee must belong to the company, with at most 1,000 of each. `assignable_employees` includes all employment statuses through Workforce's `employees_at_any_status` directory, matching Bilimbi. Claim submission still requires a working employee.
 
 ## Self-service
 
-`self_service_employee` and `self_open_claim_types` act on the working
-employee the actor's account is linked to now: the account's affiliation
-must be with this very company and be an employment the Workforce read
-shows as working; anything else is `NotLinked`. Bilimbi resolves that
-through `Workforce.Authorization.self_employee/2`; Bilibi's Workforce gains
-`authorize_self` and `with_self_employee_lock` in PW1. Until then
-`src/self_employee.rs` maps the account's affiliation to its employment id
-(the one read this module makes of a Workforce table) and the facade reads
-the employee through `Workforce::employee`; PW1 replaces that file with the
-helper.
+`self_service_employee` and `self_open_claim_types` call `Workforce::authorize_self` on every operation. Workforce re-proves the account link and resolves its working employment in this company. An unlinked or relinked account cannot keep reading its former employee's open types through an old scope. Requests in PC2 can use Workforce's `lock_self_employee` inside their mutation transaction.
 
 ## Schema
 

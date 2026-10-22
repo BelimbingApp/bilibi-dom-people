@@ -34,7 +34,6 @@ mod catalog;
 mod contributions;
 mod money;
 mod policies;
-mod self_employee;
 
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{APPROVE, CAPABILITIES, CURRENCIES_KEY, MANAGE, REIMBURSE, SUBMIT};
@@ -129,6 +128,7 @@ impl From<WorkforceError> for ClaimsError {
         match error {
             WorkforceError::Unauthorized => Self::Unauthorized,
             WorkforceError::NotFound => Self::NotFound,
+            WorkforceError::NotLinked => Self::NotLinked,
             WorkforceError::CompanyArchived => Self::CompanyArchived,
             WorkforceError::Invalid(errors) => Self::Invalid(errors),
             WorkforceError::Failed(error) => Self::Failed(error),
@@ -766,7 +766,7 @@ impl Claims {
     /// Replaces the claim types an assignment opens and the employees it
     /// covers, together (`people.claims.manage`). Every claim type must be
     /// one of the company's (`ClaimTypeNotFound`) and every employee a
-    /// working employee of the company (`EmployeeNotFound`); at most
+    /// employee of the company at any status (`EmployeeNotFound`); at most
     /// [`MEMBER_LIMIT`] of each. Whether an employee is working is judged
     /// again when a claim is submitted.
     pub async fn set_assignment_members(
@@ -784,7 +784,7 @@ impl Claims {
         if !employee_ids.is_empty() {
             let found = self
                 .workforce
-                .employees_by_ids(scope, company_id, &employee_ids)
+                .employees_at_any_status(scope, company_id, Some(&employee_ids))
                 .await?
                 .value
                 .unwrap_or_default();
@@ -826,8 +826,8 @@ impl Claims {
     }
 
     /// Employees of the company an assignment may cover, by employee number
-    /// (`people.claims.manage`): the company's working employees as the
-    /// Workforce read names them.
+    /// (`people.claims.manage`), at every employment status, as Workforce
+    /// names them.
     pub async fn assignable_employees(
         &self,
         scope: &Scope,
@@ -837,7 +837,7 @@ impl Claims {
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
         let employees = self
             .workforce
-            .employees(scope, company_id)
+            .employees_at_any_status(scope, company_id, None)
             .await?
             .value
             .unwrap_or_default();
@@ -924,9 +924,11 @@ impl Claims {
         company_id: i64,
     ) -> Result<SelfEmployee> {
         authorization::authorize(client, scope, company_id, SUBMIT).await?;
-        let Some(employee_id) = self_employee::resolve(client, scope, company_id).await? else {
-            return Err(ClaimsError::NotLinked);
-        };
+        let employee_id = self
+            .workforce
+            .authorize_self(scope, company_id, SUBMIT)
+            .await?
+            .employee_id;
         match self
             .workforce
             .employee(scope, company_id, employee_id)
