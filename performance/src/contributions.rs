@@ -26,7 +26,7 @@ pub const CAPABILITIES: [&str; 8] = [
 
 inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
-    dependencies: &["base/authz", "base/database", "base/module_registry", "base/menu", "base/ui", "base/datetime", "base/tenancy", "core/company", "people/organisation", "people/settings", "people/skills", "people/workforce"],
+    dependencies: &["base/authz", "base/database", "base/module_registry", "base/menu", "base/ui", "base/settings", "base/system", "base/datetime", "base/tenancy", "core/company", "people/organisation", "people/settings", "people/skills", "people/workforce"],
     migrations: &[("people-performance-001-performance", include_str!("../migrations/001-performance.sql"))],
     services: &[Service {id: SERVICE, factory: |services| Ok(Arc::new(Performance {
         db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
@@ -34,7 +34,7 @@ inventory::submit! { Module {
         workforce: services.get(bilibi_people_workforce::SERVICE)?,
         organisation: services.get(bilibi_people_organisation::SERVICE)?,
         skills: services.get(bilibi_people_skills::SERVICE)?,
-    }))}, Service { id: PAGES, factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(services.get(SERVICE)?, services.get("base/datetime.display")?))))) }],
+    }))}, Service { id: PAGES, factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(services.get(SERVICE)?, services.get("base/datetime.display")?, services.get("base/settings.store")?))))) }],
 }}
 inventory::submit! { Contribution::new(VOCABULARY, "people/performance.vocabulary", Provenance {module: MODULE, source: file!(), line: line!()}, &VocabularyContribution {
     domains: &["people"], verbs: &["submit", "review", "approve"],

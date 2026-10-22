@@ -18,13 +18,18 @@ use serde::de::DeserializeOwned;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap};
 
-pub(crate) struct Pages(Arc<Performance>, Arc<bilibi_datetime::DisplayPolicy>);
+pub(crate) struct Pages(
+    Arc<Performance>,
+    Arc<bilibi_datetime::DisplayPolicy>,
+    Arc<bilibi_settings::Settings>,
+);
 impl Pages {
     pub(crate) fn new(
         performance: Arc<Performance>,
         display: Arc<bilibi_datetime::DisplayPolicy>,
+        settings: Arc<bilibi_settings::Settings>,
     ) -> Self {
-        Self(performance, display)
+        Self(performance, display, settings)
     }
 }
 impl UiPage<Scope, Error> for Pages {
@@ -40,6 +45,7 @@ impl UiPage<Scope, Error> for Pages {
             let mut state = State::new(
                 self.0.clone(),
                 self.1.clone(),
+                self.2.clone(),
                 request.operation == "my",
                 request.query,
             )?;
@@ -58,6 +64,7 @@ impl UiPage<Scope, Error> for Pages {
             Ok(Some(Box::new(State::new(
                 self.0.clone(),
                 self.1.clone(),
+                self.2.clone(),
                 request.operation == "my",
                 request.query,
             )?) as Box<dyn LiveState<Scope, Error>>))
@@ -278,6 +285,8 @@ struct Pending {
 struct State {
     service: Arc<Performance>,
     display_policy: Arc<bilibi_datetime::DisplayPolicy>,
+    settings: Arc<bilibi_settings::Settings>,
+    instance: Option<bilibi_system::Instance>,
     display: bilibi_datetime::DisplayContext,
     my: bool,
     company: i64,
@@ -300,12 +309,15 @@ impl State {
     fn new(
         service: Arc<Performance>,
         display_policy: Arc<bilibi_datetime::DisplayPolicy>,
+        settings: Arc<bilibi_settings::Settings>,
         my: bool,
         query: &HashMap<String, String>,
     ) -> UiResult<Self> {
         Ok(Self {
             service,
             display_policy,
+            settings,
+            instance: None,
             display: bilibi_datetime::DisplayContext::anonymous(),
             my,
             company: 0,
@@ -382,6 +394,7 @@ impl State {
             return Ok(());
         }
         let client = self.service.db.get().await?;
+        self.instance = Some(bilibi_system::Instance::resolve(&self.settings, &**client).await?);
         self.display = match self
             .display_policy
             .display(
@@ -1604,6 +1617,43 @@ impl State {
         }
         Ok(body)
     }
+    fn confirmation(&self, dialog: &ConfirmDialog<'_>) -> UiResult<Html> {
+        // The pinned ConfirmDialog has no body slot. Keep its model and events,
+        // using Base's Modal and buttons to include the required instance banner.
+        let mut body = self
+            .instance
+            .as_ref()
+            .ok_or(Error::Internal)?
+            .banner("performance-confirm-instance", "mb-4")
+            .map_err(|_| Error::Internal)?;
+        body.push(&render(&Button {
+            id: &format!("{}-cancel", dialog.id),
+            button_type: "button",
+            event: dialog.cancel_event,
+            body: Html::text("Cancel"),
+            ..Button::default()
+        })?);
+        body.push(&render(&Button {
+            id: &format!("{}-confirm", dialog.id),
+            button_type: "button",
+            class: "ml-2",
+            variant: ButtonVariant::Danger,
+            event: dialog.confirm_event,
+            working: dialog.working,
+            body: Html::text(dialog.confirm),
+            ..Button::default()
+        })?);
+        render(&bilibi_ui::Modal {
+            id: dialog.id,
+            title: dialog.consequence,
+            description: dialog.detail,
+            cancel_event: dialog.cancel_event,
+            width: bilibi_ui::ModalWidth::Compact,
+            role: "alertdialog",
+            body,
+            ..bilibi_ui::Modal::default()
+        })
+    }
     fn render(&self) -> UiResult<String> {
         let tabs = if self.my {
             Html::EMPTY
@@ -1635,7 +1685,7 @@ impl State {
             })?
         };
         let confirmation = if let Some(p) = &self.pending {
-            render(&ConfirmDialog {
+            self.confirmation(&ConfirmDialog {
                 id: "performance-publication",
                 consequence: if matches!(p.command, Command::Respond(..)) {
                     "Your response will be recorded permanently."
