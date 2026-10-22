@@ -489,6 +489,8 @@ pub async fn run(url: &str) -> Result<()> {
         payroll.approve_run(&admin, COMPANY, run.id, " ").await,
         |e| matches!(e, Refusal::InvalidDecision),
     )?;
+    sql_denied(&c,"database independently refuses the creator's decision","INSERT INTO people_payroll_decisions (tenant_id,company_id,created_by_actor_id,run_id,outcome,reason) SELECT tenant_id,company_id,created_by_actor_id,id,'approved','self decision' FROM people_payroll_setup_snapshots WHERE id=$1",run.id).await?;
+    sql_denied(&c,"database refuses documents before approval","INSERT INTO people_payroll_documents (tenant_id,company_id,created_by_actor_id,run_id,artifact_id,kind) SELECT tenant_id,company_id,created_by_actor_id,id,gen_random_uuid(),'report' FROM people_payroll_setup_snapshots WHERE id=$1",run.id).await?;
     let approved = must(
         payroll
             .approve_run(&admin, COMPANY, run.id, " Independently checked ")
@@ -571,9 +573,338 @@ pub async fn run(url: &str) -> Result<()> {
         payroll.calculate(&staff, COMPANY, run.id).await,
         |e| matches!(e, Refusal::Unauthorized),
     )?;
+    bounds_and_pages(
+        &services,
+        &manager,
+        &admin,
+        &viewer,
+        payroll.as_ref(),
+        workforce.as_ref(),
+        employee,
+        future_input.on_date,
+    )
+    .await?;
     println!(
         "Payroll calculation proof complete: run {}, calculation {}, digest {}",
         run.id, calculation.id, calculation.digest
     );
+    Ok(())
+}
+
+/// Exercise the numeric boundary and a real lookup spanning two 1,000-ID pages.
+#[allow(clippy::too_many_arguments)]
+async fn bounds_and_pages(
+    services: &Services,
+    manager: &bilibi_tenancy::Scope,
+    admin: &bilibi_tenancy::Scope,
+    reviewer: &bilibi_tenancy::Scope,
+    payroll: &Payroll,
+    workforce: &Workforce,
+    initial_employee: i64,
+    previous_start: jiff::civil::Date,
+) -> Result<()> {
+    use bilibi_affiliation::{
+        AffiliationInput, AffiliationService, EffectiveDates, OrganisationId,
+    };
+    use bilibi_people_payroll::{NewClassification, NewItem, NewPeriod};
+    use bilibi_people_workforce::NewEmployment;
+    use bilibi_person::{PersonInput, PersonKind, PersonService};
+    let from = jiff::civil::date(previous_start.year() + 2, 1, 1);
+    must(
+        payroll
+            .put_settings(manager, COMPANY, "proof-jurisdiction", &["XAA".into()])
+            .await,
+    )?;
+    let class = must(
+        payroll
+            .create_classification(
+                manager,
+                COMPANY,
+                &NewClassification {
+                    code: "py2-bounds".into(),
+                    name: "Calculation boundary proof".into(),
+                    effective_from: from,
+                    effective_to: None,
+                },
+            )
+            .await,
+    )?;
+    let high = must(
+        payroll
+            .create_item(
+                manager,
+                COMPANY,
+                &NewItem {
+                    code: "py2-high-rate".into(),
+                    name: "Decimal boundary proof".into(),
+                    classification_id: class.id,
+                    currency: "XAA".into(),
+                    amount: Decimal::from_str_exact("99999999999999.999999")
+                        .map_err(|_| Error::Invalid)?,
+                    effective_from: from,
+                    effective_to: None,
+                },
+            )
+            .await,
+    )?;
+    let small = must(
+        payroll
+            .create_item(
+                manager,
+                COMPANY,
+                &NewItem {
+                    code: "py2-small-rate".into(),
+                    name: "Membership proof".into(),
+                    classification_id: class.id,
+                    currency: "XAA".into(),
+                    amount: Decimal::from_str_exact("0.000001").map_err(|_| Error::Invalid)?,
+                    effective_from: from,
+                    effective_to: None,
+                },
+            )
+            .await,
+    )?;
+    let period = must(
+        payroll
+            .create_period(
+                manager,
+                COMPANY,
+                &NewPeriod {
+                    code: "py2-membership".into(),
+                    starts_on: from,
+                    ends_on: from,
+                    pay_on: from,
+                },
+            )
+            .await,
+    )?;
+    let run = must(
+        payroll
+            .freeze_setup(manager, COMPANY, period.id, "XAA")
+            .await,
+    )?;
+    let input = NewContribution {
+        employee_id: initial_employee,
+        item_id: high.id,
+        source_key: "py2-too-large".into(),
+        evidence: "attestation:range".into(),
+        on_date: from,
+        units: Decimal::from(1000),
+        direction: "earning".into(),
+    };
+    denied(
+        "unrepresentable twelve-place product",
+        payroll.intake(manager, COMPANY, run.id, &input).await,
+        |e| matches!(e, Refusal::DecimalRange),
+    )?;
+    let precision = must(
+        payroll
+            .intake(
+                manager,
+                COMPANY,
+                run.id,
+                &NewContribution {
+                    source_key: "py2-high-exact".into(),
+                    units: Decimal::ONE,
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    check(
+        "large representable product accepted",
+        precision.units == "1.000000",
+    )?;
+    let persons = services.get::<PersonService>(bilibi_person::SERVICE)?;
+    let affiliations = services.get::<AffiliationService>(bilibi_affiliation::SERVICE)?;
+    let mut last = None;
+    for i in 0..1001 {
+        let person = persons
+            .create(
+                manager,
+                &PersonInput {
+                    name: format!("Payroll membership proof {i}"),
+                    kind: PersonKind::Human,
+                    email: None,
+                    phone: None,
+                },
+            )
+            .await?;
+        let affiliation = affiliations
+            .create(
+                manager,
+                &AffiliationInput {
+                    person_id: person.id,
+                    organisation_id: OrganisationId::new(COMPANY).map_err(|_| Error::Invalid)?,
+                    title: None,
+                    work_email: None,
+                    work_phone: None,
+                    dates: EffectiveDates::new(None, None).map_err(|_| Error::Invalid)?,
+                },
+            )
+            .await?;
+        let employee = workforce
+            .create_employment(
+                manager,
+                COMPANY,
+                &NewEmployment::new(
+                    person.id.get(),
+                    affiliation.id.get(),
+                    format!("PY2-{i:04}"),
+                    "full_time",
+                    "active",
+                ),
+            )
+            .await
+            .map_err(|e| {
+                eprintln!("page employee {i}: {e}");
+                Error::Internal
+            })?;
+        must(
+            payroll
+                .intake(
+                    manager,
+                    COMPANY,
+                    run.id,
+                    &NewContribution {
+                        employee_id: employee.id,
+                        item_id: small.id,
+                        source_key: format!("py2-page-{i:04}"),
+                        units: Decimal::from_str_exact("0.000001").map_err(|_| Error::Invalid)?,
+                        ..input.clone()
+                    },
+                )
+                .await,
+        )?;
+        last = Some(employee);
+    }
+    let last = last.ok_or(Error::Internal)?;
+    must(payroll.lock_run(manager, COMPANY, run.id).await)?;
+    let inactive = workforce
+        .update_employment(
+            manager,
+            COMPANY,
+            last.id,
+            &EmploymentChange {
+                status: Some("inactive".into()),
+                ..EmploymentChange::at(last.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    denied(
+        "tail of the second membership page is rechecked",
+        payroll.calculate(manager, COMPANY, run.id).await,
+        |e| matches!(e, Refusal::EmployeeNotFound),
+    )?;
+    workforce
+        .update_employment(
+            manager,
+            COMPANY,
+            last.id,
+            &EmploymentChange {
+                status: Some("active".into()),
+                ..EmploymentChange::at(inactive.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let calculation = must(payroll.calculate(manager, COMPANY, run.id).await)?;
+    check(
+        "all 1002 employees calculated across lookup pages",
+        calculation.snapshot["result"]["totals"]
+            .as_array()
+            .is_some_and(|v| v.len() == 1002),
+    )?;
+    must(
+        payroll
+            .approve_run(
+                reviewer,
+                COMPANY,
+                run.id,
+                "Membership pages and exact amounts checked",
+            )
+            .await,
+    )?;
+    // Distinct components must respect Base Events' array bound before a
+    // decision is written. Keep this a separate run with its own period.
+    let next = from.tomorrow().map_err(|_| Error::Invalid)?;
+    let mut items = Vec::new();
+    for i in 0..101 {
+        items.push(must(
+            payroll
+                .create_item(
+                    manager,
+                    COMPANY,
+                    &NewItem {
+                        code: format!("py2-component-{i:03}"),
+                        name: format!("Event component proof {i}"),
+                        classification_id: class.id,
+                        currency: "XAA".into(),
+                        amount: Decimal::ONE,
+                        effective_from: from,
+                        effective_to: None,
+                    },
+                )
+                .await,
+        )?);
+    }
+    let period = must(
+        payroll
+            .create_period(
+                manager,
+                COMPANY,
+                &NewPeriod {
+                    code: "py2-event-bound".into(),
+                    starts_on: next,
+                    ends_on: next,
+                    pay_on: next,
+                },
+            )
+            .await,
+    )?;
+    let run = must(
+        payroll
+            .freeze_setup(manager, COMPANY, period.id, "XAA")
+            .await,
+    )?;
+    for (i, item) in items.into_iter().enumerate() {
+        must(
+            payroll
+                .intake(
+                    manager,
+                    COMPANY,
+                    run.id,
+                    &NewContribution {
+                        item_id: item.id,
+                        source_key: format!("py2-component-{i:03}"),
+                        on_date: next,
+                        units: Decimal::ONE,
+                        ..input.clone()
+                    },
+                )
+                .await,
+        )?;
+    }
+    must(payroll.lock_run(manager, COMPANY, run.id).await)?;
+    must(payroll.calculate(manager, COMPANY, run.id).await)?;
+    denied(
+        "oversized approval event refuses before decision",
+        payroll
+            .approve_run(admin, COMPANY, run.id, "reviewed")
+            .await,
+        |e| matches!(e, Refusal::ApprovalTooLarge),
+    )?;
+    check(
+        "refused approval leaves no decision",
+        must(payroll.run_output(manager, COMPANY, run.id).await)?
+            .decision
+            .is_none(),
+    )?;
+    must(
+        payroll
+            .reject_run(admin, COMPANY, run.id, "Too many components")
+            .await,
+    )?;
     Ok(())
 }

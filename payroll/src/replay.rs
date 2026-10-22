@@ -98,5 +98,8 @@ pub(crate) fn canonical(value: &Value) -> String {
     }
 }
 pub(crate) fn digest(value: &Value) -> String {
-    format!("{:x}", Sha256::digest(canonical(value).as_bytes()))
+    Sha256::digest(canonical(value).as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }

@@ -70,7 +70,7 @@ impl Payroll {
     pub async fn run_output(&self, scope: &Scope, company: i64, run_id: i64) -> Result<RunOutput> {
         let mut c = self.db.get().await.map_err(Error::from)?;
         // One MVCC snapshot prevents a mixed pre/post-calculation output.
-        let tx = c
+        let tx = (**c)
             .build_transaction()
             .isolation_level(tokio_postgres::IsolationLevel::RepeatableRead)
             .read_only(true)
