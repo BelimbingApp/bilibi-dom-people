@@ -905,6 +905,9 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
+    training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
+
     // PO2: paginated explorer records and a read-only browser account.
     organisation_explorer::run(&services, &admin, &manager).await?;
 
@@ -3708,8 +3711,16 @@ mod training;
 
 // PO2: browser proof data, separate from the Organisation service proof.
 mod organisation_explorer;
+// PT3: executable learning governance proofs.
+mod training_governance;
 // Attendance workflows (PA2): standalone executable block on the prepared database.
 mod attendance_workflows;
 pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
+}
+
+// Payroll foundation (PY1): run after the default fixture prepared the database.
+mod payroll;
+pub async fn payroll(url: &str) -> Result<()> {
+    payroll::run(url).await
 }

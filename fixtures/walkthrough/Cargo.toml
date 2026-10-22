@@ -69,3 +69,6 @@ bilibi-settings.workspace = true
 bilibi-datetime.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-people-training = { path = "../../training" }
+
+# Payroll foundation (PY1): the standalone executable proof block.
+bilibi-people-payroll = { path = "../../payroll" }
