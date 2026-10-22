@@ -3702,3 +3702,7 @@ mod assessments;
 
 // PT1: the Training catalog proof block.
 mod training;
+
+// PM1: separate binary so the performance proof starts from its own empty DB.
+mod performance;
+pub use performance::run as performance;

@@ -69,3 +69,6 @@ bilibi-settings.workspace = true
 bilibi-datetime.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-people-training = { path = "../../training" }
+
+# Performance (PM1): an independent disposable workflow proof.
+bilibi-people-performance = { path = "../../performance" }
