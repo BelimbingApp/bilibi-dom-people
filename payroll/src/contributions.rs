@@ -24,8 +24,8 @@ macro_rules! provenance {
 }
 inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
-    dependencies: &["base/authz", "base/database", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
-    migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql"))],
+    dependencies: &["base/authz", "base/database", "base/events", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
+    migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql")), ("people-payroll-003-outputs", include_str!("../migrations/003-outputs.sql"))],
     services: &[Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
         db: s.get::<Db>("base/database.pool")?.as_ref().clone(),
         mutations: s.get::<MutationBoundary>("base/database.mutations")?,
@@ -34,6 +34,7 @@ inventory::submit! { Module {
         leave: s.get(bilibi_people_leave::SERVICE)?,
         claims: s.get(bilibi_people_claims::SERVICE)?,
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
+        events: s.get(bilibi_events::SERVICE)?,
     })) }],
 } }
 inventory::submit! { Contribution::new(VOCABULARY, "people/payroll.vocabulary", provenance!(), &VocabularyContribution {
@@ -63,3 +64,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
     validator: Some(Validator { accepts: currencies_valid, message: "Give up to twenty uppercase three-letter currency codes, each once" }),
     editor: Some(Editor { group: "People", label: "Payroll currencies", help: "Explicit currency codes accepted for new pay items and runs.", capability: Some(MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+/// Facts released to other Domains only after independent approval.
+pub const RUN_APPROVED: &str = "people/payroll.run_approved";
+inventory::submit! { Contribution::new(bilibi_events::EVENTS, RUN_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }

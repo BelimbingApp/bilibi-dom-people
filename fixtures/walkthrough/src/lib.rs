@@ -3775,6 +3775,12 @@ pub async fn payroll(url: &str) -> Result<()> {
     payroll::run(url).await
 }
 
+// Payroll calculation (PY2): run after the default and Payroll foundation proofs.
+mod payroll_calculation;
+pub async fn payroll_calculation(url: &str) -> Result<()> {
+    payroll_calculation::run(url).await
+}
+
 // PC5: browser records for the five Claim operations queues.
 mod claim_operations;
 pub async fn claim_operations(url: &str, command: Option<&str>) -> Result<()> {
