@@ -2483,7 +2483,7 @@ use bilibi_people_attendance::{
     RuleChanges, RULES_MANAGE, SELF_VIEW,
 };
 use jiff::{civil::time, Timestamp};
-use rust_decimal::Decimal;
+use rust_decimal::Decimal as AttendanceDecimal;
 
 fn attendance_step<T: std::fmt::Debug>(
     step: &str,
@@ -2528,7 +2528,7 @@ fn at(text: &str) -> Timestamp {
     text.parse().expect("a literal RFC 3339 instant")
 }
 
-fn decimal(text: &str) -> Decimal {
+fn decimal(text: &str) -> AttendanceDecimal {
     text.parse().expect("a literal decimal")
 }
 
