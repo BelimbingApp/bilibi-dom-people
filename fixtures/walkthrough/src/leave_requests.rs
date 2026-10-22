@@ -65,7 +65,7 @@ pub(crate) async fn run(
     viewer: &Scope,
     company: i64,
     employee: i64,
-) -> Result<()> {
+) -> Result<Scope> {
     println!("\n== Leave requests and carry-forward (PL2)");
     let leave = services.get::<Leave>(bilibi_people_leave::SERVICE)?;
     let grants = services.get::<Grants>("base/authz.grants")?;
@@ -781,5 +781,48 @@ pub(crate) async fn run(
         not_ended.id()
     );
     println!("PL2 walkthrough complete");
+    Ok(staff)
+}
+
+// PW1 unlinks the staff account after `run`; keep its pre-unlink sealed
+// scope to model an already-open page sending its next event.
+pub(crate) async fn after_unlink(
+    services: &Services,
+    admin: &Scope,
+    stale: &Scope,
+    company: i64,
+) -> Result<()> {
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    grants
+        .set_direct(admin, stale.user(), SELF_VIEW, Some(true))
+        .await?;
+    let leave = services.get::<Leave>(bilibi_people_leave::SERVICE)?;
+    let today = leave.today(admin, company).await.map_err(leave_error)?;
+    let kind = leave
+        .list_types(admin, company)
+        .await
+        .map_err(leave_error)?
+        .into_iter()
+        .find(|t| t.code == "pl2-day")
+        .ok_or(Error::Internal)?;
+    require(
+        matches!(
+            leave
+                .submit_request(
+                    stale,
+                    company,
+                    &NewRequest::new(kind.id, today, "pl2-unlinked")
+                )
+                .await,
+            Err(LeaveError::NotLinked)
+        ) && matches!(
+            leave.self_summary(stale, company, None).await,
+            Err(LeaveError::NotLinked)
+        ),
+        "a scope captured before account unlink cannot write or read for its former employee",
+    )?;
+    grants
+        .set_direct(admin, stale.user(), SELF_VIEW, None)
+        .await?;
     Ok(())
 }

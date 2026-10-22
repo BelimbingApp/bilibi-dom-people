@@ -831,7 +831,7 @@ pub async fn run(url: &str) -> Result<()> {
     .await?;
 
     // PL2: requests, reservations, decisions and ordered carry-forward.
-    leave_requests::run(
+    let leave_staff_scope = leave_requests::run(
         &services,
         &db,
         &admin,
@@ -855,6 +855,9 @@ pub async fn run(url: &str) -> Result<()> {
         &contractor_employment,
     )
     .await?;
+
+    // PL2: an open page's old scope must not survive PW1's account unlink.
+    leave_requests::after_unlink(&services, &admin, &leave_staff_scope, COMPANY).await?;
 
     // Claims assignment pickers include the pending employment PW1 created.
     claims::all_status_members(&services, &manager, COMPANY).await?;
