@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PT2: the appended participation/evidence proof block.
+    participation::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
     // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
     training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
 
@@ -3723,6 +3734,9 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// PT2: attendance revisions, capacity, private evidence and purge recovery.
+mod participation;
+
 // PO2: browser proof data, separate from the Organisation service proof.
 mod organisation_explorer;
 // PT3: executable learning governance proofs.
@@ -3737,6 +3751,12 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
 mod payroll;
 pub async fn payroll(url: &str) -> Result<()> {
     payroll::run(url).await
+}
+
+// PL3: standalone fixture for My leave and Leave approvals browser proofs.
+mod leave_pages;
+pub async fn leave_pages(url: &str) -> Result<()> {
+    leave_pages::run(url).await
 }
 
 // Skills reassessments and development actions (slice PK3).

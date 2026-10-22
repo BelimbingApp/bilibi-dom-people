@@ -1,0 +1,17 @@
+{# Bilimbi Leave.Web.ApprovalsLive, pending list upgraded to shared FlexTable. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="leave-approvals-page") %}
+{% call ui::header(subtitle=subtitle) %}Leave approvals{% endcall %}
+{% if has_company %}
+{% call forms::form(id="leave-approvals-company-form", event="select_company", change=true, class="mt-4") %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% endif %}
+<div class="mt-5">{{ state }}{{ table }}</div>
+{{ confirm }}
+{% endcall %}
+</div>
