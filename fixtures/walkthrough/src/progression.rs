@@ -368,15 +368,62 @@ pub async fn run(url: &str) -> Result<()> {
         "retired profile cannot start a draft",
     )?;
 
-    let records = saved(performance.planning_records(&manager, 1).await)?;
-    let pending = records
-        .drafts
+    let records = saved(
+        performance
+            .my_records(&staff, 1, pm::PageOptions::default())
+            .await,
+    )?;
+    let source = records
+        .reviews
+        .rows
         .iter()
-        .find(|r| r.version == 3)
+        .find(|r| r.review.version == 2)
         .ok_or(Error::Internal)?;
-    let mut last = saved(performance.release_review(&admin, 1, pending.id).await)?;
+    let target = saved(
+        performance
+            .propose_target(
+                &manager,
+                1,
+                &pm::TargetInput {
+                    definition_id: source.targets[0].definition_id,
+                    employee_id: employee.employee_id,
+                    target: "PG1 longer-period target".into(),
+                    period_start: "2020-01-01".into(),
+                    period_end: "2020-12-31".into(),
+                    effective_from: "2020-01-01".into(),
+                    confidential: false,
+                },
+            )
+            .await,
+    )?;
+    saved(
+        performance
+            .review_target(&admin, 1, target.id, "Independent PG1 review")
+            .await,
+    )?;
+    saved(performance.publish_target(&admin, 1, target.id).await)?;
+    let later = saved(
+        performance
+            .draft_review(
+                &manager,
+                1,
+                &pm::ReviewInput {
+                    employee_id: employee.employee_id,
+                    description_id: source.review.description_id,
+                    period_start: "2020-01-01".into(),
+                    period_end: "2020-12-31".into(),
+                    cutoff_at: Timestamp::now().to_string(),
+                    outcome: "Outside policy period".into(),
+                    rationale: "PG1 paged proof".into(),
+                    observation_ids: source.observations.iter().map(|o| o.id).collect(),
+                    target_ids: vec![target.id],
+                },
+            )
+            .await,
+    )?;
+    let mut last = saved(performance.release_review(&admin, 1, later.id).await)?;
     let pinned = saved(performance.review(&manager, 1, last.id).await)?;
-    for version in 4..=103 {
+    for version in 2..=101 {
         let correction = saved(
             performance
                 .correct_review(
@@ -402,7 +449,7 @@ pub async fn run(url: &str) -> Result<()> {
         matches!(
             &paged.explanations[0].rules[1],
             Criterion::Performance {
-                review_version: Some(103),
+                review_version: Some(2),
                 ..
             }
         ),
