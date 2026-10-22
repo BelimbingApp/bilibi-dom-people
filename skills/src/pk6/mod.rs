@@ -249,6 +249,15 @@ fn form(id: &str, event: &str, mut fields: Vec<Field>, label: &str) -> Result<Ht
         })?,
     })
 }
+// Dirty controls belong to the company in which they were typed. Changing
+// their key makes the shared patcher replace them when the company changes.
+fn company_fields(company: Option<i64>, mut fields: Vec<Field>) -> Vec<Field> {
+    for f in &mut fields {
+        f.id = format!("{}-company-{}", f.id, company.unwrap_or_default());
+    }
+    fields
+}
+
 fn field(name: &str, label: &str) -> Field {
     Field::named(name)
         .id(name.replace(['[', ']'], "-"))

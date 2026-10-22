@@ -595,7 +595,12 @@ impl Actions {
         section(
             "action-proposal",
             "Propose an action",
-            form("action-form", "create_action", fields, "Propose action")?,
+            form(
+                "action-form",
+                "create_action",
+                company_fields(self.company.id, fields),
+                "Propose action",
+            )?,
         )
     }
     fn controls(&self, v: &ActionView) -> Result<Html> {
@@ -886,7 +891,13 @@ impl LiveState<Scope, Error> for Actions {
             let changed = match request.input {
                 LiveInput::Event(p) => self.event(request.scope, p).await?,
                 LiveInput::Params(q) => {
-                    self.company.id = params::positive_id(q.get("company_id").map(String::as_str));
+                    let company = params::positive_id(q.get("company_id").map(String::as_str));
+                    if self.company.id != company {
+                        self.draft.clear();
+                        self.errors.clear();
+                        self.request_key = key();
+                    }
+                    self.company.id = company;
                     self.group = if q.get("group").is_some_and(|g| g == "closed") {
                         ActionGroup::Closed
                     } else {

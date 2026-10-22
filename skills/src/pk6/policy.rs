@@ -518,7 +518,12 @@ impl PolicyPage {
         section(
             "skills-policy",
             "Policy",
-            form("skills-policy-form", "save_policy", fields, "Save policy")?,
+            form(
+                "skills-policy-form",
+                "save_policy",
+                company_fields(self.company.id, fields),
+                "Save policy",
+            )?,
         )
     }
     fn types(&self) -> Result<Html> {
@@ -564,23 +569,26 @@ impl PolicyPage {
             body.push(&form(
                 "action-type-form",
                 "create_action_type",
-                vec![
-                    field("type[code]", "Type code")
-                        .required()
-                        .attr("maxlength", "80")
-                        .value(self.type_draft.get("code").cloned().unwrap_or_default()),
-                    field("type[name]", "Type name")
-                        .required()
-                        .attr("maxlength", "160")
-                        .value(self.type_draft.get("name").cloned().unwrap_or_default()),
-                    field("type[requires_provider]", "Needs a trainer or provider")
-                        .kind(InputKind::Checkbox)
-                        .checked(
-                            self.type_draft
-                                .get("requires_provider")
-                                .is_some_and(|s| s == "true"),
-                        ),
-                ],
+                company_fields(
+                    self.company.id,
+                    vec![
+                        field("type[code]", "Type code")
+                            .required()
+                            .attr("maxlength", "80")
+                            .value(self.type_draft.get("code").cloned().unwrap_or_default()),
+                        field("type[name]", "Type name")
+                            .required()
+                            .attr("maxlength", "160")
+                            .value(self.type_draft.get("name").cloned().unwrap_or_default()),
+                        field("type[requires_provider]", "Needs a trainer or provider")
+                            .kind(InputKind::Checkbox)
+                            .checked(
+                                self.type_draft
+                                    .get("requires_provider")
+                                    .is_some_and(|s| s == "true"),
+                            ),
+                    ],
+                ),
                 "Add type",
             )?);
         }
