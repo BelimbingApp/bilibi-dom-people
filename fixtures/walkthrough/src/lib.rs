@@ -4108,3 +4108,9 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
+
+// PY3: approved private documents and retention, after the default walkthrough.
+mod payroll_documents;
+pub async fn payroll_documents(url: &str) -> Result<()> {
+    payroll_documents::run(url).await
+}
