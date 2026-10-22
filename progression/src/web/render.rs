@@ -36,6 +36,19 @@ impl State {
                     .slot("effective", Html::text(&p.effective_from))
                     .slot("status", Html::text(&p.status))
                     .slot(
+                        "publication",
+                        self.publication(p, &format!("policy-{}-publication", p.id))?,
+                    )
+                    .slot(
+                        "missing_evidence",
+                        Html::text(
+                            p.rules
+                                .performance
+                                .as_ref()
+                                .map_or("", |r| missing_label(r.missing_evidence)),
+                        ),
+                    )
+                    .slot(
                         "criteria",
                         Html::text(&format!(
                             "{} skill requirements{}",
@@ -74,33 +87,42 @@ impl State {
         }
         Ok(body)
     }
+    fn publication(&self, policy: &Policy, id: &str) -> Result<Html> {
+        Ok(
+            match policy.published_at.as_deref().and_then(|s| s.parse().ok()) {
+                Some(instant) => {
+                    let r = self.clock.render(
+                        instant,
+                        bilibi_datetime::Format::DateTime,
+                        bilibi_datetime::Precision::Minute,
+                    );
+                    render(&Publication {
+                        id: id.into(),
+                        value: bilibi_ui::Instant::new(
+                            &r.iso,
+                            &r.text,
+                            &r.company,
+                            &r.utc,
+                            r.mode.as_str(),
+                        ),
+                    })?
+                }
+                None => Html::text("Draft"),
+            },
+        )
+    }
     fn detail(&self, policy: &Policy) -> Result<Html> {
-        let publication = match policy.published_at.as_deref().and_then(|s| s.parse().ok()) {
-            Some(instant) => {
-                let r = self.clock.render(
-                    instant,
-                    bilibi_datetime::Format::DateTime,
-                    bilibi_datetime::Precision::Minute,
-                );
-                render(&Publication {
-                    value: bilibi_ui::Instant::new(
-                        &r.iso,
-                        &r.text,
-                        &r.company,
-                        &r.utc,
-                        r.mode.as_str(),
-                    ),
-                })?
-            }
-            None => Html::text("Draft"),
-        };
+        let publication = self.publication(policy, "progression-publication-time")?;
         let mut body = facts(vec![
             (
-                "Version",
+                policy_fields::get("version").label,
                 Html::text(&format!("{} · {}", policy.code, policy.version)),
             ),
-            ("Effective from", Html::text(&policy.effective_from)),
-            ("Publication", publication),
+            (
+                policy_fields::get("effective").label,
+                Html::text(&policy.effective_from),
+            ),
+            (policy_fields::get("publication").label, publication),
         ])?;
         let rows = policy
             .rules
@@ -129,7 +151,7 @@ impl State {
         if let Some(rule) = &policy.rules.performance {
             body.push(&facts(vec![
                 (
-                    "Performance periods",
+                    policy_fields::get("periods").label,
                     Html::text(
                         &rule
                             .periods
@@ -140,15 +162,12 @@ impl State {
                     ),
                 ),
                 (
-                    "Accepted outcomes",
+                    policy_fields::get("outcomes").label,
                     Html::text(&rule.accepted_outcomes.join(", ")),
                 ),
                 (
-                    "Missing released evidence",
-                    Html::text(match rule.missing_evidence {
-                        MissingEvidence::Unknown => "unknown",
-                        MissingEvidence::NotMet => "not_met",
-                    }),
+                    policy_fields::get("missing_evidence").label,
+                    Html::text(missing_label(rule.missing_evidence)),
                 ),
             ])?);
         }
@@ -434,10 +453,11 @@ struct View<'a> {
 }
 #[derive(Template)]
 #[template(
-    source = "{% import \"flex_table.html\" as table %}{% call table::instant(id=\"progression-publication-time\", i=value) %}{% endcall %}",
+    source = "{% import \"flex_table.html\" as table %}{% call table::instant(id=id, i=value) %}{% endcall %}",
     ext = "html"
 )]
 struct Publication {
+    id: String,
     value: bilibi_ui::Instant,
 }
 
@@ -487,5 +507,12 @@ fn label(status: Status) -> &'static str {
         Status::Met => "Met",
         Status::NotMet => "Not met",
         Status::Unknown => "Unknown",
+    }
+}
+
+fn missing_label(value: MissingEvidence) -> &'static str {
+    match value {
+        MissingEvidence::Unknown => "unknown",
+        MissingEvidence::NotMet => "not_met",
     }
 }

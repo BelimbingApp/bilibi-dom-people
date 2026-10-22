@@ -25,6 +25,15 @@ use std::{
     sync::Arc,
 };
 
+bilibi_ui::record_fields! { mod policy_fields {
+    VERSION: bilibi_ui::RecordField::new("version", "Version"),
+    EFFECTIVE: bilibi_ui::RecordField::new("effective", "Effective from"),
+    PUBLICATION: bilibi_ui::RecordField::new("publication", "Publication"),
+    MISSING: bilibi_ui::RecordField::new("missing_evidence", "Missing released evidence"),
+    PERIODS: bilibi_ui::RecordField::new("periods", "Performance periods").excluded("Policy periods are a nested collection."),
+    OUTCOMES: bilibi_ui::RecordField::new("outcomes", "Accepted outcomes").excluded("Accepted outcomes are a nested collection."),
+} }
+
 pub(crate) struct Pages {
     display: Arc<bilibi_datetime::DisplayPolicy>,
     progression: Arc<Progression>,
@@ -164,17 +173,18 @@ impl State {
     }
     fn ensure_table(&mut self, id: &str, columns: &[(&str, &str)]) -> Result<()> {
         if !self.tables.contains_key(id) {
-            self.tables.insert(
-                id.into(),
-                ListColumns::mount(
-                    id,
-                    columns
-                        .iter()
-                        .map(|(id, label)| BuiltinColumn::new(id, label))
-                        .collect(),
-                )
-                .map_err(|_| Error::Internal)?,
-            );
+            let mut columns = ListColumns::mount(
+                id,
+                columns
+                    .iter()
+                    .map(|(id, label)| BuiltinColumn::new(id, label))
+                    .collect(),
+            )
+            .map_err(|_| Error::Internal)?;
+            if id == "progression-policies" {
+                columns = columns.with_record_fields(policy_fields::ALL.iter().copied());
+            }
+            self.tables.insert(id.into(), columns);
         }
         Ok(())
     }
