@@ -95,15 +95,15 @@ inventory::submit! {
 }
 
 // Bilimbi grants none of these to a system role; an administrator grants
-// them. `view` and `manage` are verbs Base declares; `approve` is not, and
-// the vocabulary refuses a key whose last segment no module declared.
+// them. `view` and `manage` are verbs Base declares; `approve` and `record`
+// are not, and the vocabulary refuses an undeclared last segment.
 inventory::submit! {
     Contribution::new(VOCABULARY, "people/attendance.vocabulary", provenance!(), &VocabularyContribution {
         domains: &["people"],
         verbs: &["approve", "record"],
         capabilities: &[
             C::tenant(SELF_VIEW), C::tenant(RULES_MANAGE), C::tenant(ROSTER_MANAGE),
-            C::tenant(ADJUSTMENTS_APPROVE), C::tenant(ALLOWANCES_MANAGE),
+            C::tenant(ADJUSTMENTS_APPROVE), C::tenant(ALLOWANCES_MANAGE), C::tenant(CLOCK_RECORD),
         ],
         roles: &[],
         system_principals: &[],
