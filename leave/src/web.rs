@@ -158,7 +158,11 @@ impl Table {
             caption,
         })
     }
-    fn render(&self, rows: Vec<FlexRow>, empty: &str) -> Result<Html> {
+    fn render(&self, mut rows: Vec<FlexRow>, empty: &str) -> Result<Html> {
+        // Keep Bilimbi's persisted DOM anchors when replacing its ul/table.
+        for row in &mut rows {
+            row.dom_id = Some(row.key.clone());
+        }
         let none = rows.is_empty();
         let mut table = FlexTable::new(&self.columns.id, self.columns.flex_columns(), rows)
             .sorted(self.state.sort_by.as_deref(), self.state.sort_dir);
