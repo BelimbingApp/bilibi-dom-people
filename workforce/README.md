@@ -335,6 +335,12 @@ an edge.
 `directory_employees(scope, company_id)` returns all-status directory summaries as `DirectoryEmployee { id, employee, status, employment_type }`; it excludes private employment dates, Person ids and affiliation ids. Like the existing directory reads, it needs a visible live company and no separate employment-view grant. Employee Workspace authorizes `people.employees.view` before using it. `lock_employee(tx, scope, company_id, employee_id)` holds the company's writable lock and the named employment lock for a sibling's mutation; the sibling must authorize its own operation first.
 
 `employment_types(scope, company_id)` requires `people.workforce.employment.manage` and reads active choices through `people/reference_data.employment_types`. It returns `EmploymentType { code, label }` or `Unavailable` if Reference Data is absent, without a cyclic dependency from Workforce to Reference Data.
+## Workflow subject locks
+
+Sibling People workflows can call `lock_working_employee(tx, scope, company, employee)` before accepting evidence about a working employee. Review and finalization can use `lock_employee_subject` to lock an employee at any status. Both hold the writable company lock first and then the employment row, return no private facts, and leave authorization to the caller's own capability check. Lock the subject before the sibling's own rows.
+
+`linked_employee(client, scope, company)` re-proves the signed-in account and returns its employment id at any status, or `None` when unlinked. It is an identity read for subject independence checks, not permission to act. `self_employee` and self-service writes still require a working employee. The Skills assessment workflow uses these reads and locks to refuse self-decisions inside its deciding transaction.
+
 ## Independent decisions
 
 `owns_employee(tx, scope, company_id, employee_id, capability)` lets another People facade refuse decisions on the signed-in account's own employee records. It checks the supplied permission, holds Company → Employment locks, and re-proves the account link on the caller's transaction. It returns true for a matching affiliation at any employment status, false for an unlinked account, and `NotFound` for a missing employee. Claims uses this to keep inactive employees' own claims out of their decision authority. Self-service writes continue to use `lock_self_employee`, which also requires a working status.
