@@ -66,9 +66,11 @@ pub async fn run(url: &str) -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&bilibi_module_registry::discover()?)?;
-    services
-        .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
-        .set_enforced(false);
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
     let grants = services.get::<Grants>("base/authz.grants")?;
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
@@ -759,7 +761,13 @@ pub async fn run(url: &str) -> Result<()> {
         bilibi_company::CreateOutcome::Created(c) => c,
         _ => return Err(Error::Internal),
     };
-    companies.archive_company(&admin, archived.id, None).await?;
+    companies
+        .archive_company(&admin, archived.id, None)
+        .await
+        .map_err(|e| {
+            eprintln!("archive proof company: {e}");
+            Error::Internal
+        })?;
     denied(
         "archived company refuses writes",
         payroll
