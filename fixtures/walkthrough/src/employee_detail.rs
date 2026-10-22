@@ -266,6 +266,41 @@ pub(super) async fn run(
         "all three fact sections use shared audit history",
     )?;
 
+    // Core contact restrictions must render as restricted, not as an empty
+    // contact or as a fallback to an earlier directory value.
+    let restrictions = services
+        .get::<bilibi_authz::restrictions::FieldRestrictions>("base/authz.field_restrictions")?;
+    let previous = restrictions
+        .list(admin)
+        .await?
+        .into_iter()
+        .find(|r| r.table_id == "person_affiliations" && r.field_id == "work_email")
+        .map(|r| r.role_ids);
+    let owner_role = tenant_owner_role(client, admin).await?;
+    restrictions
+        .put(admin, "person_affiliations", "work_email", &[owner_role])
+        .await?;
+    let masked = state
+        .update(LiveRequest {
+            scope: manager,
+            credential: "",
+            input: LiveInput::Refresh,
+        })
+        .await?;
+    prove(
+        masked.html.contains("employee-work_email-restricted"),
+        "Core's work-email mask renders the restricted marker in the detail page",
+    )?;
+    if let Some(roles) = previous {
+        restrictions
+            .put(admin, "person_affiliations", "work_email", &roles)
+            .await?;
+    } else {
+        restrictions
+            .remove(admin, "person_affiliations", "work_email")
+            .await?;
+    }
+
     let commit = json!({"type":"save_field","id":employee.to_string(),"field":"notes","value":"not saved","version":old.version.to_string()});
     let body = state
         .update(LiveRequest {
