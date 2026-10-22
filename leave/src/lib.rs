@@ -1,8 +1,7 @@
 //! Leave (`people/leave`, Bilimbi `Bilimbi.People.Leave`): a company's leave
 //! types, effective-dated entitlement policies, an append-only balance
-//! ledger and the balances derived from it. Requests with approval, the
-//! self-service reads and year-end carry-forward land in slice PL2; the
-//! three pages in PL3 and PL4.
+//! ledger, self-service requests with approval, and ordered year-end
+//! carry-forward. The three pages follow in PL3 and PL4.
 //!
 //! This is the module's one facade. Other People modules and pages reach it
 //! through [`Leave`], resolved from the registry as [`SERVICE`]; the schema,
@@ -13,8 +12,8 @@
 //! Missing, sibling-company and cross-tenant records are indistinguishable
 //! (`NotFound`).
 //!
-//! Every write authorizes the scope's signed-in actor for
-//! `people.leave.policies.manage` when it runs, through the Workforce
+//! Every write authorizes the scope's signed-in actor for its self-service,
+//! approval or policy capability when it runs, through the Workforce
 //! `Authorization` helpers, then holds the company's writable lock inside
 //! its mutation transaction, so a revoked grant refuses the next call, an
 //! archived company refuses every write and a company's leave writes are
@@ -149,11 +148,11 @@ pub enum LeaveError {
     InsufficientBalance,
     #[error("Choose approve or reject and a note of at most 500 characters.")]
     InvalidDecision,
-    #[error("Give a note when rejecting a request.")]
+    #[error("Give a reason when rejecting a request.")]
     NoteRequired,
-    #[error("This request is no longer pending.")]
+    #[error("That request has already been decided.")]
     NotPending,
-    #[error("You cannot approve your own request.")]
+    #[error("You cannot decide your own leave request.")]
     SelfApproval,
     #[error("This request can no longer be cancelled.")]
     NotCancellable,

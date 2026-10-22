@@ -830,6 +830,18 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // PL2: requests, reservations, decisions and ordered carry-forward.
+    leave_requests::run(
+        &services,
+        &db,
+        &admin,
+        &manager,
+        &viewer,
+        COMPANY,
+        manager_employment.id,
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -2509,3 +2521,6 @@ mod entry_operation;
 
 // ---- Organisation (PO1): its own block, run from the end of `run` ----
 mod organisation;
+
+// Leave requests and carry-forward (slice PL2).
+mod leave_requests;

@@ -1,19 +1,8 @@
 # Leave
 
-Module ID: `people/leave`, crate `bilibi-people-leave`. A company's leave
-types, effective-dated entitlement policies, the append-only balance ledger
-and the balances derived from it; later slices add requests with approval
-(PL2), year-end carry-forward (PL2) and the three pages (PL3, PL4). This
-README is the owner contract; the Bilimbi source it ports is
-[`leave/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md).
+Leave manages a company's leave balances, requests, approvals and year-end carry-forward.
 
-This is slice PL1 of the port plan: migrations 001 to 003, the three
-settings, and the facade for the leave year, request rules, types, policy
-versions, `grant_entitlements`, `record_entry` and `balances`. PL2 adds
-`submit_request`, `decide_request`, `cancel_request`, the self reads,
-`carry_forward`, `carry_forward_skipped`, `enqueue_carry_forward` with the
-`people-leave/carry-forward` worker, and `requested_type_ids`. PL5 exposes
-`record_entry` as the agent operation `people.leave.entry.record`.
+Module ID: `people/leave`, crate `bilibi-people-leave`. This README is the owner contract. The parity reference is [Bilimbi Leave](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md). PL1 provides the schema, policies and ledger; PL2 provides requests and carry-forward; PL5 provides the reviewed entry operation. The pages follow in PL3 and PL4.
 
 ## Public API
 
@@ -40,6 +29,18 @@ cross-tenant records are indistinguishable (`NotFound`).
 | `record_entry` | `people.leave.policies.manage` | An `opening` or `adjustment` entry for one working employee (`NewEntry` → `LedgerEntry`): `EntryKeyConflict`, `YearClosed`, `InvalidEntry`, `NotFound` |
 | `balances` | none | Per-type totals of one working employee and leave year (`Balance`), with `pending` and `available` |
 | `entries` | none | That employee's entries of the year, latest date first |
+| `today` | none | Today's date in the company's `localization.timezone` |
+| `self_summary` | `people.leave.self.view` | Current linked employee's balances and ledger, for the leave year containing the optional date |
+| `self_requests` | `people.leave.self.view` | Latest 50 own requests, newest start first |
+| `submit_request` | `people.leave.self.view` | `NewRequest` → `Request`, with current employment proved under its lock |
+| `cancel_request` | `people.leave.self.view` | Cancels one's own pending request, or approved leave before its start |
+| `pending_requests` | `people.leave.requests.approve` | Earliest 200 pending requests, with Workforce employee names |
+| `decide_request` | `people.leave.requests.approve` | `Decision::Approve` or `Decision::Reject`, with an optional note |
+| `requested_type_ids` | none | Distinct type IDs with pending or approved requests overlapping the inclusive date range |
+| `carry_forward` | `people.leave.policies.manage` | Closes an ended leave year; returns `CarryForwardCounts` |
+| `carried_forward_count` | none | Number of balances carried from the named year |
+| `carry_forward_skipped` | `people.leave.policies.manage` | At most 200 skips, oldest first, and the full `total` |
+| `enqueue_carry_forward` | `people.leave.policies.manage` | Queues an operator-delegated job; returns its committed `JobRef` |
 
 - **Leave year.** The company-scoped Base Setting
   `people.leave.year_start_month` (default January) sets when each leave year
@@ -48,7 +49,7 @@ cross-tenant records are indistinguishable (`NotFound`).
   stores its leave year.
 - **Request rules.** `people.leave.working_weekdays` (ISO weekday numbers,
   default Monday to Friday) and `people.leave.request_backdate_days` (default
-  30, 0 to 366) hold the rules PL2's requests count dates by. All three
+  30, 0 to 366) hold the rules requests count dates by. All three
   settings are editable under Administration › System › Settings by an
   account holding `people.leave.policies.manage`.
 - **Types.** A company's types have a unique lowercase code (1 to 40
@@ -77,13 +78,11 @@ cross-tenant records are indistinguishable (`NotFound`).
 
 ## Authorization and writes
 
-Every write authorizes the scope's signed-in actor for
-`people.leave.policies.manage` when it runs, through
+Every write authorizes the signed-in account for its self-service, approval or policy capability when it runs, through
 `bilibi_people_workforce::authorization` at the facade, so pages, the
 carry-forward worker and any other adapter share one boundary. The reads
 of types, policies, rules, balances and entries need no capability, as
-Bilimbi's do (PL2's request reads add `people.leave.requests.approve` and
-`people.leave.self.view`). A system scope cannot reach the helpers, a grant
+Bilimbi's do (request reads require `people.leave.requests.approve` or `people.leave.self.view`). A system scope cannot reach the helpers, a grant
 revoked while a page stays open refuses the next call, and the performer is
 the scope's actor, never an argument.
 
@@ -140,3 +139,29 @@ The input takes `company_id`, `employee_id` (employment ID), `leave_type_id`, `e
 The handler calls the facade on the plan's `MutationTransaction`; it never commits a separate transaction. Leave serializes its reviews and writes with a transaction advisory lock per tenant and company, taken before the Core company lock. This keeps the reviewed type, year rules and entry key stable until the owner commits. The facade then rechecks company access, writable status, current employment and entry rules under the company lock. Identical retries add no ledger mutation. A failure in any operation of a multi-operation plan rolls back the entry and its audit capture together.
 
 The PL5 block in `fixtures/walkthrough/src/entry_operation.rs` uses the real operation registry and plan service. It shows discovery, direct-write refusal, a preview without ledger writes, opening and negative adjustment commits, identical retries, malformed input and reserved sources, cross-company and cross-tenant refusals, a conflicting second operation rolling back the whole plan, competing plans from separate sessions, permission revocation and an archived type after review. It checks ledger and captured-mutation counts without exposing plan codes or session tokens.
+
+## Requests
+
+For example, a morning request reserves `0.50` days. An afternoon request on that date can reserve the other half. A full-day or hour request cannot take a slot already held by either request. Pending and approved requests hold their slots; rejection and cancellation release them.
+
+Call `submit_request` with `NewRequest::new(type_id, date, request_key)`. The default covers one full date. Set `ends_on` for a longer range, `day_part` to `am` or `pm` for half a date, or `day_part` to `hours` with `hours` for an hour-based type. Only configured working weekdays outside Reference Data calendar exceptions count. A range contains at most 366 dates and stays within one leave year. Hours are above zero and at most 24, with at most two decimals. Reasons and decision notes contain at most 500 characters. Keys contain 1 to 160 bytes.
+
+**Pending requests reserve their quantity.** If the type requires balance cover, the ledger less other pending reservations must cover submission and approval. An identical key replay returns the saved request, even after it is decided. Changed facts under that employee's key return `RequestKeyConflict`.
+
+Approval writes one negative `taken` entry. The requester and the account currently linked to the subject employment cannot approve or reject it. Rejection requires a note. An employee can cancel a pending request at any time, or an approved request strictly before its start. Cancelling approved leave writes a positive `cancelled` entry. Every transition appends a request event. All request, slot, event and ledger changes commit together and each has audit evidence.
+
+Self-service resolves the signed-in account on every call and uses `Workforce::lock_self_employee` inside the Leave transaction before touching request rows. Unlinked accounts return `NotLinked`. Revoked grants refuse the next call. No caller supplies the requester or subject employee.
+
+Other typed refusals include `InvalidRequest`, `SpansLeaveYears`, `TooFarBack`, `NoWorkingDays`, `OverlappingRequest`, `InsufficientBalance`, `YearClosed`, `NoteRequired`, `NotPending`, `SelfApproval`, `NotCancellable`, `EmployeeUnavailable`, `LeaveTypeUnavailable` and `Unavailable`.
+
+## Carry-forward
+
+For example, a closing balance of `8.00` with a cap of `3.00` creates a `3.00` carried entry in the next year and a `-5.00` expired entry in the old year. A negative balance carries zero and keeps its deficit. Types without a cap do not carry. The policy in force on the year's last date supplies the cap and the recorded policy version.
+
+**Years close in order for each employee and type.** A current employee with pending requests in that year is skipped as `pending`. An earlier open year with pending requests or entries under a capped policy causes `previous_year_open`. The report names the earliest blocking year. Each run replaces that year's report. Closing a year clears older reports and any later report whose blocking year was resolved.
+
+Every processed employee and type receives a `carried_forward` entry, including zero. Its key makes repeats harmless. That row closes the source year and every earlier year to grants, new requests, approvals, approved cancellations and manual entries. The result counts `carried`, `existing`, `pending` and `previous_year_open`. Supported source years are 1900 to 9997; a year that has not ended returns `YearNotEnded`.
+
+The worker ID is `people-leave/carry-forward`. Its arguments are exactly `company_id` and `from_year`; unknown keys are refused. It runs with five attempts as the operator who queued it. Base Queue re-proves that identity and grant on every attempt. The worker also checks company access and writable status inside its lease-fenced business transaction. Stale workforce reads retry; a revoked grant or year still open cancels. No system principal or schedule is contributed.
+
+The PL2 walkthrough block is `fixtures/walkthrough/src/leave_requests.rs`. Run the People walkthrough on a fresh disposable database, then boot the app on that database to execute its queued worker. The block covers request replay, half-day and hour slots, calendar rules, cover, concurrent submissions, decisions, cancellations, Payroll discovery, ordered carry-forward, skip replacement, caps, expiry and revoked permission.
