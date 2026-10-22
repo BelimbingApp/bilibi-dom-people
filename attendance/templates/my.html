@@ -1,0 +1,36 @@
+{# Bilimbi Attendance.Web.MyLive; list rendering uses shared FlexTables. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="my-attendance-page") %}
+{% call ui::header() %}My attendance{% endcall %}
+{% if available %}
+<div class="space-y-6">
+<section aria-labelledby="my-attendance-clock-heading">
+{% call ui::section_heading(id="my-attendance-clock-heading", title="Clocking") %}{% endcall %}
+{{ clock }}
+</section>
+<section aria-labelledby="my-attendance-shifts-heading">
+{% call ui::section_heading(id="my-attendance-shifts-heading", title="Upcoming shifts") %}{% endcall %}
+{{ shifts }}
+</section>
+<section aria-labelledby="my-attendance-days-heading">
+{% call ui::section_heading(id="my-attendance-days-heading", title="Recent days") %}{% endcall %}
+{{ days }}
+</section>
+<section aria-labelledby="my-attendance-adjust-heading">
+{% call ui::section_heading(id="my-attendance-adjust-heading", title="Request an adjustment", description=adjustment_hint) %}{% endcall %}
+{% call forms::form(id="my-attendance-adjustment-form", event="request_adjustment", class="mt-3", actions=submit) %}
+<div class="grid gap-2 sm:grid-cols-2">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
+{% endcall %}
+{{ requests }}
+</section>
+</div>
+{% else %}{{ unavailable }}{% endif %}
+{{ confirmation }}
+{% endcall %}
+</div>
