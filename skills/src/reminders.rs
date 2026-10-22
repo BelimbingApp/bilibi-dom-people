@@ -291,72 +291,76 @@ pub(super) async fn deliver(
     execution: Option<&Execution>,
 ) -> Result<Delivery> {
     let mut client = skills.db.get().await.map_err(Error::from)?;
+    let failure = {
+        let mut w = skills
+            .begin_reminders(&mut client, scope, company, "send_reminder", execution)
+            .await?;
+        let row = locked(&w, id).await?;
+        let eligible = match retry_as_of {
+            Some(day) => retryable(&w, id, day).await?,
+            None => true,
+        };
+        if row.state == "sent" || !eligible {
+            w.tx.rollback().await?;
+            return Ok(Delivery::Skipped);
+        }
+        // The ledger names an account, never the operator. Re-prove that it is
+        // still affiliated with this company before creating its notification.
+        match bilibi_user::company_accounts::get(w.sql(), scope, company, row.recipient_user_id)
+            .await
+        {
+            Ok(_) => {}
+            Err(Error::NotFound) => {
+                state(&mut w, row, Some("recipient not found")).await?;
+                w.tx.commit().await?;
+                return Ok(Delivery::Failed);
+            }
+            Err(e) => return Err(e.into()),
+        }
+        let skill: Option<String> = w
+            .sql()
+            .query_opt(
+                "SELECT name FROM people_skills WHERE tenant_id=$1 AND company_id=$2 AND id=$3",
+                &[&w.tenant, &company, &row.skill_id],
+            )
+            .await
+            .map_err(Error::from)?
+            .map(|r| r.get(0));
+        let notice = notice(&row, skill.as_deref().unwrap_or("A skill"))?;
+        let notified = skills
+            .notifications
+            .notify(&mut w.tx, scope, &[row.recipient_user_id], &notice)
+            .await;
+        match notified {
+            Ok(()) => {
+                state(&mut w, row, None).await?;
+                w.tx.commit().await?;
+                return Ok(Delivery::Sent);
+            }
+            Err(error) => {
+                // A failed notify may poison its transaction. Roll it back before
+                // leaving this scope and opening failure recovery on the client.
+                let failure = if matches!(error, Error::NotFound) {
+                    "recipient not found"
+                } else {
+                    "notification could not be created"
+                };
+                w.tx.rollback().await?;
+                failure
+            }
+        }
+    };
     let mut w = skills
-        .begin_reminders(&mut client, scope, company, "send_reminder", execution)
+        .begin_reminders(&mut client, scope, company, "fail_reminder", execution)
         .await?;
     let row = locked(&w, id).await?;
-    let eligible = match retry_as_of {
-        Some(day) => retryable(&w, id, day).await?,
-        None => true,
-    };
-    if row.state == "sent" || !eligible {
+    if row.state == "sent" {
         w.tx.rollback().await?;
         return Ok(Delivery::Skipped);
     }
-    // The ledger names an account, never the operator. Re-prove that it is
-    // still affiliated with this company before creating its notification.
-    match bilibi_user::company_accounts::get(w.sql(), scope, company, row.recipient_user_id).await {
-        Ok(_) => {}
-        Err(Error::NotFound) => {
-            state(&mut w, row, Some("recipient not found")).await?;
-            w.tx.commit().await?;
-            return Ok(Delivery::Failed);
-        }
-        Err(e) => return Err(e.into()),
-    }
-    let skill: Option<String> = w
-        .sql()
-        .query_opt(
-            "SELECT name FROM people_skills WHERE tenant_id=$1 AND company_id=$2 AND id=$3",
-            &[&w.tenant, &company, &row.skill_id],
-        )
-        .await
-        .map_err(Error::from)?
-        .map(|r| r.get(0));
-    let notice = notice(&row, skill.as_deref().unwrap_or("A skill"))?;
-    let notified = skills
-        .notifications
-        .notify(&mut w.tx, scope, &[row.recipient_user_id], &notice)
-        .await;
-    match notified {
-        Ok(()) => {
-            state(&mut w, row, None).await?;
-            w.tx.commit().await?;
-            Ok(Delivery::Sent)
-        }
-        Err(error) => {
-            // A failed notify may poison its transaction. Never try to commit
-            // it: the separately committed claim remains pending until this
-            // authorized failure write (or a later stalled-row retry).
-            let failure = if matches!(error, Error::NotFound) {
-                "recipient not found"
-            } else {
-                "notification could not be created"
-            };
-            w.tx.rollback().await?;
-            let mut w = skills
-                .begin_reminders(&mut client, scope, company, "fail_reminder", execution)
-                .await?;
-            let row = locked(&w, id).await?;
-            if row.state == "sent" {
-                w.tx.rollback().await?;
-                return Ok(Delivery::Skipped);
-            }
-            state(&mut w, row, Some(failure)).await?;
-            w.tx.commit().await?;
-            Ok(Delivery::Failed)
-        }
-    }
+    state(&mut w, row, Some(failure)).await?;
+    w.tx.commit().await?;
+    Ok(Delivery::Failed)
 }
 
 pub(super) async fn retry_ids(
