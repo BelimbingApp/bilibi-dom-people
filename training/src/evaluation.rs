@@ -457,7 +457,7 @@ impl Training {
             .workforce
             .self_employee(scope, company)
             .await
-            .map_err(|_| TrainingError::EmployeeUnavailable)?
+            .map_err(evaluation_employee_error)?
             .employee_id;
         let employees = self.evaluation_employees(scope, company).await?;
         let ids = match kind {
@@ -505,10 +505,7 @@ impl Training {
             .workforce
             .lock_self_employee(&tx, scope, company, task_caps(review.kind)[1])
             .await
-            .map_err(|e| match e {
-                WorkforceError::NotLinked => TrainingError::EmployeeUnavailable,
-                other => other.into(),
-            })?
+            .map_err(evaluation_employee_error)?
             .employee_id;
         let task = store::tasks(
             tx.sql(),
@@ -722,6 +719,14 @@ impl Training {
             tx.commit().await?;
         }
         Ok(FrozenEffectivenessSummaries { frozen })
+    }
+}
+fn evaluation_employee_error(error: WorkforceError) -> TrainingError {
+    match error {
+        WorkforceError::NotLinked | WorkforceError::NotFound => {
+            TrainingError::AttendanceEmployeeUnavailable
+        }
+        other => other.into(),
     }
 }
 fn supervisor(employee: &Employee) -> Option<i64> {

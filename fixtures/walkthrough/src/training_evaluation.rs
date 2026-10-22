@@ -743,7 +743,7 @@ pub(crate) async fn run(
                 "Old employee",
             )
             .await,
-        TrainingError::EmployeeUnavailable,
+        TrainingError::AttendanceEmployeeUnavailable,
     )?;
     // Current reporting lines and competing answers are rechecked under the company lock.
     let report = workforce
