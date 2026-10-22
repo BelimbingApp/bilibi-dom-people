@@ -63,7 +63,11 @@ async fn setting(services: &Services, admin: &Scope, key: &str, value: Value) ->
     services
         .get::<Settings>("base/settings.store")?
         .put(&mut tx, admin, Target::Global, key, value)
-        .await?;
+        .await
+        .map_err(|error| {
+            eprintln!("Setting {key}: {error}");
+            error
+        })?;
     tx.commit().await
 }
 fn write(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -294,7 +298,7 @@ pub async fn run(url: &str) -> Result<()> {
             .await,
         |e| matches!(e, Refusal::Unauthorized),
     )?;
-    setting(&services, &admin, "artifacts.storage_root", Value::Null).await?;
+    setting(&services, &admin, "artifacts.storage_root", json!("")).await?;
     denied(
         "missing storage policy",
         payroll
