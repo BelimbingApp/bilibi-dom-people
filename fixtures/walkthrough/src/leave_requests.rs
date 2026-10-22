@@ -26,6 +26,7 @@ fn leave_error(error: LeaveError) -> Error {
     eprintln!("PL2 unexpected refusal: {error:?}");
     Error::Internal
 }
+#[allow(clippy::too_many_arguments)]
 async fn opening(
     leave: &Leave,
     scope: &Scope,
@@ -621,6 +622,101 @@ pub(crate) async fn run(
         "closed-year count reads durable closing entries",
     )?;
 
+    let negative = leave
+        .create_type(
+            manager,
+            company,
+            &NewLeaveType::new("pl2-negative", "Deficit walkthrough", "day"),
+        )
+        .await
+        .map_err(leave_error)?;
+    let (ended_start, _) = rules.year_range(current_year - 1).map_err(leave_error)?;
+    leave
+        .add_policy(
+            manager,
+            company,
+            negative.id,
+            &NewPolicy {
+                effective_from: ended_start,
+                entitlement: dec(0),
+                carry_forward_cap: Some(dec(3)),
+            },
+        )
+        .await
+        .map_err(leave_error)?;
+    opening(
+        &leave,
+        manager,
+        company,
+        employee,
+        negative.id,
+        last_ended,
+        "negative",
+        -2,
+    )
+    .await?;
+    leave
+        .carry_forward(manager, company, current_year - 1)
+        .await
+        .map_err(leave_error)?;
+    let negative_next = leave
+        .entries(manager, company, employee, current_year)
+        .await
+        .map_err(leave_error)?;
+    let negative_old = leave
+        .entries(manager, company, employee, current_year - 1)
+        .await
+        .map_err(leave_error)?;
+    require(
+        negative_next.iter().any(|e| {
+            e.leave_type_id == negative.id
+                && e.entry_type == "carried_forward"
+                && e.quantity.is_zero()
+        }) && negative_old
+            .iter()
+            .filter(|e| e.leave_type_id == negative.id)
+            .map(|e| e.quantity)
+            .sum::<Decimal>()
+            == dec(-2),
+        "a deficit carries zero and stays in the old year",
+    )?;
+
+    let worker_type = leave
+        .create_type(
+            manager,
+            company,
+            &NewLeaveType::new("pl2-worker", "Worker walkthrough", "day"),
+        )
+        .await
+        .map_err(leave_error)?;
+    leave
+        .add_policy(
+            manager,
+            company,
+            worker_type.id,
+            &NewPolicy {
+                effective_from: ended_start,
+                entitlement: dec(0),
+                carry_forward_cap: Some(dec(2)),
+            },
+        )
+        .await
+        .map_err(leave_error)?;
+    opening(
+        &leave,
+        manager,
+        company,
+        employee,
+        worker_type.id,
+        last_ended,
+        "worker",
+        4,
+    )
+    .await?;
+    let queue = services.get::<bilibi_queue::Queue>("base/queue.store")?;
+    let worker = queue.workers().get("people-leave/carry-forward")?;
+    require((worker.definition.validate)(serde_json::json!({"company_id":company,"from_year":current_year-1,"actor_id":manager.user()})).is_err() && (worker.definition.validate)(serde_json::json!({"company_id":company,"from_year":9998})).is_err(), "worker arguments reject identity fields and unsupported years")?;
+
     // The host executor performs this queued job when the proof app runs.
     let job = leave
         .enqueue_carry_forward(manager, company, current_year - 1)
@@ -660,6 +756,30 @@ pub(crate) async fn run(
     grants
         .set_direct(admin, manager.user(), SELF_VIEW, Some(true))
         .await?;
+    let authentication =
+        services.get::<bilibi_tenancy::Authentication>("base/tenancy.authentication")?;
+    let staff = authentication
+        .authenticate(&**client, manager.tenant(), crate::STAFF, String::new())
+        .await?;
+    grants
+        .set_direct(admin, crate::STAFF, POLICIES_MANAGE, Some(true))
+        .await?;
+    let denied = leave
+        .enqueue_carry_forward(&staff, company, current_year - 1)
+        .await
+        .map_err(leave_error)?;
+    grants
+        .set_direct(admin, crate::STAFF, POLICIES_MANAGE, Some(false))
+        .await?;
+    let not_ended = leave
+        .enqueue_carry_forward(admin, company, current_year)
+        .await
+        .map_err(leave_error)?;
+    println!(
+        "PL2 worker refusal jobs: revoked {}, year-not-ended {}",
+        denied.id(),
+        not_ended.id()
+    );
     println!("PL2 walkthrough complete");
     Ok(())
 }

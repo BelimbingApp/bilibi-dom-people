@@ -154,7 +154,7 @@ pub enum LeaveError {
     NotPending,
     #[error("You cannot decide your own leave request.")]
     SelfApproval,
-    #[error("This request can no longer be cancelled.")]
+    #[error("That request can no longer be cancelled.")]
     NotCancellable,
     #[error("The employee is no longer available.")]
     EmployeeUnavailable,
