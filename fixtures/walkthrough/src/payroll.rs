@@ -145,7 +145,7 @@ pub async fn run(url: &str) -> Result<()> {
         .get::<_, String>(0)
         .parse()
         .map_err(|_| Error::Internal)?;
-    let start = date(today.year(), 1, 1);
+    let start = date(today.year() - 1, 1, 1);
     let end = date(today.year(), 12, 31);
     let future = date(today.year() + 1, 1, 1);
     let future_end = date(today.year() + 1, 12, 31);
@@ -333,6 +333,10 @@ pub async fn run(url: &str) -> Result<()> {
         .await
         .map_err(|_| Error::Internal)?;
     let mut request_date = today;
+    // The shared Leave proof reserves today and a future interval.
+    for _ in 0..7 {
+        request_date = request_date.yesterday().map_err(|_| Error::Invalid)?;
+    }
     while request_date.weekday().to_monday_one_offset() > 5 {
         request_date = request_date.yesterday().map_err(|_| Error::Invalid)?;
     }
