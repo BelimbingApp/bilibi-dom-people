@@ -387,11 +387,11 @@ pub(super) static DEFINITIONS_VALUE: Definitions = Definitions {
 };
 
 fn create_schema() -> Value {
-    json!({"type":"object","required":["company_id","code"],"properties":{"company_id":{"type":"integer","minimum":1},"code":{"type":"string","maxLength":255},"parent_id":{"type":["integer","null"],"minimum":1}}})
+    json!({"type":"object","required":["company_id","code"],"properties":{"company_id":{"type":"integer","minimum":1},"code":{"type":"string","maxLength":255},"parent_id":{"type":"integer","minimum":1}}})
 }
 fn version_schema() -> Value {
-    json!({"type":"object","required":["company_id","position_id","version","title","effective_from"],"properties":{"company_id":{"type":"integer","minimum":1},"position_id":{"type":"integer","minimum":1},"version":{"type":"integer","minimum":1},"title":{"type":"string","maxLength":255},"effective_from":{"type":"string","format":"date"},"effective_to":{"type":["string","null"],"format":"date"}}})
+    json!({"type":"object","required":["company_id","position_id","version","title","effective_from"],"properties":{"company_id":{"type":"integer","minimum":1},"position_id":{"type":"integer","minimum":1},"version":{"type":"integer","minimum":1},"title":{"type":"string","maxLength":255},"effective_from":{"type":"string","format":"date"},"effective_to":{"type":"string","format":"date"}}})
 }
 fn parent_schema() -> Value {
-    json!({"type":"object","required":["company_id","position_id","parent_id"],"properties":{"company_id":{"type":"integer","minimum":1},"position_id":{"type":"integer","minimum":1},"parent_id":{"type":["integer","null"],"minimum":1}}})
+    json!({"type":"object","required":["company_id","position_id"],"properties":{"company_id":{"type":"integer","minimum":1},"position_id":{"type":"integer","minimum":1},"parent_id":{"type":"integer","minimum":1}}})
 }

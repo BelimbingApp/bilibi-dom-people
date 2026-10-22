@@ -1,6 +1,6 @@
 Use these actions to create a position, add a title, or change where a position sits in its company's reporting tree.
 
-For example, create a position with code `OPS-1`, then add title version 1 starting on `2026-10-01`. If it reports to another position, create it with that position's ID as `parent_id`. You can later move it by calling the parent action; pass `null` to make it a root position.
+For example, create a position with code `OPS-1`, then add title version 1 starting on `2026-10-01`. If it reports to another position, create it with that position's ID as `parent_id`. You can later move it by calling the parent action; omit `parent_id` to make it a root position.
 
 Before each write, review the plan returned by Bilibi. Commit only after the person approves the exact company, position, title, dates, and parent shown in that plan. A plan code can be used once.
 
@@ -14,7 +14,7 @@ Call `people.organisation.position.version` with `company_id`, `position_id`, `v
 
 ## Move a position
 
-Call `people.organisation.position.parent` with `company_id`, `position_id`, and `parent_id`. Pass `null` to move the position to the company root. The new parent must be in the same company, and the move cannot create a reporting cycle.
+Call `people.organisation.position.parent` with `company_id` and `position_id`. Include `parent_id` to place it below another position. Omit `parent_id` to move it to the company root. The new parent must be in the same company, and the move cannot create a reporting cycle.
 
 ## Refusals
 

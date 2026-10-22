@@ -54,7 +54,7 @@ lock in the commit transaction.
 | --- | --- | --- | --- |
 | `people.organisation.position.create` | `company_id`, `code` | `parent_id` | The new position |
 | `people.organisation.position.version` | `company_id`, `position_id`, `version`, `title`, `effective_from` | `effective_to` | The appended title version |
-| `people.organisation.position.parent` | `company_id`, `position_id`, `parent_id` | None; pass `null` to place the position at the company root | The moved position |
+| `people.organisation.position.parent` | `company_id`, `position_id` | `parent_id`; omit it to place the position at the company root | The moved position |
 
 The full schemas and instructions for choosing values are in
 [`position-guide.md`](position-guide.md).
