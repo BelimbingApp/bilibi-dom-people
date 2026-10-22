@@ -16,9 +16,12 @@ const OPEN: &[&str] = &["not_started", "scheduled", "in_progress", "on_hold"];
 const TYPE_COLUMNS: &str = "id,code,name,requires_provider,active";
 
 pub(crate) fn now() -> DateTime {
-    jiff::Timestamp::now()
+    let time = jiff::Timestamp::now()
         .to_zoned(jiff::tz::TimeZone::UTC)
-        .datetime()
+        .datetime();
+    // Bilimbi truncates to whole seconds. PostgreSQL timestamp(0) rounds,
+    // which could otherwise move a completion into tomorrow at midnight.
+    time.with().subsec_nanosecond(0).build().unwrap_or(time)
 }
 
 pub(crate) fn text(value: &str, max: usize, required: bool) -> Result<Option<String>> {
