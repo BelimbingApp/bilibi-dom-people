@@ -299,7 +299,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             && a.priority_multiplier == policy.multiplier(&requirement.criticality) as i32
             && a.priority_score == a.gap * a.priority_multiplier
             && a.result_band == "major_gap"
-            && a.next_due_on == Some(date(2027, 10, 1)),
+            && a.next_due_on == Some(date(2028, 4, 1)),
     )?;
     let replay = saved(
         skills
@@ -627,7 +627,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     )?;
     check(
         "skill interval takes precedence over policy",
-        month_end.next_due_on == Some(date(2027, 1, 31)),
+        month_end.next_due_on == Some(date(2027, 7, 31)),
     )?;
     saved(
         skills
