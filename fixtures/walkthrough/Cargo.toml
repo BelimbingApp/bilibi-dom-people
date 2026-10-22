@@ -27,3 +27,7 @@ bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
+
+# Skills (PK1): the catalog proof block at the end of lib.rs.
+bilibi-people-skills = { path = "../../skills" }
+rust_decimal.workspace = true
