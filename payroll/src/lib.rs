@@ -1,9 +1,12 @@
 //! Company Payroll foundation, mirroring Bilimbi `Bilimbi.People.Payroll`.
 //! This facade owns authorization, version validation, snapshots and locking.
+mod calculation;
 mod contributions;
 mod error;
 mod input;
+mod intake;
 mod models;
+mod replay;
 mod setup;
 mod snapshot;
 mod store;
@@ -15,7 +18,8 @@ use bilibi_people_workforce::{authorization, Workforce};
 use bilibi_settings::{Settings, Target};
 use bilibi_tenancy::Scope;
 pub use contributions::{
-    APPROVE, ATTENDANCE_MAPPINGS_MANAGE, CAPABILITIES, COUNTRY_KEY, CURRENCIES_KEY, MANAGE, VIEW,
+    APPROVE, ATTENDANCE_MAPPINGS_MANAGE, CAPABILITIES, COUNTRY_KEY, CURRENCIES_KEY, MANAGE,
+    RUN_APPROVED, VIEW,
 };
 pub use error::PayrollError;
 pub use models::*;
@@ -33,6 +37,7 @@ pub struct Payroll {
     leave: Arc<bilibi_people_leave::Leave>,
     claims: Arc<bilibi_people_claims::Claims>,
     attendance: Arc<bilibi_people_attendance::Attendance>,
+    events: Arc<bilibi_events::Events>,
 }
 impl Payroll {
     /// Presentation only; writes always authorize again in their transaction.

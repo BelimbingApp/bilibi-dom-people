@@ -145,3 +145,83 @@ pub struct AttendanceAllowances {
     pub items: Vec<Item>,
     pub mappings: Vec<AttendanceAllowanceMapping>,
 }
+
+/// Exact operator-attested units; construct Decimal from text, never floats.
+#[derive(Clone, Debug)]
+pub struct NewContribution {
+    pub employee_id: i64,
+    pub item_id: i64,
+    pub source_key: String,
+    pub evidence: String,
+    pub on_date: Date,
+    pub units: Decimal,
+    pub direction: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Contribution {
+    pub id: i64,
+    pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
+    pub run_id: i64,
+    pub employee_id: i64,
+    pub item_id: i64,
+    pub source_key: String,
+    pub evidence: String,
+    pub on_date: String,
+    pub units: String,
+    pub direction: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Calculation {
+    pub id: i64,
+    pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
+    pub run_id: i64,
+    pub snapshot: Value,
+    pub digest: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Decision {
+    pub id: i64,
+    pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
+    pub run_id: i64,
+    pub outcome: String,
+    pub reason: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResultLine {
+    pub id: i64,
+    pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
+    pub run_id: i64,
+    pub contribution_id: i64,
+    pub employee_id: i64,
+    pub direction: String,
+    pub amount: String,
+}
+/// Document records are reserved here; creation and private bytes follow in PY3.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Document {
+    pub id: i64,
+    pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
+    pub run_id: i64,
+    pub employee_id: Option<i64>,
+    pub artifact_id: String,
+    pub kind: String,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct RunOutput {
+    pub run: Run,
+    pub contributions: Vec<Contribution>,
+    pub calculation: Option<Calculation>,
+    pub decision: Option<Decision>,
+    pub documents: Vec<Document>,
+    pub entries: Vec<ResultLine>,
+}
