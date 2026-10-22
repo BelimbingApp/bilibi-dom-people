@@ -372,7 +372,7 @@ impl Detail {
                     "work_email" => a.affiliation.work_email.as_deref().unwrap_or("—"),
                     _ => a.affiliation.work_phone.as_deref().unwrap_or("—"),
                 }),
-                _ if key == "work_email" => {
+                None if key == "work_email" && employee.employee.email.is_some() => {
                     Html::text(employee.employee.email.as_deref().unwrap_or("—"))
                 }
                 _ => render(&Restricted::new(format!("employee-{key}-restricted")))?,
