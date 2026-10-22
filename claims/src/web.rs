@@ -294,6 +294,18 @@ impl Operations {
                 self.refused(error);
             }
         }
+        let selected = self
+            .pending
+            .as_ref()
+            .map(|p| &p.selection)
+            .or(self.selection.as_ref());
+        if selected.is_some_and(|selection| {
+            self.company.as_ref().map(|c| c.id) != Some(selection.company)
+                || selection.action.capability() == REIMBURSE && !self.can_reimburse
+        }) {
+            self.clear();
+            self.message(StatusKind::Error, FORBIDDEN);
+        }
         Ok(())
     }
     async fn permitted(&mut self, scope: &Scope, capability: &str) -> Result<bool> {
