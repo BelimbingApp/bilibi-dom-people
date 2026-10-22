@@ -130,7 +130,7 @@ impl Payroll {
         .await?
         .ok_or(PayrollError::InvalidItem)?;
         if !currencies.contains(&new.currency)
-            || new.amount.is_sign_negative()
+            || new.amount < rust_decimal::Decimal::ZERO
             || new.amount >= rust_decimal::Decimal::from(100_000_000_000_000i64)
             || new.amount.round_dp(6) != new.amount
             || !input::covers(

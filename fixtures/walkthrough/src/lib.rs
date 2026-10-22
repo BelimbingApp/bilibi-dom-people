@@ -3708,3 +3708,9 @@ mod attendance_workflows;
 pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
+
+// Payroll foundation (PY1): run after the default fixture prepared the database.
+mod payroll;
+pub async fn payroll(url: &str) -> Result<()> {
+    payroll::run(url).await
+}

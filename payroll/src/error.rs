@@ -19,7 +19,7 @@ pub enum PayrollError {
     InvalidItem,
     #[error("Choose an available Leave or Claims source and an item covering the mapping dates.")]
     InvalidMapping,
-    #[error("Choose an active allowance rule, a pay item in the same currency and dates covered by the item.")]
+    #[error("Choose an allowance rule and a pay item effective for the whole mapping period.")]
     InvalidAttendanceMapping,
     #[error("Workforce data for this company is not current, so Leave and Claims sources cannot be read. Try again once it has refreshed.")]
     NotCurrent(Freshness),
