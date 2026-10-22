@@ -370,9 +370,7 @@ impl Training {
         if now < ends_at {
             return Err(TrainingError::SessionNotFinished);
         }
-        let zone = session
-            .get::<_, String>("time_zone")
-            .parse::<jiff::tz::TimeZone>()
+        let zone = jiff::tz::TimeZone::get(&session.get::<_, String>("time_zone"))
             .map_err(|_| TrainingError::InvalidTimeZoneOrTime)?;
         let finished = ends_at.to_zoned(zone).date();
         let finished_text = finished.to_string();
