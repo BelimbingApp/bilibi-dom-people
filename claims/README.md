@@ -2,7 +2,7 @@
 
 Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
 
-Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. The My claims, Claim policies and Claim operations pages belong to PC3, PC4 and PC5.
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`. Claim policies and Claim operations are delivered separately.
 
 ## Ownership
 
@@ -158,3 +158,16 @@ IDs are JSON integers. `reference` is the stable `CLM-{claim_id}` reference. The
 ## Workflow proof
 
 The appended PC2 block in `fixtures/walkthrough/src/claim_workflow.rs` runs on the same disposable database. It creates its own catalog and policies through the facade, submits and decides claims, groups currencies, checks CSV quoting and formula neutralisation, and verifies exact event payloads and ordered history. It also proves period limits, duplicate receipts, confirmed duplicates, own-claim refusals, batch rollback, grant revocation, account unlinking and relinking to an inactive employee. PostgreSQL refuses changes to the stored history and hand-off records.
+
+
+## My claims
+
+Open **People → My work → My claims** to submit an expense and follow its decision. The page uses the signed-in account’s company and working employee; neither can be chosen in the form.
+
+The open claim types table shows each category, currency, limits and receipt rule. The submission form asks for the type, expense date, amount, currency, receipt number and description. When the same type, date and amount already exist, it keeps the entered details and asks you to confirm that this is a separate expense. A repeated receipt number is refused even when that confirmation is checked.
+
+Submitted claims show their status, approved amount and decision reason. A reimbursed claim also shows its payment date. **Withdraw** first asks for confirmation; Cancel and Escape leave the claim unchanged. The server keeps the selected claim, and confirmation checks ownership and status again through `Claims::withdraw_request`.
+
+Both lists use `FlexTable` with `ListColumns` for column selection, order and compact rows. Bilimbi’s page has no sorting, filters or pagination, so those controls are absent here. `ListState` validates the page’s URL state. The page is available in a workspace tile and declares its facade writes through `PageWrites` with a pending operation-contract allowance.
+
+Every page update resolves the account’s current employee link again. Every write event checks `people.claims.submit` before parsing input, and the facade checks again under its locks. A revoked grant or removed link clears the private rows, form and pending withdrawal. Refusals stay on the page as messages; field validation also appears beside the fields and in an error summary.
