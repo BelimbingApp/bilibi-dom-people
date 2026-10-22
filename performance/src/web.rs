@@ -516,6 +516,10 @@ impl State {
             return Ok(());
         }
         if let Some(cap) = event_capability(event) {
+            if self.my != (event == "save_response") {
+                self.message(StatusKind::Error, PerformanceError::NotFound.to_string());
+                return Ok(());
+            }
             if !self.permitted(scope, cap).await {
                 return Ok(());
             }
@@ -662,6 +666,8 @@ impl State {
         };
         self.active_form = form_id.clone();
         self.errors.clear();
+        // Performance narratives accept 8,000 characters. The generic form
+        // helper keeps only 1 KiB, so read this fixed allowlist explicitly.
         let fields = fields_for(event);
         let mut values = Map::new();
         for key in fields {
@@ -1221,6 +1227,11 @@ impl State {
             })?,
         })?;
         if fold {
+            let body = render(&bilibi_ui::Page {
+                variant: bilibi_ui::PageVariant::Form,
+                body,
+                ..bilibi_ui::Page::default()
+            })?;
             render(&Fold {
                 id: &format!("{id}-fold"),
                 title,

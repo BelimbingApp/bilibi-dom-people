@@ -54,7 +54,7 @@ Run `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthro
 
 ## Pages
 
-Open **Development › Performance reviews** to work with reviews, position descriptions, KPIs and evidence. Each task has a FlexTable with column selection, compact rows and URL pagination. Review pagination keeps `page` and `page_size`; the other bounded lists use `release_`, `descriptions_`, `definitions_`, `targets_` and `evidence_` prefixes. Page sizes are 10, 25, 50 and 100. The planning lists and pickers retain the facade's 100-record bounds.
+Open **Development › Performance reviews** to work with reviews, position descriptions, KPIs and evidence. The page uses your linked company. An administrator without a company link starts with the first company their grants allow. Each task has a FlexTable with column selection, compact rows and URL pagination. Review pagination keeps `page` and `page_size`; the other bounded lists use `release_`, `descriptions_`, `definitions_`, `targets_` and `evidence_` prefixes. Page sizes are 10, 25, 50 and 100. The planning lists and pickers retain the facade's 100-record bounds.
 
 Forms offer direct reports, current positions, published profiles and exact record versions. A correction selects a prior version and states its reason. Every planning write opens a confirmation with its input held on the server; Cancel discards the pending operation. Confirmation rechecks the current grant, then the facade rechecks company reach, employment links and workflow rules. A changed or duplicated confirmation payload cannot replace the selection.
 
