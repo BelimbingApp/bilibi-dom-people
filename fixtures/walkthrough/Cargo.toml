@@ -30,4 +30,6 @@ tokio-postgres.workspace = true
 
 # Skills (PK1): the catalog proof block at the end of lib.rs.
 bilibi-people-skills = { path = "../../skills" }
+# Leave (slice PL1).
+bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
