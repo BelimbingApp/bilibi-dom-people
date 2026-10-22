@@ -234,7 +234,7 @@ pub async fn run(url: &str) -> Result<()> {
         "duplicate company code/version",
     )?;
     refused(
-        pg.publish(&manager, 2, draft.id).await,
+        pg.publish(&admin, 2, draft.id).await,
         |e| matches!(e, ProgressionError::NotFound),
         "foreign-company identity",
     )?;
