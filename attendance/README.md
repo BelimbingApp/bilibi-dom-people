@@ -139,3 +139,11 @@ BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance-w
 ```
 
 It proves draft visibility and publication/removal, search and period bounds, retired shifts, request replay/conflict/duplicates/window/future refusals, approval and rejection, self-approval refusal, cancellation, location enforcement with adjustment exemption, allowance version closure/overlap/retirement/end refusals, revoked grants and account unlinking with an earlier scope, the four audit action kinds and PostgreSQL check constraints. PA3–PA5 own the pages and their browser parity checks.
+
+## Rosters and attendance approvals
+
+`/people/attendance/rosters` lets a roster planner choose a company, search employees and plan seven days from a chosen date. Drafts stay private until **Publish week** is confirmed. Publishing includes every unpublished change for that company and week, including employees hidden by search.
+
+`/people/attendance/approvals` shows the 200 oldest pending adjustment requests for a chosen company. Approve records the requested clock event; Reject needs a note. Both decisions require confirmation, and employees cannot decide their own requests.
+
+Both pages use shared FlexTables and recheck company access before each write. The Attendance facade checks permission again under the company lock.
