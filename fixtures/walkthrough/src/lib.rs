@@ -960,7 +960,7 @@ pub async fn run(url: &str) -> Result<()> {
     .await?;
 
     println!(
-        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
+        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
