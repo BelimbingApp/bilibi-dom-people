@@ -151,6 +151,23 @@ pub(super) async fn run(services: &Services) -> Result<()> {
             request.id
         );
     }
+    let own_claim = claims
+        .submit_request(
+            &manager,
+            COMPANY,
+            &NewRequest {
+                claim_type_id: kind.id,
+                incurred_on: date(2025, 1, 15),
+                amount: Decimal::new(17, 0),
+                currency: "USD".into(),
+                description: Some("Own-claim refusal proof".into()),
+                receipt_number: None,
+                confirm_duplicate: false,
+            },
+        )
+        .await
+        .map_err(check)?;
+    println!("PC5 manager own claim {}: submitted", own_claim.id);
     let batch = claims
         .create_handoff_batch(&manager, COMPANY, "USD")
         .await
