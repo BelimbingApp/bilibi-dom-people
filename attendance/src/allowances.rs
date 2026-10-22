@@ -9,8 +9,6 @@ use jiff::civil::Date;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio_postgres::GenericClient;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AllowanceRule {
     pub id: i64,
@@ -51,11 +49,14 @@ fn validate(new: &NewAllowanceRule) -> Result<(String, String, String, String)> 
     if new.value <= Decimal::ZERO {
         errors.push(FieldError::new("value", "must be greater than 0"));
     }
-    // Refuse values which cannot survive numeric(14,4), rather than allowing PostgreSQL to round or overflow.
-    if new.value.scale() > 4 || new.value >= Decimal::from(10_000_000_000i64) {
+    // PostgreSQL rounds numeric(14,4) half away from zero; validate that stored value before SQL.
+    let stored = new
+        .value
+        .round_dp_with_strategy(4, rust_decimal::RoundingStrategy::MidpointAwayFromZero);
+    if stored <= Decimal::ZERO || stored >= Decimal::from(10_000_000_000i64) {
         errors.push(FieldError::new(
             "value",
-            "must fit 14 digits with at most 4 decimal places",
+            "must fit a positive amount with 10 integer digits and 4 decimal places",
         ));
     }
     if new.effective_until.is_some_and(|d| d < new.effective_from) {
@@ -70,7 +71,12 @@ fn validate(new: &NewAllowanceRule) -> Result<(String, String, String, String)> 
     Ok((code, name, unit, currency))
 }
 async fn get(tx: &MutationTransaction<'_>, scope: &Scope, company: i64, id: i64) -> Result<Value> {
-    tx.sql().query_opt("SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 AND id=$3 FOR UPDATE",&[&scope.tenant(),&company,&id]).await.map_err(Error::from)?.map(|r|r.get(0)).ok_or(Refusal::NotFound)
+    tx.sql()
+        .query_opt(LOCK_RULE, &[&scope.tenant(), &company, &id])
+        .await
+        .map_err(Error::from)?
+        .map(|r| r.get(0))
+        .ok_or(Refusal::NotFound)
 }
 async fn end(
     tx: &mut MutationTransaction<'_>,
@@ -89,11 +95,38 @@ async fn end(
     let tenant = scope.tenant();
     let date = until.to_string();
     let id = current.id;
-    let after:Value=tx.mutate(move|sql|Box::pin(async move{
-  let new:Value=sql.query_one("UPDATE people_attendance_allowance_policies r SET effective_until=$4::text::date,updated_at=now() WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(r) || jsonb_build_object('value',value::text)",&[&tenant,&company,&id,&date]).await?.get(0);
-  Ok((new.clone(),vec![Change{kind:"people_attendance_allowance_policy".into(),id,old,new}]))
- })).await?;
-    action(tx,scope,"people.attendance.allowance_rule_ended",json!({"company_id":company,"rule_id":id,"code":current.code,"previous_effective_until":current.effective_until,"effective_until":until.to_string()})).await?;
+    let after: Value = tx
+        .mutate(move |sql| {
+            Box::pin(async move {
+                let new: Value = sql
+                    .query_one(END_RULE, &[&tenant, &company, &id, &date])
+                    .await?
+                    .get(0);
+                Ok((
+                    new.clone(),
+                    vec![Change {
+                        kind: "people_attendance_allowance_policy".into(),
+                        id,
+                        old,
+                        new,
+                    }],
+                ))
+            })
+        })
+        .await?;
+    action(
+        tx,
+        scope,
+        "people.attendance.allowance_rule_ended",
+        json!({
+        "company_id":company,
+        "rule_id":id,
+        "code":current.code,
+        "previous_effective_until":current.effective_until,
+        "effective_until":until.to_string()}
+        ),
+    )
+    .await?;
     decode(after)
 }
 impl Attendance {
@@ -104,7 +137,12 @@ impl Attendance {
     ) -> Result<Vec<AllowanceRule>> {
         let c = self.db.get().await.map_err(Error::from)?;
         crate::access::current_company(&self.workforce, &**c, scope, company_id).await?;
-        c.query("SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 ORDER BY code,effective_from DESC,id",&[&scope.tenant(),&company_id]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect()
+        c.query(LIST_RULES, &[&scope.tenant(), &company_id])
+            .await
+            .map_err(Error::from)?
+            .into_iter()
+            .map(|r| decode(r.get(0)))
+            .collect()
     }
     pub async fn allowance_rule(
         &self,
@@ -135,19 +173,99 @@ impl Attendance {
         lock(&tx, scope, company_id, ALLOWANCES_MANAGE).await?;
         let (code, name, unit, currency) = validate(new)?;
         // A retired version still owns its company/code/start key. Check before closing an older version.
-        if tx.sql().query_opt("SELECT 1 FROM people_attendance_allowance_policies WHERE tenant_id=$1 AND company_id=$2 AND code=$3 AND effective_from=$4::text::date",&[&scope.tenant(),&company_id,&code,&new.effective_from.to_string()]).await.map_err(Error::from)?.is_some(){return Err(Refusal::Invalid(vec![FieldError::new("company_id","has already been taken")]));}
-        if let Some(row)=tx.sql().query_opt("SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 AND code=$3 AND status='active' AND effective_until IS NULL AND effective_from<$4::text::date FOR UPDATE",&[&scope.tenant(),&company_id,&code,&new.effective_from.to_string()]).await.map_err(Error::from)?{
-   end(&mut tx,scope,company_id,row.get(0),new.effective_from.checked_sub(jiff::Span::new().days(1)).map_err(|_|Refusal::InvalidEndDate)?).await?;
-  }
+        if tx
+            .sql()
+            .query_opt(
+                TAKEN_START,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &code,
+                    &new.effective_from.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .is_some()
+        {
+            return Err(Refusal::Invalid(vec![FieldError::new(
+                "company_id",
+                "has already been taken",
+            )]));
+        }
+        if let Some(row) = tx
+            .sql()
+            .query_opt(
+                OPEN_VERSION,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &code,
+                    &new.effective_from.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+        {
+            end(
+                &mut tx,
+                scope,
+                company_id,
+                row.get(0),
+                new.effective_from
+                    .checked_sub(jiff::Span::new().days(1))
+                    .map_err(|_| Refusal::InvalidEndDate)?,
+            )
+            .await?;
+        }
         let from = new.effective_from.to_string();
         let until = new.effective_until.map(|d| d.to_string());
-        if tx.sql().query_opt("SELECT 1 FROM people_attendance_allowance_policies WHERE tenant_id=$1 AND company_id=$2 AND code=$3 AND status='active' AND (effective_until IS NULL OR effective_until >= $4::text::date) AND ($5::text::date IS NULL OR effective_from <= $5::text::date)",&[&scope.tenant(),&company_id,&code,&from,&until]).await.map_err(Error::from)?.is_some(){return Err(Refusal::EffectivePeriodOverlap);}
+        if tx
+            .sql()
+            .query_opt(
+                OVERLAPPING_VERSION,
+                &[&scope.tenant(), &company_id, &code, &from, &until],
+            )
+            .await
+            .map_err(Error::from)?
+            .is_some()
+        {
+            return Err(Refusal::EffectivePeriodOverlap);
+        }
         let tenant = scope.tenant();
         let value = new.value;
-        let saved:Value=tx.mutate(move|sql|Box::pin(async move{
-   let new:Value=sql.query_one("INSERT INTO people_attendance_allowance_policies AS r (tenant_id,company_id,code,name,unit,value,currency,effective_from,effective_until) VALUES($1,$2,$3,$4,$5,$6,$7,$8::text::date,$9::text::date) RETURNING to_jsonb(r) || jsonb_build_object('value',value::text)",&[&tenant,&company_id,&code,&name,&unit,&value,&currency,&from,&until]).await?.get(0);
-   Ok((new.clone(),vec![Change{kind:"people_attendance_allowance_policy".into(),id:new["id"].as_i64().ok_or(Error::Internal)?,old:json!({}),new}]))
-  })).await?;
+        let saved: Value = tx
+            .mutate(move |sql| {
+                Box::pin(async move {
+                    let new: Value = sql
+                        .query_one(
+                            INSERT_RULE,
+                            &[
+                                &tenant,
+                                &company_id,
+                                &code,
+                                &name,
+                                &unit,
+                                &value,
+                                &currency,
+                                &from,
+                                &until,
+                            ],
+                        )
+                        .await?
+                        .get(0);
+                    Ok((
+                        new.clone(),
+                        vec![Change {
+                            kind: "people_attendance_allowance_policy".into(),
+                            id: new["id"].as_i64().ok_or(Error::Internal)?,
+                            old: json!({}),
+                            new,
+                        }],
+                    ))
+                })
+            })
+            .await?;
         tx.commit().await?;
         decode(saved)
     }
@@ -200,11 +318,74 @@ impl Attendance {
         lock(&tx, scope, company_id, ALLOWANCES_MANAGE).await?;
         let old = get(&tx, scope, company_id, id).await?;
         let tenant = scope.tenant();
-        let saved:Value=tx.mutate(move|sql|Box::pin(async move{
-   let new:Value=sql.query_one("UPDATE people_attendance_allowance_policies r SET status='retired',updated_at=now() WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(r) || jsonb_build_object('value',value::text)",&[&tenant,&company_id,&id]).await?.get(0);
-   Ok((new.clone(),vec![Change{kind:"people_attendance_allowance_policy".into(),id,old,new}]))
-  })).await?;
+        let saved: Value = tx
+            .mutate(move |sql| {
+                Box::pin(async move {
+                    let new: Value = sql
+                        .query_one(RETIRE_RULE, &[&tenant, &company_id, &id])
+                        .await?
+                        .get(0);
+                    Ok((
+                        new.clone(),
+                        vec![Change {
+                            kind: "people_attendance_allowance_policy".into(),
+                            id,
+                            old,
+                            new,
+                        }],
+                    ))
+                })
+            })
+            .await?;
         tx.commit().await?;
         decode(saved)
     }
 }
+
+const LOCK_RULE: &str = concat!(
+    "SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM ",
+    "people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 AND id=$3 FOR ",
+    "UPDATE",
+);
+
+const END_RULE: &str = concat!(
+    "UPDATE people_attendance_allowance_policies r SET ",
+    "effective_until=$4::text::date,updated_at=now() WHERE tenant_id=$1 AND company_id=$2 AND id=$3 ",
+    "RETURNING to_jsonb(r) || jsonb_build_object('value',value::text)",
+);
+
+const LIST_RULES: &str = concat!(
+    "SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM ",
+    "people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 ORDER BY ",
+    "code,effective_from DESC,id",
+);
+
+const TAKEN_START: &str = concat!(
+    "SELECT 1 FROM people_attendance_allowance_policies WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "code=$3 AND effective_from=$4::text::date",
+);
+
+const OPEN_VERSION: &str = concat!(
+    "SELECT to_jsonb(r) || jsonb_build_object('value',value::text) FROM ",
+    "people_attendance_allowance_policies r WHERE tenant_id=$1 AND company_id=$2 AND code=$3 AND ",
+    "status='active' AND effective_until IS NULL AND effective_from<$4::text::date FOR UPDATE",
+);
+
+const OVERLAPPING_VERSION: &str = concat!(
+    "SELECT 1 FROM people_attendance_allowance_policies WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "code=$3 AND status='active' AND (effective_until IS NULL OR effective_until >= $4::text::date) ",
+    "AND ($5::text::date IS NULL OR effective_from <= $5::text::date)",
+);
+
+const INSERT_RULE: &str = concat!(
+    "INSERT INTO people_attendance_allowance_policies AS r ",
+    "(tenant_id,company_id,code,name,unit,value,currency,effective_from,effective_until) ",
+    "VALUES($1,$2,$3,$4,$5,$6,$7,$8::text::date,$9::text::date) RETURNING to_jsonb(r) || ",
+    "jsonb_build_object('value',value::text)",
+);
+
+const RETIRE_RULE: &str = concat!(
+    "UPDATE people_attendance_allowance_policies r SET status='retired',updated_at=now() WHERE ",
+    "tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(r) || ",
+    "jsonb_build_object('value',value::text)",
+);

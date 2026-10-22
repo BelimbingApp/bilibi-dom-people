@@ -11,8 +11,6 @@ use jiff::{civil::DateTime, Timestamp};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio_postgres::GenericClient;
-
 #[derive(Clone, Debug)]
 pub struct NewAdjustment {
     pub request_key: String,
@@ -48,7 +46,12 @@ async fn request(
     company: i64,
     id: i64,
 ) -> Result<Value> {
-    tx.sql().query_opt("SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 AND id=$3 FOR UPDATE",&[&scope.tenant(),&company,&id]).await.map_err(Error::from)?.map(|r|r.get(0)).ok_or(Refusal::NotFound)
+    tx.sql()
+        .query_opt(LOCK_REQUEST, &[&scope.tenant(), &company, &id])
+        .await
+        .map_err(Error::from)?
+        .map(|r| r.get(0))
+        .ok_or(Refusal::NotFound)
 }
 async fn decide(
     tx: &mut MutationTransaction<'_>,
@@ -62,10 +65,28 @@ async fn decide(
     let id = old["id"].as_i64().ok_or(Refusal::NotFound)?;
     let tenant = scope.tenant();
     let actor = scope.user();
-    let saved:Value=tx.mutate(move|sql|Box::pin(async move{
-  let new:Value=sql.query_one("UPDATE people_attendance_corrections r SET status=$4,decided_by_user_id=$5,decided_at=date_trunc('second',now()),decision_note=$6,applied_clock_event_id=$7,updated_at=now() WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(r)",&[&tenant,&company,&id,&status,&actor,&note,&event]).await?.get(0);
-  Ok((new.clone(),vec![Change{kind:"people_attendance_correction".into(),id,old,new}]))
- })).await?;
+    let saved: Value = tx
+        .mutate(move |sql| {
+            Box::pin(async move {
+                let new: Value = sql
+                    .query_one(
+                        DECIDE_REQUEST,
+                        &[&tenant, &company, &id, &status, &actor, &note, &event],
+                    )
+                    .await?
+                    .get(0);
+                Ok((
+                    new.clone(),
+                    vec![Change {
+                        kind: "people_attendance_correction".into(),
+                        id,
+                        old,
+                        new,
+                    }],
+                ))
+            })
+        })
+        .await?;
     decode(saved)
 }
 impl Attendance {
@@ -180,7 +201,7 @@ impl Attendance {
             .since(date)
             .map_err(|_| Refusal::InvalidTime)?
             .get_days()
-            >= rules.adjustment_window_days
+            >= rules.adjustment_window_days as i32
         {
             return Err(Refusal::OutsideWindow);
         }
@@ -208,21 +229,80 @@ impl Attendance {
         if !errors.is_empty() {
             return Err(Refusal::Invalid(errors));
         }
-        if let Some(row)=tx.sql().query_opt("SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 AND request_key=$3",&[&scope.tenant(),&company_id,&new.request_key]).await.map_err(Error::from)?{
-   let saved:AdjustmentRequest=decode(row.get(0))?;
-   if saved.employee_id!=me.employee_id||saved.event_type!=new.event_type.as_str()||saved.proposed_at.parse::<Timestamp>().ok()!=Some(at){return Err(Refusal::RequestKeyConflict);}
-   return Ok(saved);
-  }
-        if tx.sql().query_opt("SELECT 1 FROM people_attendance_corrections WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 AND event_type=$4 AND proposed_at=$5::text::timestamptz AND status IN ('pending','approved')",&[&scope.tenant(),&company_id,&me.employee_id,&new.event_type.as_str(),&at.to_string()]).await.map_err(Error::from)?.is_some(){return Err(Refusal::DuplicateRequest);}
+        if let Some(row) = tx
+            .sql()
+            .query_opt(
+                REQUEST_BY_KEY,
+                &[&scope.tenant(), &company_id, &new.request_key],
+            )
+            .await
+            .map_err(Error::from)?
+        {
+            let saved: AdjustmentRequest = decode(row.get(0))?;
+            if saved.employee_id != me.employee_id
+                || saved.event_type != new.event_type.as_str()
+                || saved.proposed_at.parse::<Timestamp>().ok() != Some(at)
+            {
+                return Err(Refusal::RequestKeyConflict);
+            }
+            return Ok(saved);
+        }
+        if tx
+            .sql()
+            .query_opt(
+                DUPLICATE_REQUEST,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &me.employee_id,
+                    &new.event_type.as_str(),
+                    &at.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .is_some()
+        {
+            return Err(Refusal::DuplicateRequest);
+        }
         let tenant = scope.tenant();
         let actor = scope.user();
         let key = new.request_key.clone();
         let kind = new.event_type.as_str();
         let timezone = rules.timezone;
-        let saved:Value=tx.mutate(move|sql|Box::pin(async move{
-   let value:Value=sql.query_one("INSERT INTO people_attendance_corrections AS r (tenant_id,company_id,employee_id,request_key,event_type,proposed_at,on_date,timezone,reason,requested_by_user_id) VALUES($1,$2,$3,$4,$5,$6::text::timestamptz,$7::text::date,$8,$9,$10) RETURNING to_jsonb(r)",&[&tenant,&company_id,&me.employee_id,&key,&kind,&at.to_string(),&date.to_string(),&timezone,&reason,&actor]).await?.get(0);
-   Ok((value.clone(),vec![Change{kind:"people_attendance_correction".into(),id:value["id"].as_i64().ok_or(Error::Internal)?,old:json!({}),new:value}]))
-  })).await?;
+        let saved: Value = tx
+            .mutate(move |sql| {
+                Box::pin(async move {
+                    let value: Value = sql
+                        .query_one(
+                            INSERT_REQUEST,
+                            &[
+                                &tenant,
+                                &company_id,
+                                &me.employee_id,
+                                &key,
+                                &kind,
+                                &at.to_string(),
+                                &date.to_string(),
+                                &timezone,
+                                &reason,
+                                &actor,
+                            ],
+                        )
+                        .await?
+                        .get(0);
+                    Ok((
+                        value.clone(),
+                        vec![Change {
+                            kind: "people_attendance_correction".into(),
+                            id: value["id"].as_i64().ok_or(Error::Internal)?,
+                            old: json!({}),
+                            new: value,
+                        }],
+                    ))
+                })
+            })
+            .await?;
         tx.commit().await?;
         decode(saved)
     }
@@ -289,17 +369,25 @@ impl Attendance {
             )
             .await?;
         lock(&tx, scope, company_id, ADJUSTMENTS_APPROVE).await?;
+        // Read the subject without a request lock, then keep Company → Employment → Request.
+        // The writable company lock serializes all decisions, submissions and account relinks.
+        let subject: i64 = tx
+            .sql()
+            .query_opt(REQUEST_SUBJECT, &[&scope.tenant(), &company_id, &id])
+            .await
+            .map_err(Error::from)?
+            .ok_or(Refusal::NotFound)?
+            .get(0);
+        let own_employee = self
+            .workforce
+            .owns_employee(&tx, scope, company_id, subject, ADJUSTMENTS_APPROVE)
+            .await?;
         let old = request(&tx, scope, company_id, id).await?;
         let req: AdjustmentRequest = decode(old.clone())?;
         if req.status != "pending" {
             return Err(Refusal::NotPending);
         }
-        if req.requested_by_user_id == scope.user()
-            || self
-                .workforce
-                .owns_employee(&tx, scope, company_id, req.employee_id, ADJUSTMENTS_APPROVE)
-                .await?
-        {
+        if req.requested_by_user_id == scope.user() || own_employee {
             return Err(Refusal::SelfApproval);
         }
         let event = if status == "approved" {
@@ -342,7 +430,24 @@ impl Attendance {
             None
         };
         let saved = decide(&mut tx, scope, company_id, old, status, note, event).await?;
-        action(&tx,scope,if status=="approved"{"people.attendance.adjustment_approved"}else{"people.attendance.adjustment_rejected"},json!({"company_id":company_id,"request_id":id,"employee_id":saved.employee_id,"event_type":saved.event_type,"proposed_at":saved.proposed_at,"applied_clock_event_id":saved.applied_clock_event_id})).await?;
+        action(
+            &tx,
+            scope,
+            if status == "approved" {
+                "people.attendance.adjustment_approved"
+            } else {
+                "people.attendance.adjustment_rejected"
+            },
+            json!({
+            "company_id":company_id,
+            "request_id":id,
+            "employee_id":saved.employee_id,
+            "event_type":saved.event_type,
+            "proposed_at":saved.proposed_at,
+            "applied_clock_event_id":saved.applied_clock_event_id}
+            ),
+        )
+        .await?;
         tx.commit().await?;
         Ok(saved)
     }
@@ -356,7 +461,15 @@ impl Attendance {
             .authorize_self(scope, company_id, SELF_VIEW)
             .await?;
         let c = self.db.get().await.map_err(Error::from)?;
-        c.query("SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 ORDER BY inserted_at DESC,id DESC LIMIT 20",&[&scope.tenant(),&company_id,&me.employee_id]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect()
+        c.query(
+            SELF_REQUESTS,
+            &[&scope.tenant(), &company_id, &me.employee_id],
+        )
+        .await
+        .map_err(Error::from)?
+        .into_iter()
+        .map(|r| decode(r.get(0)))
+        .collect()
     }
     pub async fn pending_adjustments(
         &self,
@@ -373,7 +486,12 @@ impl Attendance {
             )
             .await?;
             access::current_company(&self.workforce, &**c, scope, company_id).await?;
-            c.query("SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 AND status='pending' ORDER BY proposed_at,id LIMIT 200",&[&scope.tenant(),&company_id]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect::<Result<_>>()?
+            c.query(PENDING_REQUESTS, &[&scope.tenant(), &company_id])
+                .await
+                .map_err(Error::from)?
+                .into_iter()
+                .map(|r| decode(r.get(0)))
+                .collect::<Result<_>>()?
         };
         let mut ids: Vec<_> = requests.iter().map(|r| r.employee_id).collect();
         ids.sort_unstable();
@@ -398,3 +516,43 @@ impl Attendance {
             .collect())
     }
 }
+
+const LOCK_REQUEST: &str = concat!(
+    "SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 ",
+    "AND id=$3 FOR UPDATE",
+);
+
+const DECIDE_REQUEST: &str = concat!(
+    "UPDATE people_attendance_corrections r SET ",
+    "status=$4,decided_by_user_id=$5,decided_at=date_trunc('second',now()),decision_note=$6,applied_clock_event_id=$7,updated_at=now() ",
+    "WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(r)",
+);
+
+const REQUEST_BY_KEY: &str = concat!(
+    "SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 ",
+    "AND request_key=$3",
+);
+
+const DUPLICATE_REQUEST: &str = concat!(
+    "SELECT 1 FROM people_attendance_corrections WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "employee_id=$3 AND event_type=$4 AND proposed_at=$5::text::timestamptz AND status IN ",
+    "('pending','approved')",
+);
+
+const INSERT_REQUEST: &str = concat!(
+    "INSERT INTO people_attendance_corrections AS r ",
+    "(tenant_id,company_id,employee_id,request_key,event_type,proposed_at,on_date,timezone,reason,requested_by_user_id) ",
+    "VALUES($1,$2,$3,$4,$5,$6::text::timestamptz,$7::text::date,$8,$9,$10) RETURNING to_jsonb(r)",
+);
+
+const SELF_REQUESTS: &str = concat!(
+    "SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 ",
+    "AND employee_id=$3 ORDER BY inserted_at DESC,id DESC LIMIT 20",
+);
+
+const PENDING_REQUESTS: &str = concat!(
+    "SELECT to_jsonb(r) FROM people_attendance_corrections r WHERE tenant_id=$1 AND company_id=$2 ",
+    "AND status='pending' ORDER BY proposed_at,id LIMIT 200",
+);
+
+const REQUEST_SUBJECT: &str = "SELECT employee_id FROM people_attendance_corrections WHERE tenant_id=$1 AND company_id=$2 AND id=$3";

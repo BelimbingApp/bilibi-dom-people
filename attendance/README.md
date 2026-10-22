@@ -1,6 +1,6 @@
 # Attendance
 
-Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. Rosters, adjustment requests and allowance rules follow in port plan row PA2; the pages in PA3 to PA5; the device operation in PA6. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
+Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. Pages follow in PA3 to PA5; the device operation in PA6. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
 
 ## Public API
 
@@ -22,7 +22,7 @@ Resolve `Attendance` from the registry as `people/attendance.attendance` (`bilib
 
 Every operator write authorizes its capability on every call through the Workforce `Authorization` helpers with the scope it was handed, so a grant revoked while a page stays connected refuses the next event (`Unauthorized`); a company the scope cannot see is `NotFound`. Inside its mutation transaction a write holds the company's writable lock first (an archived company is `CompanyArchived`), rechecks the operator's grant after waiting for that lock, and records every row it touches as a `Change`. A clock proves working employment through Workforce's `working_employee_ids_on` on its own transaction and resolves rules and active locations under the same lock, so a queued clock observes a preceding rule change or retirement.
 
-`record_clock` has no capability of its own, as in Bilimbi: the caller authorizes what it records. Self-clocking (PA2) proves the signed-in employee with `people.attendance.self.view` and the company's `self_clock_enabled` rule; an approved adjustment is recorded by its approver; the device operation (PA6) declares its own key. The scope's actor is recorded as the fact's actor. An employee who is not a working employee of the company is `NotFound`.
+`record_clock` has no capability of its own, as in Bilimbi: the caller authorizes what it records. Self-clocking proves the signed-in employee with `people.attendance.self.view` and the company's `self_clock_enabled` rule; an approved adjustment is recorded by its approver; the device operation (PA6) declares its own key. The scope's actor is recorded as the fact's actor. An employee who is not a working employee of the company is `NotFound`.
 
 ## Clock facts and days
 
@@ -66,9 +66,9 @@ All five live under the Authz domain `people` and are granted by an administrato
 | --- | --- |
 | `people.attendance.self.view` | My attendance, self-clocking and own requests |
 | `people.attendance.rules.manage` | Rules, shift templates, clocking locations |
-| `people.attendance.roster.manage` | Rosters (PA2, PA5) |
-| `people.attendance.adjustments.approve` | Adjustment decisions (PA2, PA5) |
-| `people.attendance.allowances.manage` | Allowance rules (PA2, PA3) |
+| `people.attendance.roster.manage` | Rosters (PA5) |
+| `people.attendance.adjustments.approve` | Adjustment decisions (PA5) |
+| `people.attendance.allowances.manage` | Allowance rules (PA3) |
 
 ## Self-service seam
 
@@ -91,4 +91,46 @@ The first binary creates the employments. The second proves attendance: the rule
 
 ## Dependencies
 
-`base/authz`, `base/database`, `base/datetime`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (less `base/audit` and `core/user`, which the rosters and adjustments of PA2 bring).
+`base/audit`, `base/authz`, `base/database`, `base/datetime`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (Core account identity is proven through Workforce, so attendance needs no direct `core/user` edge).
+
+## Roster planning and publication
+
+Use `plan_roster_entry(scope, company, employee, date, RosterValue)` to plan a shift, rest day or removal (`Shift(id)`, `Rest`, `None`). Planning requires `people.attendance.roster.manage`, a working employee and an active shift template. Clearing an unpublished entry deletes it immediately. Clearing a published entry keeps its published value until publication.
+
+`publish_roster(scope, company, from, to)` publishes every pending entry in the inclusive period, which must span 1 to 31 days. It returns the count, increments an existing publication's revision, applies removals and records `people.attendance.roster_published`, including when the count is zero. Publication does not require an employee or shift to remain active: it publishes the planner's stored values, as Bilimbi does.
+
+`roster(scope, company, from, days, query)` requires the same capability. It returns dates, at most 200 working employees, all templates, their entries and the company's pending entry count for the whole period. Search matches employee names and numbers without case sensitivity. Employees sort by name then number. `truncated` reports that more employees matched, while `RosterEntry::pending()` compares working and published values. Entries are a vector keyed by their `employee_id` and `on_date` fields.
+
+`self_roster(scope, company, from, days)` requires `people.attendance.self.view` and resolves the linked working employee on every call. It shows only published values, with the shift code, name and local times. The My attendance page requests `SELF_ROSTER_DAYS` (14); the service accepts the reference's 1 to 31 days. Draft changes and pending removals leave that employee view unchanged until published.
+
+## Missing-punch requests and self-clocking
+
+`submit_adjustment(scope, company, &NewAdjustment)` takes a page-minted `request_key`, an `In` or `Out` event, a local date/time string and a reason. It resolves and locks the signed-in employee through Workforce's `lock_self_employee`, then rechecks the capability. The local time must exist unambiguously in the company's attendance timezone, fall within its adjustment window (today counts) and be at or before now. A reason is required and limited to 500 characters; a request key is 1 to 160 bytes.
+
+A matching company/request key returns the existing request when employee, event type and proposed instant match. A changed payload is `RequestKeyConflict`. Another pending or approved request for the same employee, event type and instant is `DuplicateRequest`. Cancelled and rejected requests permit a fresh request with another key.
+
+`cancel_adjustment(scope, company, id)` takes the same self-service lock and cancels only that employee's pending request. `decide_adjustment(scope, company, id, "approve" | "reject", note)` requires `people.attendance.adjustments.approve`. It refuses both the original requester and an account currently linked to the subject employee, even after account relinking. Rejection requires a note; either decision limits the trimmed note to 500 bytes. A request already decided or cancelled is `NotPending`.
+
+Approval proves the employee is still working and ingests the proposed instant through the existing clock projection inside the deciding transaction. Its source is `adjustment`, its event key `request:<id>`, and its actor the approver. Approved adjustments are exempt from the location requirement. The decision and the clock event roll back together if either cannot be recorded. Decisions record `people.attendance.adjustment_approved` or `people.attendance.adjustment_rejected` with the request, employee, event type, proposed instant and applied event ID.
+
+`self_adjustments(scope, company)` returns the linked employee's 20 newest requests. `pending_adjustments(scope, company)` requires the approval capability and returns the 200 oldest proposed times, with names read through Workforce. Requests keep their history when an employee stops working; an unavailable current name is `None`.
+
+`self_clock(scope, company, type, key, latitude, longitude)` accepts only `In` or `Out`. It refuses impersonated and agent sessions, requires a linked working employee, `people.attendance.self.view` and enabled self-clocking. It uses source `web` and the server's current instant; its coordinates follow normal clock ingestion and the company's location rule. As with `record_clock`, replaying a key with a different instant refuses rather than changing the earlier fact.
+
+## Allowance rules
+
+Payroll reads the company-defined versions through `list_allowance_rules(scope, company)`, with no attendance capability required. Results include active and retired versions, sorted by code, newest effective start, then ID. `allowance_rule(scope, company, id)` reads one version. Neither read calculates or pays an allowance.
+
+`create_allowance_rule(scope, company, &NewAllowanceRule)`, `end_allowance_rule(scope, company, id, until)` and `retire_allowance_rule(scope, company, id)` require `people.attendance.allowances.manage`. Codes and names use the shift template's validation. A unit is 1 to 32 characters, begins with a letter and otherwise uses letters, digits, `_`, `.` or `-`. Currency is a company-supplied three-letter code, trimmed and uppercased. Values are positive decimals stored as `numeric(14,4)`, with PostgreSQL rounding to four decimal places. A value that rounds to zero or exceeds the stored range is refused before SQL.
+
+Effective dates are inclusive. A later version automatically ends an earlier active open version on the previous day. Any remaining active overlap refuses the whole transaction, including that automatic end and its audit action. A company/code/start date remains unique after retirement. An explicit end must precede the stored end, if present, and cannot precede the start. Ending a version, including an automatic end, records `people.attendance.allowance_rule_ended`. Retirement preserves the version and its dates for history.
+
+All PA2 writes hold the writable company lock before their own rows and recheck their capability after acquiring it. Self writes also hold and re-prove the employment lock. Every inserted, updated or deleted row passes through `MutationBoundary`; audit actions use Base Audit on the same transaction. Migrations `people-attendance-002-rosters-adjustments` and `people-attendance-003-allowance-rules` add roster entries, corrections and allowance policies. Public date fields are ISO text and instant fields RFC 3339 text; input dates use `jiff::civil::Date`.
+
+Run PA2's executable proof after the default People walkthrough has created its employments:
+
+```sh
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance-workflows
+```
+
+It proves draft visibility and publication/removal, search and period bounds, retired shifts, request replay/conflict/duplicates/window/future refusals, approval and rejection, self-approval refusal, cancellation, location enforcement with adjustment exemption, allowance version closure/overlap/retirement/end refusals, revoked grants and account unlinking with an earlier scope, the four audit action kinds and PostgreSQL check constraints. PA3–PA5 own the pages and their browser parity checks.

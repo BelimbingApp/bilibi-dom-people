@@ -8,8 +8,6 @@ use bilibi_tenancy::Scope;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio_postgres::GenericClient;
-
 pub const MAX_ROSTER_DAYS: i32 = 31;
 pub const MAX_ROSTER_EMPLOYEES: usize = 200;
 pub const SELF_ROSTER_DAYS: i32 = 14;
@@ -61,7 +59,6 @@ pub struct PublishedShift {
     pub end_minute: Option<i32>,
     pub break_minutes: Option<i32>,
 }
-const PENDING: &str = "(kind <> coalesce(published_kind,'none') OR shift_template_id IS DISTINCT FROM published_shift_template_id)";
 pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(|_| Refusal::Failed(Error::Internal))
 }
@@ -96,8 +93,7 @@ pub(crate) async fn action(
         payload,
         true,
     )
-    .await
-    .map_err(|_| Refusal::Failed(Error::Internal))?;
+    .await?;
     Ok(())
 }
 impl Attendance {
@@ -151,8 +147,35 @@ impl Attendance {
             .collect::<Result<_>>()?;
         let ids: Vec<_> = employees.iter().map(|e| e.id).collect();
         let c = self.db.get().await.map_err(Error::from)?;
-        let entries=c.query("SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND company_id=$2 AND employee_id=ANY($3) AND on_date BETWEEN $4::text::date AND $5::text::date ORDER BY employee_id,on_date", &[&scope.tenant(),&company_id,&ids,&from.to_string(),&to.to_string()]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect::<Result<_>>()?;
-        let pending=c.query_one(&format!("SELECT count(*) FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND on_date BETWEEN $3::text::date AND $4::text::date AND {PENDING}"),&[&scope.tenant(),&company_id,&from.to_string(),&to.to_string()]).await.map_err(Error::from)?.get(0);
+        let entries = c
+            .query(
+                ROSTER_ENTRIES,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &ids,
+                    &from.to_string(),
+                    &to.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .into_iter()
+            .map(|r| decode(r.get(0)))
+            .collect::<Result<_>>()?;
+        let pending = c
+            .query_one(
+                COUNT_PENDING,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &from.to_string(),
+                    &to.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .get(0);
         Ok(Roster {
             dates: (0..days)
                 .map(|i| {
@@ -194,9 +217,30 @@ impl Attendance {
             RosterValue::None => ("none", None),
         };
         if let Some(id) = template {
-            if tx.sql().query_opt("SELECT 1 FROM people_attendance_shift_definitions WHERE tenant_id=$1 AND company_id=$2 AND id=$3 AND status='active'",&[&scope.tenant(),&company_id,&id]).await.map_err(Error::from)?.is_none(){return Err(Refusal::ShiftUnavailable);}
+            if tx
+                .sql()
+                .query_opt(ACTIVE_SHIFT, &[&scope.tenant(), &company_id, &id])
+                .await
+                .map_err(Error::from)?
+                .is_none()
+            {
+                return Err(Refusal::ShiftUnavailable);
+            }
         }
-        let old:Option<Value>=tx.sql().query_opt("SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 AND on_date=$4::text::date FOR UPDATE",&[&scope.tenant(),&company_id,&employee_id,&on_date.to_string()]).await.map_err(Error::from)?.map(|r|r.get(0));
+        let old: Option<Value> = tx
+            .sql()
+            .query_opt(
+                LOCK_ENTRY,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &employee_id,
+                    &on_date.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .map(|r| r.get(0));
         if old.is_none() && kind == "none" {
             return Ok(None);
         }
@@ -204,15 +248,44 @@ impl Attendance {
         let tenant = scope.tenant();
         let actor = scope.user();
         let date = on_date.to_string();
-        let value=tx.mutate(move|sql|Box::pin(async move{
-   let after:Value=if delete {
-    sql.execute("DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 AND on_date=$4::text::date",&[&tenant,&company_id,&employee_id,&date]).await?;json!({})
-   }else{
-    sql.query_one("INSERT INTO people_attendance_roster_entries AS e (tenant_id,company_id,employee_id,on_date,kind,shift_template_id,updated_by_user_id) VALUES($1,$2,$3,$4::text::date,$5,$6,$7) ON CONFLICT(company_id,employee_id,on_date) DO UPDATE SET kind=$5,shift_template_id=$6,updated_by_user_id=$7,updated_at=now() RETURNING to_jsonb(e)",&[&tenant,&company_id,&employee_id,&date,&kind,&template,&actor]).await?.get(0)
-   };
-   let id=old.as_ref().unwrap_or(&after)["id"].as_i64().ok_or(Error::Internal)?;
-   Ok((if delete{None}else{Some(after.clone())},vec![Change{kind:"people_attendance_roster_entry".into(),id,old:old.unwrap_or(json!({})),new:after}]))
-  })).await?;
+        let value = tx
+            .mutate(move |sql| {
+                Box::pin(async move {
+                    let after: Value = if delete {
+                        sql.execute(DELETE_DRAFT, &[&tenant, &company_id, &employee_id, &date])
+                            .await?;
+                        json!({})
+                    } else {
+                        sql.query_one(
+                            UPSERT_DRAFT,
+                            &[
+                                &tenant,
+                                &company_id,
+                                &employee_id,
+                                &date,
+                                &kind,
+                                &template,
+                                &actor,
+                            ],
+                        )
+                        .await?
+                        .get(0)
+                    };
+                    let id = old.as_ref().unwrap_or(&after)["id"]
+                        .as_i64()
+                        .ok_or(Error::Internal)?;
+                    Ok((
+                        if delete { None } else { Some(after.clone()) },
+                        vec![Change {
+                            kind: "people_attendance_roster_entry".into(),
+                            id,
+                            old: old.unwrap_or(json!({})),
+                            new: after,
+                        }],
+                    ))
+                })
+            })
+            .await?;
         tx.commit().await?;
         value.map(decode).transpose()
     }
@@ -238,21 +311,64 @@ impl Attendance {
             )
             .await?;
         lock(&tx, scope, company_id, ROSTER_MANAGE).await?;
-        let rows:Vec<Value>=tx.sql().query(&format!("SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND company_id=$2 AND on_date BETWEEN $3::text::date AND $4::text::date AND {PENDING} ORDER BY id FOR UPDATE"),&[&scope.tenant(),&company_id,&from.to_string(),&to.to_string()]).await.map_err(Error::from)?.into_iter().map(|r|r.get(0)).collect();
+        let rows: Vec<Value> = tx
+            .sql()
+            .query(
+                LOCK_PENDING,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &from.to_string(),
+                    &to.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .into_iter()
+            .map(|r| r.get(0))
+            .collect();
         let count = rows.len();
         let tenant = scope.tenant();
         let actor = scope.user();
         if count > 0 {
-            tx.mutate(move|sql|Box::pin(async move{
-   let mut changes=Vec::new();
-   for old in rows {let id=old["id"].as_i64().ok_or(Error::Internal)?;
-    let new=if old["kind"]=="none"{sql.execute("DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND id=$3",&[&tenant,&company_id,&id]).await?;json!({})}else{
-     sql.query_one("UPDATE people_attendance_roster_entries e SET published_kind=kind,published_shift_template_id=shift_template_id,published_at=date_trunc('second',now()),published_by_user_id=$4,revision=CASE WHEN published_kind IS NULL THEN revision ELSE revision+1 END,updated_at=now() WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(e)",&[&tenant,&company_id,&id,&actor]).await?.get(0)
-    };changes.push(Change{kind:"people_attendance_roster_entry".into(),id,old,new});
-   }Ok(((),changes))
-  })).await?;
+            tx.mutate(move |sql| {
+                Box::pin(async move {
+                    let mut changes = Vec::new();
+                    for old in rows {
+                        let id = old["id"].as_i64().ok_or(Error::Internal)?;
+                        let new = if old["kind"] == "none" {
+                            sql.execute(DELETE_PUBLISHED, &[&tenant, &company_id, &id])
+                                .await?;
+                            json!({})
+                        } else {
+                            sql.query_one(PUBLISH_ENTRY, &[&tenant, &company_id, &id, &actor])
+                                .await?
+                                .get(0)
+                        };
+                        changes.push(Change {
+                            kind: "people_attendance_roster_entry".into(),
+                            id,
+                            old,
+                            new,
+                        });
+                    }
+                    Ok(((), changes))
+                })
+            })
+            .await?;
         }
-        action(&tx,scope,"people.attendance.roster_published",json!({"company_id":company_id,"from":from.to_string(),"to":to.to_string(),"entries":count})).await?;
+        action(
+            &tx,
+            scope,
+            "people.attendance.roster_published",
+            json!({
+            "company_id":company_id,
+            "from":from.to_string(),
+            "to":to.to_string(),
+            "entries":count}
+            ),
+        )
+        .await?;
         tx.commit().await?;
         Ok(count)
     }
@@ -269,6 +385,81 @@ impl Attendance {
             .authorize_self(scope, company_id, SELF_VIEW)
             .await?;
         let c = self.db.get().await.map_err(Error::from)?;
-        c.query("SELECT jsonb_build_object('on_date',e.on_date,'kind',e.published_kind,'shift_code',t.code,'shift_name',t.name,'start_minute',t.start_minute,'end_minute',t.end_minute,'break_minutes',t.break_minutes) FROM people_attendance_roster_entries e LEFT JOIN people_attendance_shift_definitions t ON t.id=e.published_shift_template_id AND t.tenant_id=e.tenant_id AND t.company_id=e.company_id WHERE e.tenant_id=$1 AND e.company_id=$2 AND e.employee_id=$3 AND e.on_date BETWEEN $4::text::date AND $5::text::date AND e.published_kind IS NOT NULL ORDER BY e.on_date",&[&scope.tenant(),&company_id,&me.employee_id,&from.to_string(),&to.to_string()]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect()
+        c.query(
+            PUBLISHED_SHIFTS,
+            &[
+                &scope.tenant(),
+                &company_id,
+                &me.employee_id,
+                &from.to_string(),
+                &to.to_string(),
+            ],
+        )
+        .await
+        .map_err(Error::from)?
+        .into_iter()
+        .map(|r| decode(r.get(0)))
+        .collect()
     }
 }
+
+const ROSTER_ENTRIES: &str = concat!(
+    "SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND ",
+    "company_id=$2 AND employee_id=ANY($3) AND on_date BETWEEN $4::text::date AND $5::text::date ",
+    "ORDER BY employee_id,on_date",
+);
+
+const COUNT_PENDING: &str = concat!(
+    "SELECT count(*) FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "on_date BETWEEN $3::text::date AND $4::text::date AND (kind <> coalesce(published_kind,'none') ",
+    "OR shift_template_id IS DISTINCT FROM published_shift_template_id)",
+);
+
+const ACTIVE_SHIFT: &str = concat!(
+    "SELECT 1 FROM people_attendance_shift_definitions WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "id=$3 AND status='active'",
+);
+
+const LOCK_ENTRY: &str = concat!(
+    "SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND ",
+    "company_id=$2 AND employee_id=$3 AND on_date=$4::text::date FOR UPDATE",
+);
+
+const DELETE_DRAFT: &str = concat!(
+    "DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND ",
+    "employee_id=$3 AND on_date=$4::text::date",
+);
+
+const UPSERT_DRAFT: &str = concat!(
+    "INSERT INTO people_attendance_roster_entries AS e ",
+    "(tenant_id,company_id,employee_id,on_date,kind,shift_template_id,updated_by_user_id) ",
+    "VALUES($1,$2,$3,$4::text::date,$5,$6,$7) ON CONFLICT(company_id,employee_id,on_date) DO UPDATE ",
+    "SET kind=$5,shift_template_id=$6,updated_by_user_id=$7,updated_at=now() RETURNING to_jsonb(e)",
+);
+
+const LOCK_PENDING: &str = concat!(
+    "SELECT to_jsonb(e) FROM people_attendance_roster_entries e WHERE tenant_id=$1 AND ",
+    "company_id=$2 AND on_date BETWEEN $3::text::date AND $4::text::date AND (kind <> ",
+    "coalesce(published_kind,'none') OR shift_template_id IS DISTINCT FROM ",
+    "published_shift_template_id) ORDER BY id FOR UPDATE",
+);
+
+const DELETE_PUBLISHED: &str = concat!(
+    "DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND id=$3",
+);
+
+const PUBLISH_ENTRY: &str = concat!(
+    "UPDATE people_attendance_roster_entries e SET ",
+    "published_kind=kind,published_shift_template_id=shift_template_id,published_at=date_trunc('second',now()),published_by_user_id=$4,revision=CASE ",
+    "WHEN published_kind IS NULL THEN revision ELSE revision+1 END,updated_at=now() WHERE ",
+    "tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING to_jsonb(e)",
+);
+
+const PUBLISHED_SHIFTS: &str = concat!(
+    "SELECT ",
+    "jsonb_build_object('on_date',e.on_date,'kind',e.published_kind,'shift_code',t.code,'shift_name',t.name,'start_minute',t.start_minute,'end_minute',t.end_minute,'break_minutes',t.break_minutes) ",
+    "FROM people_attendance_roster_entries e LEFT JOIN people_attendance_shift_definitions t ON ",
+    "t.id=e.published_shift_template_id AND t.tenant_id=e.tenant_id AND t.company_id=e.company_id ",
+    "WHERE e.tenant_id=$1 AND e.company_id=$2 AND e.employee_id=$3 AND e.on_date BETWEEN ",
+    "$4::text::date AND $5::text::date AND e.published_kind IS NOT NULL ORDER BY e.on_date",
+);
