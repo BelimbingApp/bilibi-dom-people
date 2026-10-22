@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 pub struct Classification {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub code: String,
     pub name: String,
     pub effective_from: String,
@@ -20,6 +22,8 @@ pub struct Classification {
 pub struct Item {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub code: String,
     pub name: String,
     pub classification_id: i64,
@@ -33,6 +37,8 @@ pub struct Item {
 pub struct Period {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub code: String,
     pub starts_on: String,
     pub ends_on: String,
@@ -43,6 +49,8 @@ pub struct Period {
 pub struct Mapping {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub source_kind: String,
     pub source_key: String,
     pub item_id: i64,
@@ -54,6 +62,8 @@ pub struct Mapping {
 pub struct AttendanceAllowanceMapping {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub attendance_rule_code: String,
     pub item_id: i64,
     pub effective_from: String,
@@ -64,6 +74,8 @@ pub struct AttendanceAllowanceMapping {
 pub struct Run {
     pub id: i64,
     pub created_by_actor_id: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
     pub period_id: i64,
     pub country: String,
     pub currency: String,
