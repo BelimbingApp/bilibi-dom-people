@@ -149,6 +149,21 @@ impl Training {
             return Err(TrainingError::EmployeeUnavailable);
         }
         let reason = input.reason.trim();
+        let previous = tx.sql().query_opt("SELECT revision, status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 AND employee_id=$4 ORDER BY revision DESC LIMIT 1", &[&scope.tenant(), &company_id, &input.session_id, &input.employee_id]).await.map_err(Error::from)?;
+        let revision = previous
+            .as_ref()
+            .map_or(0, |row| row.get::<_, i32>("revision"))
+            .checked_add(1)
+            .ok_or(TrainingError::InvalidRecord)?;
+        let already_confirmed = previous
+            .as_ref()
+            .is_some_and(|row| row.get::<_, String>("status") == "confirmed");
+        if input.status == AttendanceStatus::Confirmed && !already_confirmed {
+            let occupied: i64 = tx.sql().query_one("SELECT count(*) FROM (SELECT DISTINCT ON (employee_id) status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 ORDER BY employee_id, revision DESC) latest WHERE status='confirmed'", &[&scope.tenant(), &company_id, &input.session_id]).await.map_err(Error::from)?.get(0);
+            if occupied >= i64::from(session.get::<_, i32>("capacity")) {
+                return Err(TrainingError::AttendanceCapacityExceeded);
+            }
+        }
         let mut errors = Vec::new();
         for (field, value, maximum) in [
             ("reason", reason, 2000),
@@ -165,21 +180,6 @@ impl Training {
         }
         if !errors.is_empty() {
             return Err(TrainingError::Invalid(errors));
-        }
-        let previous = tx.sql().query_opt("SELECT revision, status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 AND employee_id=$4 ORDER BY revision DESC LIMIT 1", &[&scope.tenant(), &company_id, &input.session_id, &input.employee_id]).await.map_err(Error::from)?;
-        let revision = previous
-            .as_ref()
-            .map_or(0, |row| row.get::<_, i32>("revision"))
-            .checked_add(1)
-            .ok_or(TrainingError::InvalidRecord)?;
-        let already_confirmed = previous
-            .as_ref()
-            .is_some_and(|row| row.get::<_, String>("status") == "confirmed");
-        if input.status == AttendanceStatus::Confirmed && !already_confirmed {
-            let occupied: i64 = tx.sql().query_one("SELECT count(*) FROM (SELECT DISTINCT ON (employee_id) status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 ORDER BY employee_id, revision DESC) latest WHERE status='confirmed'", &[&scope.tenant(), &company_id, &input.session_id]).await.map_err(Error::from)?.get(0);
-            if occupied >= i64::from(session.get::<_, i32>("capacity")) {
-                return Err(TrainingError::AttendanceCapacityExceeded);
-            }
         }
         let saved = insert_fact(&mut tx, scope, company_id, actor, input, reason, revision).await?;
         tx.commit().await?;

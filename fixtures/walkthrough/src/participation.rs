@@ -179,6 +179,7 @@ pub(crate) async fn run(
     let mut invalid = first.clone();
     invalid.import_key = "pt2-invalid".into();
     invalid.reason = " ".into();
+    invalid.status = Status::Absent;
     refused(
         "blank reason",
         training.record(manager, COMPANY, &invalid).await,
