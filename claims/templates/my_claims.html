@@ -1,0 +1,32 @@
+{# Bilimbi People Claims.Web.MyClaimsLive, using the Platform's shared lists and forms. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-my-claims") %}
+{% call ui::header(subtitle=subtitle) %}My claims{% endcall %}
+{% if available %}
+{% call ui::card(id="my-claims-new", class="mt-5") %}
+{% call ui::section_heading(id="new-claim-heading", title="New claim") %}{% endcall %}
+{{ open_types }}
+{% if has_types %}
+{{ errors }}
+{% call forms::form(id="my-claims-form", event="submit_claim", class="mt-4", actions=submit) %}
+<div class="grid gap-2 sm:grid-cols-2">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
+{% if possible_duplicate %}{% call forms::input(field=duplicate_field) %}{% endcall %}{% endif %}
+{% endcall %}
+{% endif %}
+{% endcall %}
+{% call ui::card(id="my-claims-submitted", class="mt-5") %}
+{% call ui::section_heading(id="claims-heading", title="Submitted claims") %}{% endcall %}
+{{ requests }}
+{% endcall %}
+{% else %}
+{{ unavailable }}
+{% endif %}
+{{ confirmation }}
+{% endcall %}
+</div>
