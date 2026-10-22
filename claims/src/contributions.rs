@@ -43,7 +43,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
+            "base/authz", "base/menu", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy", "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
@@ -72,7 +72,12 @@ inventory::submit! {
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 }))
             },
-        }, crate::downloads::SERVICE_DEFINITION],
+        }, crate::downloads::SERVICE_DEFINITION, Service {
+            id: "people/claims.operations_pages",
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?,
+            ))))),
+        }],
     }
 }
 
@@ -117,3 +122,26 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
 // Facts for independently composed subscribers, committed with each decision.
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
+
+// Bilimbi Claims.Web.OperationsLive and its Time and expenses menu leaf.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/claims.operations", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get,
+    path: "/people/claims/operations", service: "people/claims.operations_pages", operation: "operations",
+    access: bilibi_module_registry::contributions::Access::Capability(APPROVE), framed: true,
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, "people/claims.operations_pages", provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: "people/claims.operations_pages", contracts: &[], pending: bilibi_module_registry::contributions::Pending::Every {
+        reason: "Claim operations use the authorized Claims facade; decision and reimbursement contracts are not yet reviewed.",
+    },
+}) }
+bilibi_menu::contribute!(
+    "people/claims",
+    bilibi_menu::MenuItem::page(
+        "people.time_and_expenses.claim_operations",
+        "Claim operations",
+        "/people/claims/operations"
+    )
+    .under("people.time_and_expenses")
+    .requires(bilibi_menu::Requirement::Capability(APPROVE))
+    .order(30)
+);

@@ -1,0 +1,7 @@
+{% import "forms.html" as forms %}
+{% call forms::form(id="claim-decision-form", event="review", actions=actions) %}
+{% for field in fields %}
+{% if field.kind == bilibi_ui::InputKind::Textarea %}{% call forms::textarea(field=field) %}{% endcall %}
+{% else %}{% call forms::input(field=field) %}{% endcall %}{% endif %}
+{% endfor %}
+{% endcall %}

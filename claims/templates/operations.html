@@ -1,0 +1,16 @@
+{# Bilimbi Claims.Web.OperationsLive; shared Platform UI owns presentation. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-claim-operations", variant=bilibi_ui::PageVariant::List) %}
+{% call ui::header(subtitle="Decide claims, record reimbursement, and hand approved claims off.") %}Claim operations{% endcall %}
+{% if available %}
+{{ filters }}{{ tabs }}
+{% call ui::section_heading(id="claim-queue-heading", title=heading, description=if batches { "A batch groups approved claims of one currency for finance or payroll. Export it as a CSV, then mark it reimbursed once paid." } else { "" }) %}{% endcall %}
+{{ waiting }}{{ table }}
+{% if truncated %}<p class="mt-2 text-xs text-ink-muted">Showing the first 500 claims.</p>{% endif %}
+{% else %}{{ empty }}{% endif %}
+{% endcall %}
+{{ dialog }}{{ confirmation }}
+</div>
