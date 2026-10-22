@@ -222,9 +222,11 @@ impl MyClaims {
         // Recheck before parsing write input, then the facade rechecks under its locks.
         let permitted = if let Some(company) = self.company {
             let client = self.claims.db.get().await?;
-            authorization::authorize(&**client, scope, company, SUBMIT)
-                .await
-                .is_ok()
+            match authorization::authorize(&**client, scope, company, SUBMIT).await {
+                Ok(_) => true,
+                Err(bilibi_people_workforce::WorkforceError::Failed(error)) => return Err(error),
+                Err(_) => false,
+            }
         } else {
             false
         };

@@ -51,18 +51,37 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
                 .await?;
         }
         "unlink" => {
-            users
-                .unlink_affiliation(&admin, 3)
-                .await
-                .map_err(|_| Error::Invalid)?;
+            users.unlink(&admin, 3).await.map_err(|_| Error::Invalid)?;
         }
         "relink" => {
-            let employment = client.query_one("SELECT affiliation_id FROM people_workforce_employments WHERE tenant_id=1 AND company_id=1 AND employee_number='E-002'", &[]).await?;
+            let workforce = services
+                .get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
+            let employees = workforce
+                .employees_at_any_status(&manager, 1, None)
+                .await
+                .map_err(|_| Error::Invalid)?;
+            let employee = employees
+                .require_current()
+                .map_err(|_| Error::Invalid)?
+                .into_iter()
+                .find(|e| e.employee_number == "E-002")
+                .ok_or(Error::NotFound)?;
+            let id = employee
+                .reference
+                .stable_id
+                .parse()
+                .map_err(|_| Error::Invalid)?;
+            let employment = workforce
+                .employment(&manager, 1, id)
+                .await
+                .map_err(|_| Error::Invalid)?
+                .require_current()
+                .map_err(|_| Error::Invalid)?;
             users
                 .link_affiliation(
                     &admin,
                     3,
-                    bilibi_affiliation::AffiliationId::new(employment.get("affiliation_id"))
+                    bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
                         .map_err(|_| Error::Invalid)?,
                 )
                 .await
