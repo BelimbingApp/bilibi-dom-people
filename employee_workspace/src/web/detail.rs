@@ -306,7 +306,10 @@ impl Detail {
             match self
                 .core
                 .persons
-                .read(scope, PersonId::new(employment.person_id)?)
+                .read(
+                    scope,
+                    PersonId::new(employment.person_id).map_err(|_| Error::Internal)?,
+                )
                 .await
             {
                 Ok(person) => Some(person),
@@ -337,7 +340,10 @@ impl Detail {
             match self
                 .core
                 .affiliations
-                .read(scope, AffiliationId::new(employment.affiliation_id)?)
+                .read(
+                    scope,
+                    AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Internal)?,
+                )
                 .await
             {
                 Ok(affiliation) => Some(affiliation),
