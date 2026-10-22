@@ -12,6 +12,12 @@ pub(crate) async fn run(services: &Services, admin: &Scope, manager: &Scope) -> 
         .get::<Grants>("base/authz.grants")?
         .set_direct(admin, 2, VIEW, Some(true))
         .await?;
+    // The viewer has no affiliation, so give the company chooser reach
+    // without granting permission to change Organisation assignments.
+    services
+        .get::<Grants>("base/authz.grants")?
+        .set_direct(admin, 2, "admin.company.tenant-wide.manage", Some(true))
+        .await?;
     let organisation = services.get::<Organisation>(SERVICE)?;
     // More than two pages at 25 rows; position identity order stays stable.
     for number in 1..=51 {
