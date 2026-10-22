@@ -6,14 +6,9 @@ effective-dated assignments of employees to them. This README is the owner
 contract; the Bilimbi source it ports is
 [`organisation/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/organisation/docs/README.md).
 
-This is the service slice (PO1 of the port plan): schema, facade and the
-`people/organisation.positions` port. PO2 adds the explorer page
-`/people/organisation` with the menu leaf Team › Organisation
-(`people.team.organisation`, order 20, capability `people.organisation.view`)
-and its `base/menu` and `base/ui` edges; PO3 exposes the
-three facade-only writes (`create_position`, `record_version`, `set_parent`)
-as agent operations. Until PO2 the module contributes no page and no leaf: a
-leaf whose route is not mounted would be a dead link.
+Open `/people/organisation` from **People → Team → Organisation** to see a company's positions and holders on a chosen date. Choose an active company and an **As of** date; the table shows title, parent, holders and vacancy. Pages contain 50 positions by default, with 25, 50 and 100 available. Table settings let you choose columns and compact rows.
+
+With `people.organisation.manage`, use **Assign** to choose an employee, assignment kind and dates. Use **End** beside a holder to enter their last day. Both actions ask for confirmation before changing anything. The page retains the chosen company, record and dates on the server and checks both view and manage permission again on each write event.
 
 A position is a stable identity of one company; a vacancy leaves it and its
 title in place. Substantive assignments cannot overlap for one position;
