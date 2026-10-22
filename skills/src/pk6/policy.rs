@@ -326,6 +326,14 @@ impl PolicyPage {
                 if !self.authorize(scope, CATALOG_MANAGE).await {
                     return Ok(true);
                 }
+                let active = match text(payload, "active") {
+                    "true" => true,
+                    "false" => false,
+                    _ => {
+                        self.flash.error("Check the entered values.");
+                        return Ok(false);
+                    }
+                };
                 self.load(scope, false).await?;
                 let Some(t) = self.types.iter().find(|t| Some(t.id) == id(payload, "id")) else {
                     self.flash.error("That record is not available to you.");
@@ -562,11 +570,7 @@ impl PolicyPage {
                     .slot(
                         "controls",
                         if self.can_types {
-                            button(
-                                "toggle_action_type",
-                                if t.active { "Deactivate" } else { "Reactivate" },
-                                t.id,
-                            )?
+                            type_toggle(t)?
                         } else {
                             Html::EMPTY
                         },
@@ -880,4 +884,31 @@ fn policy_result<T>(flash: &mut Flash, result: crate::Result<T>, success: &str) 
     } else {
         flash.result(result, success)
     }
+}
+
+fn type_toggle(kind: &crate::ActionType) -> Result<Html> {
+    let id = format!("toggle-action-type-{}", kind.id);
+    let mut fields = render(&hidden("id", kind.id).id(format!("{id}-id")))?;
+    fields.push(&render(
+        &field("active", "")
+            .id(format!("{id}-active"))
+            .kind(InputKind::Hidden)
+            .value((!kind.active).to_string()),
+    )?);
+    render(&Form {
+        id: &id,
+        event: "toggle_action_type",
+        change: false,
+        class: "inline",
+        body: fields,
+        actions: render(&Button {
+            button_type: "submit",
+            body: Html::text(if kind.active {
+                "Deactivate"
+            } else {
+                "Reactivate"
+            }),
+            ..Button::default()
+        })?,
+    })
 }
