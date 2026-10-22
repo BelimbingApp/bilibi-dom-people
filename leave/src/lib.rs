@@ -23,18 +23,23 @@
 //!
 //! See `README.md`.
 mod agent;
+mod carry_forward;
 mod contributions;
 mod entries;
 mod input;
 mod ledger;
 mod policies;
+mod requests;
 mod types;
+mod worker;
 
 pub use bilibi_people_workforce::{FieldError, Freshness};
+pub use carry_forward::{CarryForwardCounts, CarryForwardSkip, CarryForwardSkipped};
 pub use contributions::{
     CAPABILITIES, POLICIES_MANAGE, REQUESTS_APPROVE, REQUEST_BACKDATE_DAYS_KEY, SELF_VIEW,
     WORKING_WEEKDAYS_KEY, YEAR_START_MONTH_KEY,
 };
+pub use requests::{Decision, NewRequest, PendingRequest, Request, SelfSummary};
 
 use bilibi_company::{organisation, WriteError};
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
@@ -126,6 +131,42 @@ pub enum LeaveError {
     /// The leave year is already carried forward for that employee and type.
     #[error("That leave year is closed for the employee and type")]
     YearClosed,
+    #[error("Your account is not linked to a working employee in this company.")]
+    NotLinked,
+    #[error("Choose an active leave type and valid dates; half days and hours cover a single date, and hours apply only to hour-based types.")]
+    InvalidRequest,
+    #[error("Another request already uses that key.")]
+    RequestKeyConflict,
+    #[error("A request must fall within one leave year.")]
+    SpansLeaveYears,
+    #[error("The start date is further back than requests may start.")]
+    TooFarBack,
+    #[error("The chosen dates contain no working days.")]
+    NoWorkingDays,
+    #[error("Another pending or approved request already covers part of these dates.")]
+    OverlappingRequest,
+    #[error("The available balance does not cover this request.")]
+    InsufficientBalance,
+    #[error("Choose approve or reject and a note of at most 500 characters.")]
+    InvalidDecision,
+    #[error("Give a note when rejecting a request.")]
+    NoteRequired,
+    #[error("This request is no longer pending.")]
+    NotPending,
+    #[error("You cannot approve your own request.")]
+    SelfApproval,
+    #[error("This request can no longer be cancelled.")]
+    NotCancellable,
+    #[error("The employee is no longer available.")]
+    EmployeeUnavailable,
+    #[error("The leave type is no longer available.")]
+    LeaveTypeUnavailable,
+    #[error("The leave year has not ended yet.")]
+    YearNotEnded,
+    #[error("Invalid carry-forward")]
+    InvalidCarryForward,
+    #[error("Leave is unavailable.")]
+    Unavailable,
     /// A database or capture failure; never a refusal.
     #[error(transparent)]
     Failed(Error),
@@ -144,6 +185,7 @@ impl From<WorkforceError> for LeaveError {
         match error {
             WorkforceError::Unauthorized => Self::Unauthorized,
             WorkforceError::NotFound | WorkforceError::InvalidOptions => Self::NotFound,
+            WorkforceError::NotLinked => Self::NotLinked,
             WorkforceError::CompanyArchived => Self::CompanyArchived,
             WorkforceError::Failed(error) => Self::Failed(error),
             // Refusals of employment writes, which this module never makes.
@@ -362,6 +404,8 @@ pub struct Leave {
     mutations: Arc<MutationBoundary>,
     settings: Arc<Settings>,
     workforce: Arc<Workforce>,
+    reference_data: Arc<bilibi_people_reference_data::ReferenceData>,
+    queue: Arc<bilibi_queue::Queue>,
 }
 
 impl Leave {
