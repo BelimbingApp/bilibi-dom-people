@@ -4114,3 +4114,7 @@ mod payroll_pages;
 pub async fn payroll_pages(url: &str) -> Result<()> {
     payroll_pages::run(url).await
 }
+
+// PG1: reuse the Performance fixture, then exercise progression through facades.
+mod progression;
+pub use progression::run as progression;
