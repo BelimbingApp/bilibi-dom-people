@@ -812,6 +812,24 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    organisation::run(
+        &services,
+        &client,
+        organisation::Cast {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_user: MANAGER,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+            contractor_employment: contractor_employment.id,
+        },
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -2486,6 +2504,9 @@ async fn skills_catalog(
 
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
+
+// ---- Organisation (PO1): its own block, run from the end of `run` ----
+mod organisation;
 
 // PT1: the Training catalog proof block.
 mod training;

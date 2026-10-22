@@ -546,7 +546,7 @@ impl Training {
             return Err(TrainingError::CompanyUnavailable);
         }
         self.workforce
-            .company(scope, company_id)
+            .company_on(client, scope, company_id)
             .await?
             .require_current()
             .map_err(|not_current| TrainingError::WorkforceNotCurrent(not_current.0))?;

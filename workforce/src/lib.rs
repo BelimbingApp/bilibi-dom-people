@@ -417,7 +417,18 @@ impl Workforce {
     /// The company's native workforce identity (Bilimbi `company/2`).
     pub async fn company(&self, scope: &Scope, company_id: i64) -> Result<ReadResult<Company>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        self.company_on(&**client, scope, company_id).await
+    }
+
+    /// The company read on a caller's connection or transaction. Ports use
+    /// this to share the caller's view without renting another connection.
+    pub async fn company_on(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<ReadResult<Company>> {
+        let company = live_company(client, scope, company_id).await?;
         Ok(ReadResult::current(Company {
             reference: Reference::company(company.id),
             platform_company_id: company.id,
@@ -506,6 +517,28 @@ impl Workforce {
             .project(&**client, scope, company.id, &statuses, rows)
             .await?;
         Ok(ReadResult::current(employees))
+    }
+
+    /// The working ids among at most [`LOOKUP_LIMIT`] employee ids, on the
+    /// caller's connection or transaction. Applies the same company and
+    /// working-status rules as [`Self::employees_by_ids`], without resolving
+    /// names or contacts when a caller needs only membership.
+    pub async fn working_employee_ids_on(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+        employee_ids: &[i64],
+    ) -> Result<ReadResult<Vec<i64>>> {
+        let company = live_company(client, scope, company_id).await?;
+        let ids = lookup_ids(employee_ids)?;
+        let statuses = self
+            .company_working_statuses(client, scope, &company)
+            .await?;
+        let rows = employments::by_ids(client, scope.tenant(), company.id, &ids, &statuses).await?;
+        Ok(ReadResult::current(
+            rows.into_iter().map(|row| row.employment.id).collect(),
+        ))
     }
 
     /// One working employee of the company (Bilimbi `employee/3`); an
