@@ -770,22 +770,6 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
-<<<<<<< HEAD
-    // ---- Organisation (PO1): positions, versions and assignments ----
-    organisation::run(
-        &services,
-        &client,
-        organisation::Cast {
-            admin: &admin,
-            manager: &manager,
-            viewer: &viewer,
-            company: COMPANY,
-            other_company: OTHER_COMPANY,
-            manager_user: MANAGER,
-            manager_employment: manager_employment.id,
-            staff_employment: staff_employment.id,
-            contractor_employment: contractor_employment.id,
-=======
     // Claims (slice PC1): currencies, catalog, policies and assignments, on
     // the employments created above.
     claims::run(
@@ -802,7 +786,24 @@ pub async fn run(url: &str) -> Result<()> {
             other_company: OTHER_COMPANY,
             manager_employment: manager_employment.id,
             staff_employment: staff_employment.id,
->>>>>>> origin/main
+        },
+    )
+    .await?;
+
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    organisation::run(
+        &services,
+        &client,
+        organisation::Cast {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_user: MANAGER,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+            contractor_employment: contractor_employment.id,
         },
     )
     .await?;
