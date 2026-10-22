@@ -350,3 +350,5 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 ### Employment identity links
 
 `employment_links_on(client, scope, company, affiliation_ids)` matches at most `LOOKUP_LIMIT` positive Core affiliation ids to `(affiliation_id, employment_id)` pairs, at any employment status. The company must be live and reachable. It returns a current `ReadResult` and exposes no employment facts. Skills reminders use it with Core User's proven company accounts to find recipient employment references without requiring employment-page permissions. It grants no authority to act on those employees.
+
+`prove_self_or_direct_report` is the object-safe subject check for an Artifacts owner callback. The owner first checks its own capability and supplies the live scope Artifacts re-proved. Workforce resolves the working statuses through Settings, then checks the linked employment and subject on the callback transaction. It locks both employment rows against relinking, status and supervisor changes. The method proves identity and relationship only; it grants no application permission and exposes no employment facts.

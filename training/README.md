@@ -288,3 +288,44 @@ At freeze time, only current employees whose latest attendance is confirmed coun
 `effectiveness_summary` requires only `effectiveness.summary.view` and returns frozen snapshots newest first. It never exposes employee IDs, arbitrary cohort filters, population totals or complementary counts. **Later answers, employment changes and setting changes do not recompute frozen results.**
 
 Migration `people-training-004-evaluation` creates five tables and guards policy publication, review identity, exact answer bounds and immutable history in PostgreSQL. All writes use the company writable lock and `MutationBoundary`; every row produces an audit change. No-op maintenance returns without committing an empty mutation. The executable PT4 proof block is [training_evaluation.rs](../fixtures/walkthrough/src/training_evaluation.rs), run through the existing disposable walkthrough.
+
+## Passports and learning insights
+
+Employees can read their own training passport; managers can read passports for their current direct reports. Each passport shows the latest attendance revision for each session. Evidence stays attached to its original revision, including after a correction.
+
+For example, call `passport_employees(scope, company, PassportAudience::Team)` to populate the employee chooser. Pass a returned employment ID to `passport` with `page` and `perPage` parameters. The result contains the employee, Workforce freshness, and a `TrainingPage<PassportRow>`. Team membership and grants are checked again on every call. The manager's own employee never appears in their team.
+
+| Method | Permission under `people.training.` | Result |
+| --- | --- | --- |
+| `passport_employees`, `passport` with `SelfService` | `passport.my.view` | Own working employee and latest attendance |
+| `passport_employees`, `passport` with `Team` | `passport.team.view` | Current direct reports and their latest attendance |
+| `generate_passport` | Audience permission plus `passport.generate` | Private PDF snapshot of at most 1,000 records |
+| `read_passport` | Stored passport's audience permission | Original PDF bytes, after checking current membership |
+| `read_passport_evidence` | `records.view`, or own/team passport permission for the fact's employee | Evidence bytes from any original revision |
+| `learning_insight_periods`, `learning_insights` | `insights.view` | Frozen period choices and suppressed course counts |
+| `learning_insight_drill` | Both `insights.view` and `records.view` | Latest attendance rows for one course |
+
+Passport and insight pages use `page` and `perPage` (25, 50, 100 or 300; default 25). Out-of-range pages clamp to the last page. Passports sort by completion and fact ID descending. Course totals sort by course name and ID; drills sort by completion descending, employee ID, then fact ID descending.
+
+### PDF generation and downloads
+
+`generate_passport` creates a complete snapshot through the existing `DocumentOwner`, `PdfOwner` and `artifacts::pdf::render`. **More than 1,000 records refuses generation; it never truncates the PDF.** Self and team publication require current Workforce data. Native Workforce is always current; the read result retains freshness so a future stale self read can show its warning. Team reads refuse stale data.
+
+The owner keeps the existing persisted adapter identity. It checks the audience grant, current account link, employee status and direct-report relationship before reading or publishing. Publication also needs `passport.generate`. Its Workforce subject proof runs on the Artifacts transaction and locks the employment rows against relinking and reporting-line changes. An unlinked or relinked account cannot download a former employee's document. Retention operators can purge passport and evidence bytes; provenance remains.
+
+Four `DOWNLOADS` routes retain Bilimbi's addresses. Replace `{audience}` with `my` or `team` and `{id}` with the artifact UUID:
+
+- `/people/training/records/{audience}/document/{company_id}/{id}` downloads `passport.pdf`.
+- `/people/training/records/{audience}/evidence/{company_id}/{id}` downloads `evidence.pdf`.
+
+Every request checks its route permission and the document owner's current authorization. The shared `FileBody` supplies `private, no-store`, `nosniff` and attachment headers. Missing, expired, purged and refused documents answer 404. Base Settings controls private storage, byte limits and retention. Characters unsupported by the built-in PDF font produce a refusal; records stay available on screen.
+
+### Disclosure rules
+
+Record viewers choose inclusive ISO UTC dates with `from` and `until`, spanning at most 366 days. The end day's midnight boundary is included correctly by querying up to the following midnight. Drills use the same window and latest attendance revisions. Neither response contains evaluation scores.
+
+Readers without `records.view` must select `period`, exactly matching a frozen Effectiveness period's start date. Arbitrary dates are ignored for them; an unavailable period is refused. This prevents overlapping arbitrary windows from revealing small attendance cohorts by subtraction.
+
+The company must configure `people.training.evaluation.minimum_cohort` to at least two. Below that many distinct employees, a course exposes no employee, confirmed or absent count. When the overall cohort is large enough but either attendance count is below the minimum, **both attendance counts are withheld**. Frozen periods supply the allowed boundaries; attendance counts still use the latest attendance revisions, matching Bilimbi. Effectiveness scores remain the separate immutable summaries.
+
+The passport/records pages are the PT7 slice and the insights page is PT9. This slice supplies their facade, types, permissions and download handlers.

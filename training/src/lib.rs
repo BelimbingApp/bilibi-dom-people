@@ -36,7 +36,15 @@ mod clock;
 mod contributions;
 mod documents;
 mod download;
+mod insights;
 mod participation;
+mod passport;
+mod passport_store;
+pub use insights::{InsightDrillRow, InsightPeriod, InsightRow, INSIGHTS_VIEW};
+pub use passport::{
+    Passport, PassportAudience, PassportDirectory, PassportEvidence, PassportRow, TrainingPage,
+    PASSPORT_GENERATE, PASSPORT_LIMIT, PASSPORT_MY_VIEW, PASSPORT_TEAM_VIEW,
+};
 
 pub use participation::{
     AttendanceFact, AttendanceStatus, EmployeeOption, Evidence, NewAttendance,
@@ -84,6 +92,16 @@ pub type Result<T> = std::result::Result<T, TrainingError>;
 /// its pages show (`Training.Web.Support.message/1`).
 #[derive(Debug, thiserror::Error)]
 pub enum TrainingError {
+    #[error("This passport exceeds the document safety limit of 1,000 records. Review records on screen.")]
+    PassportTooLarge,
+    #[error("This document contains characters the available PDF renderer cannot display. The training records remain available on screen.")]
+    UnsupportedPassportText,
+    #[error("Choose valid dates in order, covering at most 366 days.")]
+    InvalidInsightRange,
+    #[error("Choose a frozen Effectiveness reporting period. Periods appear once an operator freezes them.")]
+    ReportPeriodUnavailable,
+    #[error("Save this company's evaluation settings on Effectiveness first.")]
+    ReportNotConfigured,
     #[error("Save this company's evaluation settings on Effectiveness before publication.")]
     EvaluationPolicyNotConfigured,
     #[error("Save this company's evaluation settings on Effectiveness first.")]

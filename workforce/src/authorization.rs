@@ -409,3 +409,41 @@ impl Workforce {
         })
     }
 }
+
+impl Workforce {
+    /// Object-safe subject proof for an Artifacts owner callback. The caller
+    /// authorizes its own capability and passes the live scope Artifacts just
+    /// re-proved. Uses this transaction for the account's employment and target
+    /// relation, locking both against relinking, status and supervisor changes.
+    /// Working-status configuration is resolved afresh through its owner.
+    pub async fn prove_self_or_direct_report(
+        &self,
+        client: &dyn ProofClient,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        direct_report: bool,
+    ) -> Result<()> {
+        let affiliation = scope
+            .actor()
+            .affiliation()
+            .ok_or(WorkforceError::NotLinked)?
+            .get();
+        let statuses = self
+            .working_statuses(scope, company_id)
+            .await?
+            .require_current()
+            .map_err(|_| WorkforceError::NotLinked)?;
+        let row = client.query_opt(
+            "SELECT me.id FROM people_workforce_employments me
+             JOIN people_workforce_employments subject ON subject.tenant_id=me.tenant_id AND subject.company_id=me.company_id
+             WHERE me.tenant_id=$1 AND me.company_id=$2 AND me.affiliation_id=$3
+             AND me.status=ANY($4) AND subject.status=ANY($4) AND subject.id=$5
+             AND (($6 AND subject.supervisor_employment_id=me.id AND subject.id<>me.id) OR (NOT $6 AND subject.id=me.id))
+             FOR NO KEY UPDATE OF me,subject",
+            &[&scope.tenant(),&company_id,&affiliation,&statuses,&employee_id,&direct_report],
+        ).await?;
+        row.ok_or(WorkforceError::NotLinked)?;
+        Ok(())
+    }
+}
