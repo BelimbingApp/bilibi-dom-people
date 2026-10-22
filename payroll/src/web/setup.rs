@@ -629,7 +629,7 @@ impl State {
                     .iter()
                     .find(|f| f.id == field_id)
                     .map(|f| f.label.as_str())
-                    .unwrap_or(&error.field);
+                    .unwrap_or(error.field);
                 summary.push(field_id, bilibi_ui::error_sentence(label, &error.message));
             }
             body.push(&render(&summary)?);
