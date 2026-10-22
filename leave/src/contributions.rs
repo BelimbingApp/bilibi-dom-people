@@ -46,8 +46,8 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "core/company",
-            "people/settings", "people/workforce",
+            "base/settings", "base/tenancy", "base/datetime", "base/queue", "core/company",
+            "people/settings", "people/workforce", "people/reference_data",
         ],
         migrations: &[
             ("people-leave-001-core", include_str!("../migrations/001-core.sql")),
@@ -62,10 +62,15 @@ inventory::submit! {
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
+                    reference_data: services.get(bilibi_people_reference_data::SERVICE)?,
+                    queue: services.get("base/queue.store")?,
                 });
                 crate::agent::bind(facade.clone())?;
                 Ok(facade)
             },
+        }, Service {
+            id: crate::worker::SERVICE,
+            factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::worker::CarryForwardWorker(services.get(SERVICE)?))))),
         }],
     }
 }
@@ -113,3 +118,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, REQUEST_BACKDATE_DAYS_KEY, p
     nullable: false, encrypted: false, minimum: Some(0.0), maximum: Some(366.0), validator: None,
     editor: Some(Editor { group: "People", label: "Leave request backdating", help: "How many days before today a leave request may start.", capability: Some(POLICIES_MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+// Bilimbi CarryForwardWorker: no schedule, five attempts as the operator.
+inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::worker::validate }) }
+inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }

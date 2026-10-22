@@ -289,6 +289,31 @@ impl Workforce {
         Ok(me)
     }
 
+    /// Whether this account is currently linked to a named employee, at any
+    /// employment status. Decision owners use this after their capability
+    /// check to refuse acting on their own records. Company → Employment
+    /// locks serialize relinking; the account is re-proved under that lock.
+    /// An unlinked account returns false; a missing employee is NotFound.
+    pub async fn owns_employee(
+        &self,
+        tx: &MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        capability: &str,
+    ) -> Result<bool> {
+        authorize(tx.sql(), scope, company_id, capability).await?;
+        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        let employee = crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
+            .await?
+            .ok_or(WorkforceError::NotFound)?;
+        let fresh = self.authentication.reprove(tx.sql(), scope).await?;
+        Ok(fresh
+            .actor()
+            .affiliation()
+            .is_some_and(|id| id.get() == employee.affiliation_id))
+    }
+
     /// Runs a self-service write under the actor's own employment lock
     /// (Bilimbi `with_self_employee_lock/4`): opens a mutation transaction
     /// named `action` (the caller's audited action, `people.<module>.<verb>`),

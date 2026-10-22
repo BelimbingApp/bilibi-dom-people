@@ -1043,6 +1043,25 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     ] {
         sql_refuses(client, label, sql, id).await?;
     }
+    // Own the archive-proof company: other slices still need Company 002.
+    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
+    let archive_company = match companies
+        .create_company(
+            c.admin,
+            &bilibi_company::NewCompany {
+                name: "PK2 archive proof".into(),
+                ..bilibi_company::NewCompany::default()
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?
+    {
+        bilibi_company::CreateOutcome::Created(company) => company.id,
+        bilibi_company::CreateOutcome::Refused(errors) => {
+            eprintln!("PK2 archive-proof company: {errors:?}");
+            return Err(Error::Internal);
+        }
+    };
     // The same Skills write must succeed before archiving, so this cannot
     // pass merely because an invalid subject would have been refused anyway.
     let policy_write = PolicyChanges {
@@ -1051,14 +1070,13 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     };
     saved(
         skills
-            .put_policy(c.admin, super::OTHER_COMPANY, &policy_write)
+            .put_policy(c.admin, archive_company, &policy_write)
             .await,
     )?;
-    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
     companies
         .archive_company(
             c.admin,
-            super::OTHER_COMPANY,
+            archive_company,
             Some("PK2 archived-company proof"),
         )
         .await
@@ -1069,7 +1087,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     refuses(
         "archived company refuses the next write",
         skills
-            .put_policy(c.admin, super::OTHER_COMPANY, &policy_write)
+            .put_policy(c.admin, archive_company, &policy_write)
             .await,
         |e| {
             matches!(
