@@ -984,6 +984,16 @@ impl Detail {
             Err(WorkspaceError::Workforce(WorkforceError::Failed(_))) => {
                 self.commits.put(key, CommitStatus::failure());
             }
+            Err(WorkspaceError::Stale | WorkspaceError::Workforce(WorkforceError::Stale)) => {
+                self.commits.put(
+                    key,
+                    CommitStatus::refusal(
+                        &key.replace('_', " "),
+                        value,
+                        &["has changed. Refresh it and try again"],
+                    ),
+                );
+            }
             Err(e) => {
                 let reasons = match &e {
                     WorkspaceError::Workforce(WorkforceError::Invalid(errors)) => errors

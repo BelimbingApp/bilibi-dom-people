@@ -311,7 +311,7 @@ pub(super) async fn run(
         .await?;
     prove(
         body.html.contains("data-status=\"error\"")
-            && body.html.contains("This record has changed"),
+            && body.html.contains("has changed. Refresh it and try again."),
         "a stale live commit renders a recoverable field refusal",
     )?;
 
