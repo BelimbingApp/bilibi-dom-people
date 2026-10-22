@@ -164,4 +164,14 @@ Every processed employee and type receives a `carried_forward` entry, including 
 
 The worker ID is `people-leave/carry-forward`. Its arguments are exactly `company_id` and `from_year`; unknown keys are refused. It runs with five attempts as the operator who queued it. Base Queue re-proves that identity and grant on every attempt. The worker also checks company access and active status inside its lease-fenced business transaction. Stale workforce reads retry; a revoked grant or year still open cancels. No system principal or schedule is contributed.
 
-The PL2 walkthrough block is `fixtures/walkthrough/src/leave_requests.rs`. Run the People walkthrough on a fresh disposable database, then boot the app on that database to execute its queued worker. The block covers request replay, half-day and hour slots, calendar rules, cover, concurrent submissions, decisions, cancellations, Payroll discovery, ordered carry-forward, skip replacement, caps, expiry and revoked permission.
+The PL2 walkthrough block is `fixtures/walkthrough/src/leave_requests.rs`. It covers request replay, half-day and hour slots, calendar rules, cover, concurrent submissions, decisions, cancellations, Payroll discovery, ordered carry-forward, skip replacement, caps, expiry and revoked permission.
+
+From the Platform checkout, set `DATABASE_URL` to a fresh disposable database and run:
+
+```sh
+cargo run --release -p bilibi-people-walkthrough --bin bilibi-people-walkthrough
+BILIBI_ENV=development cargo run --release -p bilibi-web -- seed-production
+BILIBI_ENV=development BIND_ADDR=127.0.0.1:32172 APP_ORIGIN=http://localhost:32172 cargo run --release -p bilibi-web -- run
+```
+
+Use a private loopback port you own. The development production seeds configure the copy as Dev; setting the environment alone does not enable HTTP on a freshly installed walkthrough database. Keep `APP_ORIGIN` equal to the address you open in Chrome. The running app executes the walkthrough's three jobs: the operator's job completes with capped carry and expiry entries, the revoked actor's job cancels as `actor_refused`, and the unfinished-year job cancels as `year_not_ended`. Stop your app and drop the disposable database when finished.
