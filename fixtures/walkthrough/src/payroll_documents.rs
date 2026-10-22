@@ -382,7 +382,12 @@ pub async fn run(url: &str) -> Result<()> {
             payroll
                 .read_document(&manager, company, &report.artifact_id)
                 .await,
-            |e| matches!(e, Refusal::NotFound | Refusal::Unauthorized),
+            |e| {
+                matches!(
+                    e,
+                    Refusal::NotFound | Refusal::Unauthorized | Refusal::CompanyArchived
+                )
+            },
         )?;
     }
     denied(
