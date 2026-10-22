@@ -247,7 +247,10 @@ fn hidden(name: &str, value: i64) -> Field {
         .value(value.to_string())
 }
 fn row(id: &str, key: i64) -> FlexRow {
-    FlexRow::new(key.to_string()).id(format!("{id}-{key}"))
+    FlexRow {
+        id: format!("{id}-{key}"),
+        ..FlexRow::new(key.to_string())
+    }
 }
 fn text<'a>(v: &'a Value, key: &str) -> &'a str {
     v.get(key).and_then(Value::as_str).unwrap_or_default()
@@ -357,8 +360,7 @@ fn confirm(
     if !pending {
         return Ok(Html::EMPTY);
     }
-    // The shared dialog owns the installation banner when rendered by the host.
-    // Keep the owner's resolved banner beside the review as well.
+    // Keep the resolved installation identity alongside the shared review.
     let mut html = company.banner.clone();
     html.push(&render(&ConfirmDialog {
         id: "skills-confirm",

@@ -84,7 +84,7 @@ inventory::submit! {
         )],
         services: &[Service {
             id: crate::pk6::PAGES,
-            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
         }, Service {
             id: SERVICE,
             factory: |services| {

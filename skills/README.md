@@ -310,3 +310,13 @@ A refused recipient becomes `failed` with `recipient not found`. Other notificat
 ### Run the reminder proof
 
 On a fresh disposable database, run the default People walkthrough, then `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skill-reminders`. The PK7 block creates records through the public owners. It checks all four due rules, exact recipients, denied senders, deduplication, concurrent issuers, failure recovery, interrupted pending claims, the 15-minute grace period, ISO week-year boundaries, account unlinking, direct-deny audiences and revoked-grant Queue execution. Fault injection uses temporary notification triggers and ages only an interrupted fixture claim. It also checks immutable sent rows and shared notification/ledger audit traces. The existing Notifications page and bell show the recipient messages; Skills policy controls belong to PK6.
+
+## Development actions and Skills policy pages (PK6)
+
+Use **Development actions** at `/people/skills/actions` to propose work from an assessment gap or a manual gap. Choose its owner, coordinator and provider, then enter the objective, intervention, expected evidence and dates. Another person approves it. The owner can start or hold the work, record completion evidence and set a reassessment date. A finalized reassessment supplies the result. History shows the append-only events.
+
+The Open and Closed tabs keep their selection in the address. Accounts with action-update permission can also switch between In reach and Owned. Every list uses the shared FlexTable column picker and compact rows. The source lists have no sorting or pagination; the action list remains bounded to 300 records.
+
+Use **Skills policy** at `/people/skills/policy` to edit the seven assessment and reminder settings. The limits shown on each field match its setting definition. Catalog managers can add, deactivate and reactivate action types. Requesters and reassessment performers see their pending requests; performers with assessment-submit permission can record a reassessment. Sending and retrying reminders require reminder-send permission. The page shows the due work and the latest 300 delivery ledger rows, including failures, through `reminder_ledger`.
+
+All writes recheck the page permission and the action's own permission when the event runs. The Skills facade checks again inside its transaction. Proposal, approval, progress, type activation changes, reassessment decisions and reminder runs wait for a shared ConfirmDialog. Its company, target and entered values stay on the server; confirmation payloads cannot replace them. Switching company dismisses the pending action. A revoked grant, archived company or unlinked owner refuses the next write without ending the live page.
