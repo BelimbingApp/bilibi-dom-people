@@ -619,6 +619,40 @@ pub(crate) async fn run(
             .await,
         ClaimsError::NothingToReimburse,
     )?;
+    // Force the outbox insert to fail after the status/history writes. The
+    // enclosing MutationBoundary must roll all of them back together.
+    client.batch_execute("CREATE FUNCTION fixture_pc2_refuse_event() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name='people/claims.request_reimbursed' THEN RAISE EXCEPTION 'PC2 outbox rollback proof'; END IF; RETURN NEW; END $$; CREATE TRIGGER fixture_pc2_refuse_event BEFORE INSERT ON base_events FOR EACH ROW EXECUTE FUNCTION fixture_pc2_refuse_event()").await?;
+    ensure(
+        "outbox failure refuses payment",
+        matches!(
+            claims
+                .reimburse_request(manager, COMPANY, euro.id, &Reimbursement::default())
+                .await,
+            Err(ClaimsError::Failed(_))
+        ),
+    )?;
+    client.batch_execute("DROP TRIGGER fixture_pc2_refuse_event ON base_events; DROP FUNCTION fixture_pc2_refuse_event()").await?;
+    let euro_after = saved(
+        "read claim after outbox rollback",
+        claims
+            .employee_requests(manager, COMPANY, employees.1)
+            .await,
+    )?
+    .into_iter()
+    .find(|r| r.id == euro.id)
+    .ok_or(Error::Internal)?;
+    ensure(
+        "outbox failure rolls back payment and history",
+        euro_after.status == "approved"
+            && saved(
+                "history after outbox rollback",
+                claims
+                    .request_events(manager, COMPANY, employees.1, euro.id)
+                    .await,
+            )?
+            .len()
+                == 2,
+    )?;
     saved(
         "individual EUR reimbursement",
         claims
@@ -778,5 +812,15 @@ pub(crate) async fn run(
     for sql in ["UPDATE people_claim_request_events SET reason='changed' WHERE request_id=$1", "DELETE FROM people_claim_request_events WHERE request_id=$1", "UPDATE people_claim_handoff_batches SET total_amount=1 WHERE id=(SELECT handoff_batch_id FROM people_claim_submissions WHERE id=$1)", "UPDATE people_claim_submissions SET handoff_batch_id=NULL WHERE id=$1"] {
         ensure("database preserves history and hand off",client.execute(sql,&[&first.id]).await.is_err())?;
     }
+    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
+    companies
+        .archive_company(admin, 2, Some("PC2 disposable archived-company refusal"))
+        .await
+        .map_err(|_| Error::Internal)?;
+    refuses(
+        "archived company rejects writes",
+        claims.create_handoff_batch(manager, 2, "USD").await,
+        ClaimsError::CompanyArchived,
+    )?;
     Ok(())
 }

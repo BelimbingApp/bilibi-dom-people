@@ -61,7 +61,7 @@ inventory::submit! {
                 include_str!("../migrations/003-workflow-history.sql"),
             ),
         ],
-        services: &[crate::downloads::SERVICE_DEFINITION, Service {
+        services: &[Service {
             id: SERVICE,
             factory: |services| {
                 Ok(Arc::new(Claims {
@@ -72,7 +72,7 @@ inventory::submit! {
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 }))
             },
-        }],
+        }, crate::downloads::SERVICE_DEFINITION],
     }
 }
 
