@@ -88,7 +88,7 @@ fn show<T: std::fmt::Debug>(
 }
 
 /// A record saved by a step the walkthrough cannot go on without.
-fn saved<T>(record: Option<T>) -> Result<T> {
+pub(crate) fn saved<T>(record: Option<T>) -> Result<T> {
     record.ok_or(Error::Internal)
 }
 
@@ -754,6 +754,22 @@ pub async fn run(url: &str) -> Result<()> {
         refused(&client, step, sql, manager_employment.id).await;
     }
 
+    // Leave (slice PL1): its own block, in `leave.rs`.
+    leave::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        MANAGER,
+        COMPANY,
+        OTHER_COMPANY,
+        manager_employment.id,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
+
     // Claims (slice PC1): currencies, catalog, policies and assignments, on
     // the employments created above.
     claims::run(
@@ -784,3 +800,5 @@ pub async fn run(url: &str) -> Result<()> {
 // Slice blocks, each its own module, added at the end so parallel slices
 // do not clash on merge.
 mod claims;
+// Leave (slice PL1).
+mod leave;

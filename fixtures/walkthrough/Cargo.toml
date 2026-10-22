@@ -30,4 +30,6 @@ tokio-postgres.workspace = true
 
 # Claims (slice PC1).
 bilibi-people-claims = { path = "../../claims" }
+# Leave (slice PL1).
+bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
