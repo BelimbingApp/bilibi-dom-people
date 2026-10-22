@@ -29,7 +29,7 @@ cross-tenant records are indistinguishable (`NotFound`).
 | `rules` | none | The month the company's leave year begins (`Rules`; `leave_year`, `year_range`) |
 | `put_rules` | `people.leave.policies.manage` | Sets that month; `YearInUse` once the ledger has entries, `InvalidRules` outside 1 to 12 |
 | `request_rules` | none | The working weekdays and backdating limit (`RequestRules`) |
-| `put_request_rules` | `people.leave.policies.manage` | Saves them: one or more ISO weekdays 1 to 7 (stored distinct, sorted) and 0 to 366 days, else `InvalidRules` |
+| `put_request_rules` | `people.leave.policies.manage` | Saves them: one or more ISO weekdays 1 to 7 (stored distinct, sorted) and 0 to 366 days, else `InvalidRequestRules` |
 | `list_types` | none | The company's types, active first then by name (`LeaveType`) |
 | `create_type` | `people.leave.policies.manage` | Adds an active type (`NewLeaveType`); refused values are `Invalid` field errors in Bilimbi's words |
 | `set_type_status` | `people.leave.policies.manage` | `active` or `archived`, else `InvalidStatus` |

@@ -92,9 +92,12 @@ pub enum LeaveError {
     /// The leave year start month cannot change once the ledger has entries.
     #[error("The leave year cannot change after balances have been recorded.")]
     YearInUse,
-    /// A month outside 1 to 12, no working weekday, or backdating outside 0 to 366.
+    /// A month outside 1 to 12.
     #[error("Choose a month for the leave year.")]
     InvalidRules,
+    /// No working weekday, a weekday outside 1 to 7, or backdating outside 0 to 366.
+    #[error("Choose at least one working weekday and a backdating limit of 0 to 366 days.")]
+    InvalidRequestRules,
     /// A type status other than `active` or `archived`.
     #[error("The leave type could not be updated.")]
     InvalidStatus,
@@ -417,7 +420,7 @@ impl Leave {
 
     /// Saves the request rules (`people.leave.policies.manage`): one or more
     /// ISO weekdays 1 to 7, stored distinct and sorted, and a backdating
-    /// limit of 0 to 366 days; anything else is `InvalidRules`.
+    /// limit of 0 to 366 days; anything else is `InvalidRequestRules`.
     pub async fn put_request_rules(
         &self,
         scope: &Scope,
@@ -431,7 +434,7 @@ impl Leave {
                 .all(|day| (1..=7).contains(day))
             || !(0..=366).contains(&rules.backdate_days)
         {
-            return Err(LeaveError::InvalidRules);
+            return Err(LeaveError::InvalidRequestRules);
         }
         let mut weekdays = rules.working_weekdays.clone();
         weekdays.sort_unstable();
@@ -1043,6 +1046,8 @@ fn balance(
         .into_iter()
         .flat_map(|sums| sums.values())
         .fold(zero, |total, value| total + value);
+    // Scale 2 even when no request is pending (`0.00`, not `0`).
+    let pending = pending + zero;
     Balance {
         leave_type,
         entitlement: sum(&["entitlement"]),
