@@ -5,7 +5,7 @@ use bilibi_module_registry::Services;
 use bilibi_people_leave::{
     Leave, NewEntry, NewLeaveType, NewRequest, POLICIES_MANAGE, REQUESTS_APPROVE, SELF_VIEW,
 };
-use bilibi_people_workforce::{NewEmployment, Workforce, EMPLOYMENT_MANAGE};
+use bilibi_people_workforce::{NewEmployment, Workforce};
 use bilibi_tenancy::Authentication;
 use jiff::ToSpan;
 use rust_decimal::Decimal;
@@ -34,12 +34,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
     let admin = auth
         .authenticate(&**client, 1, 4, "walkthrough".into())
         .await?;
-    for key in [
-        EMPLOYMENT_MANAGE,
-        SELF_VIEW,
-        REQUESTS_APPROVE,
-        POLICIES_MANAGE,
-    ] {
+    for key in [SELF_VIEW, REQUESTS_APPROVE, POLICIES_MANAGE] {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
     grants.set_direct(&admin, 3, SELF_VIEW, Some(true)).await?;
@@ -50,7 +45,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let employee = workforce
         .create_employment(
-            &manager,
+            &admin,
             1,
             &NewEmployment::new(1, 1, "PL3-001", "employment", "active"),
         )
