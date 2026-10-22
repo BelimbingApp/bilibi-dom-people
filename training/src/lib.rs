@@ -12,24 +12,32 @@
 //! impersonator recorded on every fact; a caller cannot supply them.
 //!
 //! Capacity is the most learners an event or session takes; enrolment and
-//! attendance belong to Participation (PT2). Session times are entered as
+//! attendance are recorded as append-only revisions with import-key replay. Session times are entered as
 //! local wall clocks in an explicit IANA zone and stored as UTC instants;
 //! a wall clock inside a DST gap or overlap is refused, never guessed
 //! (`clock.rs`). The calendar answers sessions overlapping a half-open UTC
 //! window of at most 366 days, at most 500 rows, and the company's own zone
 //! (Base DateTime's `localization.timezone`) bounds its days.
 //!
-//! This slice (PT1 of the port plan) is the catalog facade; the Courses and
+//! PT1 and PT2 provide the catalog, participation and evidence operations. The Courses and
 //! Sessions & calendar pages (PT6) and the menu leaves land with them.
 //! See `README.md`.
 mod catalog;
 mod clock;
 mod contributions;
+mod documents;
+mod download;
+mod participation;
+
+pub use participation::{
+    AttendanceFact, AttendanceStatus, EmployeeOption, Evidence, NewAttendance,
+};
 
 pub use bilibi_people_workforce::{FieldError, Freshness};
 pub use clock::{day_start, local_instant};
 pub use contributions::{
-    CAPABILITIES, COURSES_MANAGE, COURSES_VIEW, SESSIONS_MANAGE, SESSIONS_VIEW,
+    CAPABILITIES, COURSES_MANAGE, COURSES_VIEW, EVIDENCE_MANAGE, RECORDS_MANAGE, RECORDS_VIEW,
+    RETENTION_MANAGE, SESSIONS_MANAGE, SESSIONS_VIEW,
 };
 
 use bilibi_company::{organisation, WriteError};
@@ -79,6 +87,24 @@ pub enum TrainingError {
     /// A session capacity above its event's.
     #[error("Session capacity cannot exceed event capacity.")]
     CapacityExceeded,
+    #[error("Choose a session in this company.")]
+    SessionUnavailable,
+    #[error("Choose a current employee in this company.")]
+    EmployeeUnavailable,
+    #[error(
+        "This record key already belongs to different attendance. Use a new key for a correction."
+    )]
+    ImportConflict,
+    #[error("Supply a session, employee, record key and reason.")]
+    InvalidRecord,
+    #[error("This session has no remaining attendance places. Correct an existing record or ask a session operator to review capacity.")]
+    AttendanceCapacityExceeded,
+    #[error("Choose a PDF evidence document.")]
+    InvalidPdf,
+    #[error("Ask an operator to configure private document storage in Operator Settings.")]
+    ArtifactPolicy,
+    #[error("That could not be completed. Refresh and try again.")]
+    ArtifactFailed(bilibi_artifacts::Error),
     /// A local wall clock inside a DST overlap.
     #[error("That local time occurs twice. Choose a time outside the clock overlap.")]
     AmbiguousTime,
@@ -247,6 +273,7 @@ pub struct Training {
     mutations: Arc<MutationBoundary>,
     settings: Arc<Settings>,
     workforce: Arc<Workforce>,
+    artifacts: Arc<bilibi_artifacts::Artifacts>,
 }
 
 impl Training {

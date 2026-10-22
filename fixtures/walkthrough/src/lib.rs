@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PT2: the appended participation/evidence proof block.
+    participation::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -3702,3 +3713,6 @@ mod assessments;
 
 // PT1: the Training catalog proof block.
 mod training;
+
+// PT2: attendance revisions, capacity, private evidence and purge recovery.
+mod participation;
