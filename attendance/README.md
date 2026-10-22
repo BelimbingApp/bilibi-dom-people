@@ -96,7 +96,7 @@ The first binary creates the employments. The second proves attendance: the rule
 
 ## Dependencies
 
-`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/datetime`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (Core account identity is proven through Workforce, so attendance needs no direct `core/user` edge).
+`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/datetime`, `base/menu`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `base/ui`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (Core account identity is proven through Workforce, so attendance needs no direct `core/user` edge).
 
 ## Roster planning and publication
 
