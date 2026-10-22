@@ -672,6 +672,68 @@ pub async fn run(url: &str) -> Result<()> {
             .release_review(&admin, 1, corrected_review.id)
             .await,
     )?;
+    let retained_cutoff = saved(
+        performance
+            .correct_review(
+                &manager,
+                1,
+                corrected_review.id,
+                &ReviewCorrection {
+                    description_id: description.id,
+                    cutoff_at: None,
+                    outcome: "Further correction".into(),
+                    rationale: "Same cutoff".into(),
+                    change_reason: "Clarified wording".into(),
+                    observation_ids: vec![correction.id],
+                    target_ids: vec![target.id],
+                },
+            )
+            .await,
+    )?;
+    prove(
+        retained_cutoff.cutoff_at == corrected_review.cutoff_at && retained_cutoff.version == 3,
+        "correction without a cutoff retains the preceding cutoff",
+    )?;
+    let authored = saved(
+        performance
+            .reviews(
+                &manager,
+                1,
+                PageOptions {
+                    page: i64::MAX,
+                    page_size: 10,
+                },
+            )
+            .await,
+    )?;
+    prove(
+        authored.total == 4 && authored.page == 1,
+        "authored review history and page clamping",
+    )?;
+    refused(
+        performance
+            .reviews(
+                &manager,
+                1,
+                PageOptions {
+                    page: 0,
+                    page_size: 10,
+                },
+            )
+            .await,
+        |e| matches!(e, PerformanceError::InvalidOptions),
+        "invalid review pagination",
+    )?;
+    refused(
+        performance.review(&admin, 2, review.id).await,
+        |e| matches!(e, PerformanceError::NotFound),
+        "cross-company review identity",
+    )?;
+    refused(
+        performance.review(&viewer, 1, review.id).await,
+        |e| matches!(e, PerformanceError::Unauthorized),
+        "ungranted review reader",
+    )?;
     let original = saved(performance.review(&manager, 1, review.id).await)?;
     prove(
         original.review.rationale == "Original rationale"
