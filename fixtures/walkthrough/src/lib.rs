@@ -4027,3 +4027,9 @@ pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
 // PM1: separate binary so the performance proof starts from its own empty DB.
 mod performance;
 pub use performance::run as performance;
+
+// PA5: standalone browser fixture for rosters and attendance approvals.
+mod attendance_pages;
+pub async fn attendance_pages(url: &str) -> Result<()> {
+    attendance_pages::run(url).await
+}

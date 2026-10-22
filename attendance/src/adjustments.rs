@@ -363,7 +363,7 @@ impl Attendance {
         if status == "rejected" && note.is_none() {
             return Err(Refusal::NoteRequired);
         }
-        if note.as_ref().is_some_and(|s| s.len() > 500) {
+        if note.as_ref().is_some_and(|s| s.chars().count() > 500) {
             return Err(Refusal::NoteTooLong);
         }
         let mut c = self.db.get().await.map_err(Error::from)?;
