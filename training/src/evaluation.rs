@@ -137,8 +137,13 @@ fn criteria_valid(criteria: &[EvaluationCriterion]) -> bool {
             == criteria.len()
 }
 fn date(s: &str) -> Result<Date> {
-    s.parse::<Date>()
-        .map_err(|_| TrainingError::InvalidEvaluationPeriod)
+    let parsed = s
+        .parse::<Date>()
+        .map_err(|_| TrainingError::InvalidEvaluationPeriod)?;
+    if parsed.to_string() != s {
+        return Err(TrainingError::InvalidEvaluationPeriod);
+    }
+    Ok(parsed)
 }
 fn shift_days(day: Date, days: i32) -> Result<Date> {
     day.checked_add(days.days())
@@ -270,7 +275,9 @@ impl Training {
         let mut client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, EVALUATION_POLICY_MANAGE)
             .await?;
-        if date(&new.effective_to)? < date(&new.effective_from)? {
+        let effective_from = date(&new.effective_from)?;
+        let effective_to = date(&new.effective_to)?;
+        if effective_to < effective_from {
             return Err(TrainingError::InvalidEvaluationPeriod);
         }
         if !reason_valid(&new.reason) {
@@ -308,10 +315,10 @@ impl Training {
             &[],
         )
         .await?;
-        if policies
-            .iter()
-            .any(|p| p.effective_from <= new.effective_to && p.effective_to >= new.effective_from)
-        {
+        if policies.iter().any(|p| {
+            date(&p.effective_from).is_ok_and(|d| d <= effective_to)
+                && date(&p.effective_to).is_ok_and(|d| d >= effective_from)
+        }) {
             return Err(TrainingError::EvaluationPolicyOverlap);
         }
         let version = policies.first().map_or(1, |p| p.version + 1);

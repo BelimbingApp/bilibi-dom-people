@@ -745,6 +745,69 @@ pub(crate) async fn run(
             .await,
         TrainingError::EmployeeUnavailable,
     )?;
+    // Current reporting lines and competing answers are rechecked under the company lock.
+    let report = workforce
+        .employment(manager, COMPANY, second.id)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    let report = workforce
+        .update_employment(
+            manager,
+            COMPANY,
+            second.id,
+            &EmploymentChange {
+                supervisor_employment_id: Some(None),
+                ..EmploymentChange::at(report.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let second_delayed = tasks
+        .iter()
+        .find(|t| t.employee_id == second.id && t.review.checkpoint_days == 7)
+        .ok_or(Error::Internal)?
+        .review
+        .id;
+    refused(
+        "changed reporting line",
+        training
+            .answer_evaluation(
+                manager,
+                COMPANY,
+                second_delayed,
+                &json!({"outcome":null,"uncertain":null}),
+                "Unknown",
+            )
+            .await,
+        TrainingError::OutsideDirectTeam,
+    )?;
+    workforce
+        .update_employment(
+            manager,
+            COMPANY,
+            second.id,
+            &EmploymentChange {
+                supervisor_employment_id: Some(Some(employees.0)),
+                ..EmploymentChange::at(report.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let race_values = json!({"outcome":null,"uncertain":null});
+    let (a, b) = tokio::join!(
+        training.answer_evaluation(manager, COMPANY, second_delayed, &race_values, "Unknown"),
+        training.answer_evaluation(manager, COMPANY, second_delayed, &race_values, "Unknown")
+    );
+    proof(
+        "competing answers commit once",
+        matches!(
+            (&a, &b),
+            (Ok(_), Err(TrainingError::AlreadyAnswered))
+                | (Err(TrainingError::AlreadyAnswered), Ok(_))
+        ),
+    )?;
     // Leavers remain attendance history, but never get new review obligations.
     let current = workforce
         .employment(manager, COMPANY, second.id)
