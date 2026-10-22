@@ -311,7 +311,7 @@ impl Explorer {
         Ok(())
     }
     async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<()> {
-        let event = payload.get("event").and_then(Value::as_str).unwrap_or("");
+        let event = payload.get("type").and_then(Value::as_str).unwrap_or("");
         if matches!(
             event,
             "assign" | "end_assignment" | "review_assignment" | "confirm_assignment"
