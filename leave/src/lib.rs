@@ -22,7 +22,9 @@
 //! refusal atoms, never a fatal transport error.
 //!
 //! See `README.md`.
+mod agent;
 mod contributions;
+mod entries;
 mod input;
 mod ledger;
 mod policies;
@@ -758,71 +760,18 @@ impl Leave {
     ) -> Result<LedgerEntry> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        let company = self.current_company(scope, company_id).await?;
-        self.current_employee(scope, company_id, employee_id)
-            .await?;
-        let (quantity, note) = validate_entry(new)?;
         let mut tx = self
             .begin(&mut client, scope, company_id, "people.leave.record_entry")
             .await?;
-        let tenant = scope.tenant();
-        let leave_type = types::lock_active(tx.sql(), tenant, company_id, new.leave_type_id)
-            .await?
-            .ok_or(LeaveError::NotFound)?;
-        let rules = self.read_rules(tx.sql(), scope, &company).await?;
-        let leave_year = rules.leave_year(new.occurred_on);
-        if let Some(existing) =
-            ledger::find(tx.sql(), tenant, company_id, &new.source, &new.entry_key).await?
-        {
-            let same = existing.employee_id == employee_id
-                && existing.leave_type_id == leave_type.id
-                && existing.entry_type == new.entry_type
-                && existing.quantity == quantity
-                && existing.occurred_on == new.occurred_on
-                && existing.note == note;
+        let entry = self
+            .record_entry_in(&mut tx, scope, company_id, employee_id, new)
+            .await?;
+        if entry.created {
+            tx.commit().await?;
+        } else {
             tx.rollback().await?;
-            return if same {
-                Ok(existing)
-            } else {
-                Err(LeaveError::EntryKeyConflict)
-            };
         }
-        if ledger::closed(
-            tx.sql(),
-            tenant,
-            company_id,
-            employee_id,
-            leave_type.id,
-            leave_year,
-        )
-        .await?
-        {
-            return Err(LeaveError::YearClosed);
-        }
-        let mut inserted = ledger::insert(
-            &mut tx,
-            tenant,
-            company_id,
-            vec![ledger::NewRow {
-                employee_id,
-                leave_type_id: leave_type.id,
-                leave_year,
-                entry_type: new.entry_type.clone(),
-                quantity,
-                unit: leave_type.unit,
-                policy_id: None,
-                policy_version: None,
-                occurred_on: new.occurred_on,
-                source: new.source.clone(),
-                entry_key: new.entry_key.clone(),
-                actor_user_id: scope.actor().user(),
-                note,
-            }],
-        )
-        .await?;
-        let entry = inserted.pop().ok_or(LeaveError::EntryKeyConflict)?;
-        tx.commit().await?;
-        Ok(entry)
+        Ok(entry.entry)
     }
 
     /// Per-type totals of one working employee and leave year, derived from
@@ -897,6 +846,7 @@ impl Leave {
             .mutations
             .begin(client, scope.mutation_context(action))
             .await?;
+        entries::serialize(tx.sql(), scope, company_id).await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
         Ok(tx)
     }

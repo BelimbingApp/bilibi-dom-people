@@ -43,6 +43,9 @@ rust_decimal.workspace = true
 # Skills (PK1): the catalog proof block at the end of lib.rs.
 bilibi-people-skills = { path = "../../skills" }
 
+# Reviewed Leave entry operation (slice PL5).
+bilibi-agent-api.workspace = true
+
 # Attendance (PA1).
 bilibi-people-attendance = { path = "../../attendance" }
 
