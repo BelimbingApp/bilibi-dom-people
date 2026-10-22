@@ -178,7 +178,14 @@ impl Table {
         t.suggestions = self.columns.flex_suggestions();
         t.add_query = &self.columns.add_query;
         if none {
-            t.empty = Some(TableEmpty::State(EmptyState::missing(empty, "")));
+            t.empty = Some(TableEmpty::State(EmptyState::missing(empty, "").id(
+                match self.columns.id.as_str() {
+                    "actions" => "actions-empty",
+                    "action-types" => "action-types-none",
+                    "reminders-due" => "reminders-none",
+                    _ => "skills-table-empty",
+                },
+            )));
         }
         render(&t)
     }
@@ -209,13 +216,25 @@ fn button(event: &str, label: &str, id: i64) -> Result<Html> {
         ..Button::default()
     })
 }
-fn form(id: &str, event: &str, fields: Vec<Field>, label: &str) -> Result<Html> {
-    let body = fields
-        .iter()
-        .map(render)
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .collect();
+fn form(id: &str, event: &str, mut fields: Vec<Field>, label: &str) -> Result<Html> {
+    let mut summary = bilibi_ui::ErrorSummary::new(format!("{id}-errors"));
+    for f in &mut fields {
+        if f.kind.is_hidden() {
+            f.id = format!("{id}-{}", f.name);
+        }
+        for error in &f.errors {
+            summary.push(&f.id, error);
+        }
+    }
+    let mut body = render(&summary)?;
+    body.push(
+        &fields
+            .iter()
+            .map(render)
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .collect(),
+    );
     render(&Form {
         id,
         event,

@@ -494,17 +494,25 @@ impl PolicyPage {
             .iter()
             .zip(values)
             .map(|((key, label, min, max), value)| {
-                field(&format!("policy[{key}]"), label)
+                let text = self
+                    .policy_draft
+                    .get(*key)
+                    .cloned()
+                    .unwrap_or_else(|| value.to_string());
+                let mut f = field(&format!("policy[{key}]"), label)
                     .kind(InputKind::Number)
                     .attr("min", &min.to_string())
                     .attr("max", &max.to_string())
                     .required()
-                    .value(
-                        self.policy_draft
-                            .get(*key)
-                            .cloned()
-                            .unwrap_or_else(|| value.to_string()),
-                    )
+                    .value(&text);
+                if self.policy_draft.contains_key(*key)
+                    && !text
+                        .parse::<i64>()
+                        .is_ok_and(|v| (*min..=*max).contains(&v))
+                {
+                    f = f.error(format!("Enter a whole number from {min} to {max}."));
+                }
+                f
             })
             .collect();
         section(
@@ -727,10 +735,12 @@ impl PolicyPage {
                 .id("skills-policy-unavailable"),
             )?;
         } else {
-            body.push(&self.policy_form()?);
-            body.push(&self.types()?);
-            body.push(&self.requests()?);
-            body.push(&self.reminders()?);
+            body = render(&PolicyLayout {
+                policy: self.policy_form()?,
+                types: self.types()?,
+                requests: self.requests()?,
+                reminders: self.reminders()?,
+            })?;
         }
         let confirmation = if let Some(p) = &self.pending {
             confirm(
@@ -830,4 +840,13 @@ impl LiveState<Scope, Error> for PolicyPage {
             })
         })
     }
+}
+
+#[derive(askama::Template)]
+#[template(path = "pk6_policy_layout.html")]
+struct PolicyLayout {
+    policy: Html,
+    types: Html,
+    requests: Html,
+    reminders: Html,
 }

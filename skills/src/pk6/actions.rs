@@ -78,6 +78,7 @@ pub(super) struct Actions {
     available: bool,
     flash: Flash,
     draft: HashMap<String, String>,
+    errors: Vec<crate::FieldError>,
     request_key: String,
 }
 impl Actions {
@@ -135,6 +136,7 @@ impl Actions {
             available: false,
             flash: Flash::default(),
             draft: HashMap::new(),
+            errors: vec![],
             request_key: key(),
         })
     }
@@ -309,6 +311,12 @@ impl Actions {
                                 .await
                         }
                     };
+                    if matches!(p.command, Command::Propose(_)) {
+                        self.errors = match &result {
+                            Err(SkillsError::Invalid(errors)) => errors.clone(),
+                            _ => vec![],
+                        };
+                    }
                     if self.flash.result(result, p.command.success())
                         && matches!(p.command, Command::Propose(_))
                     {
@@ -577,6 +585,12 @@ impl Actions {
             if let Some(v) = self.draft.get(key) {
                 f.value.clone_from(v);
             }
+            f.errors = self
+                .errors
+                .iter()
+                .filter(|e| e.field == key)
+                .map(|e| e.message.clone())
+                .collect();
         }
         section(
             "action-proposal",
