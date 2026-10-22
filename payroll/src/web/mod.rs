@@ -180,6 +180,7 @@ struct State {
     drafts: HashMap<String, Draft>,
     tables: HashMap<&'static str, Table>,
     today: Date,
+    focus_pending: bool,
     display: bilibi_datetime::DisplayContext,
 }
 impl State {
@@ -274,6 +275,7 @@ impl State {
             flash: Flash::default(),
             drafts: HashMap::new(),
             tables,
+            focus_pending: operation == "mappings",
             display: bilibi_datetime::DisplayContext::anonymous(),
             today: jiff::Timestamp::now()
                 .to_zoned(jiff::tz::TimeZone::UTC)
@@ -593,7 +595,17 @@ impl LiveState<Scope, Error> for State {
                 LiveInput::Refresh => {}
             }
             self.load(request.scope).await?;
+            // The first live patch restores scroll after native autofocus.
+            // A same-document fragment navigation runs after that patch and
+            // preserves company queries and framed-page state without JS here.
+            let redirect = if self.focus_pending && self.setup.is_some() {
+                self.focus_pending = false;
+                Some("#payroll-mappings-section".into())
+            } else {
+                None
+            };
             Ok(LiveBody {
+                redirect,
                 html: self.render()?,
                 query: self
                     .company_id
