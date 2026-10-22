@@ -1,0 +1,12 @@
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+{% call forms::form(id="learning-entry-form",event="save_entry",actions=actions) %}
+{% call feedback::error_summary(summary=summary) %}{% endcall %}
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{% for (title, fields) in items %}
+{% call forms::section(title=title) %}
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{% endcall %}
+{% endfor %}
+{% if is_plan %}{{ add_item }}{% endif %}
+{% endcall %}

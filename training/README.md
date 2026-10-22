@@ -13,8 +13,7 @@ This is the catalog slice (PT1 of the port plan): migration 001, the
 four catalog capabilities. PT2 adds participation and evidence, PT3
 requests, plans and budgets, PT4 evaluation and effectiveness, PT5
 passports and insights; the Courses and Sessions & calendar pages, with
-their menu leaves, land in PT6. Until a page lands the sidebar shows no
-Training entry, and an administrator grants the catalog capabilities.
+their menu leaves, land in PT6. The Learning pages add My learning, Learning requests & reviews and Learning policy and budgets to the sidebar. An administrator grants Training capabilities.
 
 ## Public API
 
@@ -134,7 +133,7 @@ role: an administrator grants them.
 | `people.training.sessions.view` | Reads events and the calendar (`/people/training/sessions`, PT6) |
 | `people.training.sessions.manage` | Adds events and sessions, and picks among the active courses |
 
-The ten governance keys and `people.training.currencies` are described below. The remaining 17 keys, the verbs `answer` and `generate`, the eight menu leaves and `people.training.evaluation.*` settings land with their slices.
+The ten governance keys and `people.training.currencies` are described below. The remaining 17 keys, the verbs `answer` and `generate`, the remaining menu leaves and `people.training.evaluation.*` settings land with their slices.
 
 ## Walkthrough
 
@@ -155,7 +154,7 @@ Authz, whose step-up the Platform enforces outside development mode.
 
 ## Learning requests, plans and budgets
 
-Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the learning pages are added in PT8.
+Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the six learning pages use these methods.
 
 For example, an employee creates a draft with `create_learning_request`, submits it with a reason, and their direct manager recommends it. HR reviews it before an approver reserves the cost. Every decision remains in `learning_histories`.
 
@@ -189,3 +188,27 @@ A correction retains the prior currency and cannot overlap another active policy
 Migration `people-training-003-learning-governance` creates the six Bilimbi governance tables. Scoped foreign keys keep links in the same company; employee links reference Workforce employment IDs. PostgreSQL guards immutable policies, items and decisions, permanent content, terminal states, valid transitions, effective budgets and commitments. Writes take the company lock, recheck authorization, then use `MutationBoundary`; every inserted or updated record, including histories and superseded plans, produces its own audit change. Self-service writes re-prove the account under Workforce's employment lock. The governance advisory lock also serializes budget trigger checks for the same company.
 
 The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It creates records through these methods on a disposable database and fails if an expected transition or refusal differs.
+
+
+## Learning pages
+
+Employees can request learning, managers can recommend it and create plans, and independent reviewers can approve both. Budget operators set the accepted currencies and allocations.
+
+Open **My learning**, add a request, then submit it with a reason. The manager recommends it from **Team requests**. HR reviews it from **Learning requests & reviews**, and an approver records the final decision there. Each decision asks for confirmation and remains in History.
+
+| Address under `/people/training` | Task | Entry capability |
+| --- | --- | --- |
+| `/my` | Own learning requests | `people.training.learning.view` |
+| `/team` | Direct-report requests | `people.training.requests.recommend` |
+| `/plans` | Create team plans with up to 300 learning items; submit, cancel or amend | `people.training.plans.submit` |
+| `/requests` | HR request register and review or approval | `people.training.requests.view` |
+| `/plan-reviews` | Submitted plans and independent approval | `people.training.plans.view` |
+| `/budgets` | Company currencies, policy versions and totals for each currency and period | `people.training.budgets.view` |
+
+Task links appear only with their own grant. `learning.view` opens My learning without granting request submission: a reader without `requests.submit` sees the authorized task links and the reference's task guidance. Request, review, approval and budget controls each need their separate write grant.
+
+All registers use the shared FlexTable with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). The reference has no record sorting or search on these pages. History and plan items also use FlexTable. The company chooser defaults to the first active company the account may select; an explicitly unavailable company does not silently select another.
+
+The live owner re-reads company reach and capabilities before every event. A confirmation retains its record, action and reason on the server and rechecks the specific action's grant on confirmation. The facade repeats its checks under the company lock. Refusals stay on the page as error messages. Budget corrections retain the prior currency; plan amendments create a new draft. Every form preserves entered values on refusal.
+
+The page service is `people/training.learning_pages`, implemented in `src/web_learning.rs`. It declares the facade writes through `PageWrites::pending`, following the port plan. The My evaluations section belongs to the evaluation page slice (PT9).

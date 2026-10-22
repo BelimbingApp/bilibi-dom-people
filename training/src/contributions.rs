@@ -22,7 +22,8 @@ pub const SESSIONS_VIEW: &str = "people.training.sessions.view";
 /// Adds events and sessions, and picks among the active courses for them.
 pub const SESSIONS_MANAGE: &str = "people.training.sessions.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 14] = [
+pub const CAPABILITIES: [&str; 15] = [
+    crate::LEARNING_VIEW,
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
@@ -55,7 +56,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy",
+            "base/party_ids", "base/settings", "base/tenancy", "base/menu", "base/system", "base/ui",
             "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
@@ -73,6 +74,9 @@ inventory::submit! {
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 }))
             },
+        }, Service {
+            id: crate::web_learning::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
         }],
     }
 }
