@@ -204,7 +204,7 @@ pub struct ResultLine {
     pub direction: String,
     pub amount: String,
 }
-/// Document records are reserved here; creation and private bytes follow in PY3.
+/// Immutable provenance; Base Artifacts owns byte storage and retention.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Document {
     pub id: i64,

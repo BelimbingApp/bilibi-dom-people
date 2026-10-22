@@ -53,6 +53,12 @@ pub enum PayrollError {
         "The approved components exceed the event limit of 100 components or 64 KiB. Use fewer pay items or directions in one run."
     )]
     ApprovalTooLarge,
+    #[error("Payroll action refused: :invalid_document")]
+    InvalidDocument,
+    #[error("Private documents require an operator-configured Base Artifacts storage directory and retention period.")]
+    ArtifactPolicy,
+    #[error(transparent)]
+    ArtifactFailed(bilibi_artifacts::Error),
     #[error(transparent)]
     Failed(Error),
 }
