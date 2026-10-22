@@ -181,7 +181,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
                 category_id: category.id,
                 code: "page_claim".into(),
                 name: "Page claim".into(),
-                receipt_requirement: "none".into(),
+                receipt_requirement: "never".into(),
                 eligibility: None,
             },
         )
