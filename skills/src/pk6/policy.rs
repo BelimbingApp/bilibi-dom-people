@@ -223,6 +223,13 @@ impl PolicyPage {
         Ok(())
     }
     async fn authorize(&mut self, scope: &Scope, cap: &str) -> bool {
+        let previously_allowed = match cap {
+            CATALOG_MANAGE => self.can_types,
+            REMINDERS_SEND => self.can_remind,
+            REASSESSMENTS_SUBMIT | REASSESSMENTS_EXECUTE => self.can_requests,
+            ASSESSMENTS_SUBMIT => self.can_perform,
+            _ => self.available,
+        };
         let ok = self.company.allowed(&self.core, scope, POLICY_MANAGE).await
             && (self.company.allowed(&self.core, scope, cap).await
                 || (cap == REASSESSMENTS_SUBMIT
@@ -232,11 +239,15 @@ impl PolicyPage {
                         .await));
         if !ok {
             self.pending = None;
-            self.flash
-                .error("You no longer have permission to change this company's skills policy.");
+            self.flash.error(if previously_allowed {
+                "You no longer have permission to change this company's skills policy."
+            } else {
+                "You cannot change this company's skills policy."
+            });
         }
         ok
     }
+
     async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<bool> {
         match text(payload, "type") {
             "clear-flash" => self.flash.clear(payload),
@@ -275,7 +286,7 @@ impl PolicyPage {
                     }
                     Err(e) => Err(e),
                 };
-                if self.flash.result(result, "Skills policy saved.") {
+                if policy_result(&mut self.flash, result, "Skills policy saved.") {
                     self.policy_draft.clear();
                 }
                 return Ok(true);
@@ -303,7 +314,8 @@ impl PolicyPage {
                     name: self.type_draft["name"].clone(),
                     requires_provider: self.type_draft["requires_provider"] == "true",
                 };
-                if self.flash.result(
+                if policy_result(
+                    &mut self.flash,
                     self.core
                         .skills
                         .create_action_type(scope, self.company.id.unwrap_or_default(), &input)
@@ -409,7 +421,8 @@ impl PolicyPage {
                     }
                     match p.command {
                         Command::Toggle(id, active) => {
-                            self.flash.result(
+                            policy_result(
+                                &mut self.flash,
                                 self.core
                                     .skills
                                     .set_action_type_active(scope, p.company, id, active)
@@ -418,7 +431,8 @@ impl PolicyPage {
                             );
                         }
                         Command::Cancel(id) => {
-                            self.flash.result(
+                            policy_result(
+                                &mut self.flash,
                                 self.core
                                     .skills
                                     .cancel_reassessment(scope, p.company, id)
@@ -428,7 +442,8 @@ impl PolicyPage {
                         }
                         Command::Perform(id, input) => {
                             if self.authorize(scope, ASSESSMENTS_SUBMIT).await {
-                                self.flash.result(
+                                policy_result(
+                                    &mut self.flash,
                                     self.core
                                         .skills
                                         .perform_reassessment(scope, p.company, id, &input)
@@ -438,13 +453,15 @@ impl PolicyPage {
                             }
                         }
                         Command::Run => {
-                            self.flash.result(
+                            policy_result(
+                                &mut self.flash,
                                 self.core.skills.enqueue_reminders(scope, p.company).await,
                                 "Reminders queued.",
                             );
                         }
                         Command::Retry => {
-                            self.flash.result(
+                            policy_result(
+                                &mut self.flash,
                                 self.core
                                     .skills
                                     .retry_reminders(scope, p.company, None)
@@ -857,4 +874,15 @@ struct PolicyLayout {
     types: Html,
     requests: Html,
     reminders: Html,
+}
+
+// Match PolicyLive's refusal when a grant changes between the page check and
+// the facade's transaction check.
+fn policy_result<T>(flash: &mut Flash, result: crate::Result<T>, success: &str) -> bool {
+    if matches!(result, Err(SkillsError::Unauthorized)) {
+        flash.error("You no longer have permission to change this company's skills policy.");
+        false
+    } else {
+        flash.result(result, success)
+    }
 }
