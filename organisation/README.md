@@ -6,14 +6,9 @@ effective-dated assignments of employees to them. This README is the owner
 contract; the Bilimbi source it ports is
 [`organisation/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/organisation/docs/README.md).
 
-This is the service slice (PO1 of the port plan): schema, facade and the
-`people/organisation.positions` port. PO2 adds the explorer page
-`/people/organisation` with the menu leaf Team › Organisation
-(`people.team.organisation`, order 20, capability `people.organisation.view`)
-and its `base/menu` and `base/ui` edges; PO3 exposes the
-three facade-only writes (`create_position`, `record_version`, `set_parent`)
-as agent operations. Until PO2 the module contributes no page and no leaf: a
-leaf whose route is not mounted would be a dead link.
+Open `/people/organisation` from **People → Team → Organisation** to see a company's positions and holders on a chosen date. Choose an active company and an **As of** date; the table shows title, parent, holders and vacancy. Pages contain 50 positions by default, with 25, 50 and 100 available. Table settings let you choose columns and compact rows.
+
+With `people.organisation.manage`, use **Assign** to choose an employee, assignment kind and dates. Use **End** beside a holder to enter their last day. Both actions ask for confirmation before changing anything. The page retains the chosen company, record and dates on the server and checks both view and manage permission again on each write event.
 
 A position is a stable identity of one company; a vacancy leaves it and its
 title in place. Substantive assignments cannot overlap for one position;
@@ -162,7 +157,7 @@ an empty object on the absent side of a creation).
 
 Bilimbi grants neither to a system role; an administrator grants them. Both
 live under the Authz domain `people`; `view` and `manage` are verbs Base
-declares. The explorer (PO2) opens under `view`, offers its assign and end
+declares. The explorer opens under `view`, offers its assign and end
 controls to an actor holding `manage`, and refuses the event, with Bilimbi's
 sentence "You no longer have permission to change this company's
 assignments.", when the grant is gone; the facade checks once more.
@@ -207,7 +202,13 @@ The walkthrough also reserves every pool connection except one and proves that a
 
 ## Dependencies
 
-`base/audit`, `base/authz`, `base/database`, `base/module_registry`,
-`base/ports`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo
+`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/menu`, `base/module_registry`,
+`base/ports`, `base/tenancy`, `base/ui`, `core/company`, `people/settings`, `people/workforce`; the Cargo
 manifest lists the same edges. Workforce reaches this module only through
 the port above, never the other way round.
+
+## Explorer browser proof
+
+The walkthrough adds 51 positions for pagination and a title that changes on 1 July 2026. Sign in as `manager@example.test`, open `/people/organisation`, and select 25 rows per page. Follow Next and Back, choose a company with no positions, and compare **As of** dates before and after the title change. Use **Assign**, cancel its confirmation, then confirm an acting assignment. End that assignment on a valid last day and confirm the change. `viewer@example.test` has view permission only and sees neither action.
+
+The active-company picker first obtains authorised summaries through Workforce. Those summaries expose archival state but no status. The page then reads only the candidate companies' active status with a tenant predicate; names still come from Core through Workforce.

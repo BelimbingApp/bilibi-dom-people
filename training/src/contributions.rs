@@ -1,10 +1,10 @@
 //! What Training adds to the shared catalogs (Bilimbi
 //! `Bilimbi.People.Training.Contributions`): the module descriptor with its
-//! catalog migration and facade service, and the catalog capabilities under
+//! catalog and governance migrations and facade service, and catalog capabilities under
 //! the `people` Authz domain. Bilimbi grants no Training key to a system
-//! role: an administrator grants them. The governance,
-//! evaluation and passport keys, the three verbs they add (`recommend`,
-//! `answer`, `generate`), the eight menu leaves and the company settings land
+//! role: an administrator grants them. Governance contributes its keys and setting
+//! in `governance.rs`. The evaluation and passport keys,
+//! the verbs `answer` and `generate`, the eight menu leaves and the company settings land
 //! with their slices beside this block.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
@@ -25,7 +25,8 @@ pub const RECORDS_VIEW: &str = "people.training.records.view";
 pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
-pub const CAPABILITIES: [&str; 8] = [
+/// Every Training capability currently implemented.
+pub const CAPABILITIES: [&str; 18] = [
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
@@ -34,6 +35,16 @@ pub const CAPABILITIES: [&str; 8] = [
     RECORDS_MANAGE,
     EVIDENCE_MANAGE,
     RETENTION_MANAGE,
+    crate::REQUESTS_SUBMIT,
+    crate::REQUESTS_RECOMMEND,
+    crate::REQUESTS_REVIEW,
+    crate::REQUESTS_APPROVE,
+    crate::REQUESTS_VIEW,
+    crate::PLANS_SUBMIT,
+    crate::PLANS_APPROVE,
+    crate::PLANS_VIEW,
+    crate::BUDGETS_VIEW,
+    crate::BUDGETS_MANAGE,
 ];
 
 macro_rules! provenance {
@@ -59,6 +70,7 @@ inventory::submit! {
         migrations: &[
             ("people-training-001-catalog", include_str!("../migrations/001-catalog.sql")),
             ("people-training-002-participation", include_str!("../migrations/002-participation.sql")),
+            ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql")),
         ],
         services: &[Service {
             id: SERVICE,

@@ -142,11 +142,11 @@ impl Training {
             .workforce
             .working_employee_ids_on(tx.sql(), scope, company_id, &[input.employee_id])
             .await
-            .map_err(|_| TrainingError::EmployeeUnavailable)?
+            .map_err(|_| TrainingError::AttendanceEmployeeUnavailable)?
             .require_current()
-            .map_err(|_| TrainingError::EmployeeUnavailable)?;
+            .map_err(|_| TrainingError::AttendanceEmployeeUnavailable)?;
         if employees.is_empty() {
-            return Err(TrainingError::EmployeeUnavailable);
+            return Err(TrainingError::AttendanceEmployeeUnavailable);
         }
         let reason = input.reason.trim();
         let previous = tx.sql().query_opt("SELECT revision, status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 AND employee_id=$4 ORDER BY revision DESC LIMIT 1", &[&scope.tenant(), &company_id, &input.session_id, &input.employee_id]).await.map_err(Error::from)?;
