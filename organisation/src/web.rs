@@ -536,13 +536,16 @@ impl Explorer {
                             assignment.employee_reference.stable_id
                         ),
                         end,
+                        compact: self.columns.mode() == bilibi_ui::RowMode::Compact,
                     })?);
                 }
                 if p.assignments_incomplete {
-                    holders.push(&render(&EmptyState::missing(
-                        "More assignments exist beyond this page's display limit.",
-                        "",
-                    ))?);
+                    let notice = "More assignments exist beyond this page's display limit.";
+                    if self.columns.mode() == bilibi_ui::RowMode::Compact {
+                        holders.push(&Html::text(&format!(" · {notice}")));
+                    } else {
+                        holders.push(&render(&EmptyState::missing(notice, ""))?);
+                    }
                 }
                 let mut row = FlexRow::new(&p.reference.stable_id)
                     .slot(
@@ -820,12 +823,13 @@ struct AssignmentForm {
 }
 #[derive(Template)]
 #[template(
-    source = "<div class=\"flex flex-wrap items-center gap-2\">{{ label }}{{ end }}</div>",
+    source = "{% if compact %}<span class=\"inline-flex items-center gap-2\">{{ label }}{{ end }}</span> {% else %}<div class=\"flex flex-wrap items-center gap-2\">{{ label }}{{ end }}</div>{% endif %}",
     ext = "html"
 )]
 struct Holder {
     label: String,
     end: Html,
+    compact: bool,
 }
 #[derive(Template)]
 #[template(
