@@ -60,7 +60,7 @@ Five company-scoped Base Settings, each with the editor capability `people.atten
 
 ## Capabilities
 
-All five live under the Authz domain `people` and are granted by an administrator; Bilimbi grants none of them to a system role. `approve` is a verb Base does not declare, so this module declares it.
+All six live under the Authz domain `people` and are granted by an administrator; Bilimbi grants none of them to a system role. `approve` and `record` are verbs Base does not declare, so this module declares them.
 
 | Capability | Opens |
 | --- | --- |
@@ -69,6 +69,11 @@ All five live under the Authz domain `people` and are granted by an administrato
 | `people.attendance.roster.manage` | Rosters (PA2, PA5) |
 | `people.attendance.adjustments.approve` | Adjustment decisions (PA2, PA5) |
 | `people.attendance.allowances.manage` | Allowance rules (PA2, PA3) |
+| `people.attendance.clock.record` | Reviewed agent operation for a device or integration clock event |
+
+## Agent operation
+
+`people.attendance.clock.record` records one event through a reviewed Agent API plan. Its input schema requires `company_id`, a current working `employee_id`, a stable `event_key`, `event_type` (`in`, `out`, `break_in` or `break_out`), `source` and offset-bearing `occurred_at`; `latitude` and `longitude` are optional but must be supplied together. Keys and source identifiers are 1–160 and 1–32 bytes respectively. Coordinates are checked against the company's current location rule. Preview validates the current employee, company rules and location; commit repeats those checks after taking the company writable lock. The operation requires `people.attendance.clock.record` on the selected company. Its guide is registered under `people.attendance`.
 
 ## Self-service seam
 
