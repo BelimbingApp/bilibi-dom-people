@@ -318,7 +318,7 @@ impl Explorer {
             return Ok(());
         }
         match event {
-            "dismiss-flash" => self.flash = None,
+            "clear-flash" => self.flash = None,
             "filters" | "filter" => {
                 self.clear_selection();
                 self.list

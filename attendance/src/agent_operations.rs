@@ -97,7 +97,23 @@ fn map_error(error: AttendanceError) -> bilibi_agent_api::Error {
         | AttendanceError::Unavailable(_)
         | AttendanceError::NotLinked
         | AttendanceError::InvalidStatus
-        | AttendanceError::Invalid(_) => invalid(),
+        | AttendanceError::Invalid(_)
+        | AttendanceError::InvalidPeriod
+        | AttendanceError::ShiftUnavailable
+        | AttendanceError::InvalidTime
+        | AttendanceError::FutureTime
+        | AttendanceError::OutsideWindow
+        | AttendanceError::DuplicateRequest
+        | AttendanceError::RequestKeyConflict
+        | AttendanceError::NotPending
+        | AttendanceError::SelfApproval
+        | AttendanceError::NoteRequired
+        | AttendanceError::NoteTooLong
+        | AttendanceError::InvalidDecision
+        | AttendanceError::EmployeeUnavailable
+        | AttendanceError::SelfClockUnavailable
+        | AttendanceError::EffectivePeriodOverlap
+        | AttendanceError::InvalidEndDate => invalid(),
         AttendanceError::Failed(error) => error.into(),
     }
 }
