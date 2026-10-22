@@ -347,7 +347,7 @@ impl PolicyPage {
                             scope,
                             self.company.id.unwrap_or_default(),
                             t.id,
-                            !t.active,
+                            active,
                         )
                         .await,
                     "Action type updated.",

@@ -289,6 +289,30 @@ async fn main() -> Result<()> {
         "delivery ledger requires reminder-send permission",
     )?;
     let mut page = mount(&services, &manager, "policy").await?;
+    for _ in 0..2 {
+        let html = event(
+            &mut page,
+            &manager,
+            json!({"type":"toggle_action_type", "id":kind.id.to_string(), "active":"false"}),
+        )
+        .await?;
+        check(
+            !html.contains("id=\"skills-confirm\""),
+            "type activation applies immediately",
+        )?;
+    }
+    check(
+        saved(skills.list_action_types(&admin, 1).await)?
+            .iter()
+            .any(|t| t.id == kind.id && !t.active),
+        "repeated deactivation preserves the requested inactive state",
+    )?;
+    event(
+        &mut page,
+        &manager,
+        json!({"type":"toggle_action_type", "id":kind.id.to_string(), "active":"true"}),
+    )
+    .await?;
     check(
         event(&mut page, &manager, json!({"type":"run_reminders"}))
             .await?
