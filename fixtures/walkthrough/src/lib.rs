@@ -3727,16 +3727,45 @@ pub async fn payroll(url: &str) -> Result<()> {
 
 // PC5: browser records for the five Claim operations queues.
 mod claim_operations;
-pub async fn claim_operations(url: &str) -> Result<()> {
+pub async fn claim_operations(url: &str, command: Option<&str>) -> Result<()> {
     bilibi_base::link();
     bilibi_core::link();
     bilibi_domains::link();
     bilibi_extensions::link();
     let db = pool(url)?;
+    let client = db.get().await?;
+    let fixture: bool = client.query_one(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE tenant_id=1 AND id=1 AND email='manager@example.test') AND EXISTS(SELECT 1 FROM users WHERE tenant_id=1 AND id=4 AND email='admin@example.test')",
+        &[],
+    ).await?.get(0);
+    if !fixture {
+        return Err(Error::Invalid);
+    }
     let modules = bilibi_module_registry::discover()?;
     let mut services = Services::default();
     services.provide("bootstrap.database", Arc::new(db))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
-    claim_operations::run(&services).await
+    if let Some(command) = command {
+        let (capability, enabled) = match command {
+            "revoke-reimburse" => (bilibi_people_claims::REIMBURSE, false),
+            "restore-reimburse" => (bilibi_people_claims::REIMBURSE, true),
+            "revoke-approve" => (bilibi_people_claims::APPROVE, false),
+            "restore-approve" => (bilibi_people_claims::APPROVE, true),
+            _ => return Err(Error::Invalid),
+        };
+        let admin = services
+            .get::<Authentication>("base/tenancy.authentication")?
+            .authenticate(&**client, TENANT, ADMIN, "claim-operations-proof".into())
+            .await?;
+        services
+            .get::<Grants>("base/authz.grants")?
+            .set_direct(&admin, MANAGER, capability, Some(enabled))
+            .await?;
+        println!("PC5 manager grant {capability}: {enabled}");
+        Ok(())
+    } else {
+        drop(client);
+        claim_operations::run(&services).await
+    }
 }
