@@ -864,6 +864,20 @@ pub async fn run(url: &str) -> Result<()> {
 
     references::run(&services, &grants, &client, &admin, &manager, &viewer).await?;
 
+    // Skills assessments (PK2): its own proof block at the end.
+    assessments::run(
+        &services,
+        &client,
+        assessments::Context {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            manager_employee: manager_employment.id,
+            staff_employee: staff_employment.id,
+        },
+    )
+    .await?;
+
     // PC2: requests, decisions, hand-off, transactional events and refusals.
     claim_workflow::run(
         &services,
@@ -3296,6 +3310,9 @@ pub async fn attendance(url: &str) -> Result<()> {
 
 // Attendance queued-write proof (PA1).
 mod attendance_locks;
+
+// Skills assessments (slice PK2).
+mod assessments;
 
 // PT1: the Training catalog proof block.
 mod training;
