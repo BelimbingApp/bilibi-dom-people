@@ -412,6 +412,7 @@ impl MyAttendance {
             flash,
             available: self.records.is_some(),
             clock: Html::EMPTY,
+            clock_hint: String::new(),
             days: Html::EMPTY,
             shifts: Html::EMPTY,
             requests: Html::EMPTY,
@@ -430,7 +431,7 @@ impl MyAttendance {
         if let Some(r) = &self.records {
             if r.rules.self_clock_enabled {
                 if r.rules.location_required {
-                    view.clock.push(&render(&bilibi_ui::SectionHeading { id: "my-attendance-location-required", description: "This company requires your location inside an approved clocking location. Your browser will ask for location access when you clock. If it is unavailable, request an adjustment below.", ..Default::default() })?);
+                    view.clock_hint = "This company requires your location inside an approved clocking location. Your browser will ask for location access when you clock. If it is unavailable, request an adjustment below.".into();
                 }
                 for (event, label) in [("in", "Clock in"), ("out", "Clock out")] {
                     let id = format!("my-attendance-clock-{event}");
@@ -672,6 +673,7 @@ struct View<'a> {
     flash: FlashMap<'a>,
     available: bool,
     clock: Html,
+    clock_hint: String,
     days: Html,
     shifts: Html,
     requests: Html,

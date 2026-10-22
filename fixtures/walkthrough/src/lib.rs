@@ -3733,6 +3733,57 @@ pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
     let admin = authentication
         .authenticate(&**c, TENANT, ADMIN, "walkthrough".into())
         .await?;
+    if mode == "unlink" {
+        services
+            .get::<UserService>("core/user.accounts")?
+            .unlink(&admin, MANAGER)
+            .await
+            .map_err(|_| Error::Internal)?;
+        return Ok(());
+    }
+    if mode == "link" || mode == "link-staff" {
+        let user = if mode == "link" { MANAGER } else { STAFF };
+        let number = if mode == "link" { "E-001" } else { "E-002" };
+        let employees = workforce
+            .employees(&admin, COMPANY)
+            .await
+            .map_err(|_| Error::Internal)?
+            .require_current()
+            .map_err(|_| Error::Internal)?;
+        let id = employees
+            .iter()
+            .find(|e| e.employee_number == number)
+            .ok_or(Error::NotFound)?
+            .reference
+            .stable_id
+            .parse()
+            .map_err(|_| Error::Invalid)?;
+        let employment = workforce
+            .employment(&admin, COMPANY, id)
+            .await
+            .map_err(|_| Error::Internal)?
+            .require_current()
+            .map_err(|_| Error::Internal)?;
+        let users = services.get::<UserService>("core/user.accounts")?;
+        users
+            .link_person(
+                &admin,
+                user,
+                PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        users
+            .link_affiliation(
+                &admin,
+                user,
+                bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
+                    .map_err(|_| Error::Invalid)?,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        return Ok(());
+    }
     if mode == "revoke" || mode == "restore" {
         grants
             .set_direct(&admin, MANAGER, SELF_VIEW, Some(mode == "restore"))
@@ -3809,7 +3860,7 @@ pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
         .await
         .map_err(|_| Error::Internal)?;
     attendance
-        .publish_roster(&manager, COMPANY, today, 14)
+        .publish_roster(&manager, COMPANY, today, tomorrow)
         .await
         .map_err(|_| Error::Internal)?;
     // This replacement remains a draft, so the browser must still show the published rest day.
@@ -3837,7 +3888,7 @@ pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
         .await
         .map_err(|_| Error::Internal)?;
     attendance
-        .publish_roster(&manager, COMPANY, far, 1)
+        .publish_roster(&manager, COMPANY, far, far)
         .await
         .map_err(|_| Error::Internal)?;
     for days in 1..=32 {
