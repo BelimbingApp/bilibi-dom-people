@@ -21,6 +21,9 @@ pub(super) async fn run(url: &str) -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
+    // Use the installed services once: agent bindings refuse a second bootstrap.
+    // Production seeds store the Dev role needed for this HTTP-only proof.
+    bilibi_database::seeds::run(&db, &modules, services.catalog()?, &services).await?;
     services
         .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
         .set_enforced(false);

@@ -341,6 +341,7 @@ impl Rosters {
                 body: render(
                     &Field::named("company_id")
                         .id("attendance-rosters-company")
+                        .wrapper_class("max-w-md")
                         .label("Company")
                         .kind(InputKind::Select)
                         .options(choices(&options))
@@ -370,14 +371,14 @@ impl Rosters {
                 .label("Week from")
                 .kind(InputKind::Date)
                 .value(self.from().map_or_else(String::new, |d| d.to_string()))
-                .wrapper_class(""),
+                .wrapper_class("mb-0"),
         )?;
         fields.push(&render(
             &Field::named("q")
                 .label("Search employees")
                 .placeholder("Name or number")
                 .value(&self.list.search)
-                .wrapper_class(""),
+                .wrapper_class("mb-0"),
         )?);
         let mut actions = submit("Show")?;
         for (offset, id, label) in [
@@ -402,7 +403,7 @@ impl Rosters {
             id: "attendance-roster-filter",
             event: "filter",
             change: false,
-            class: "flex flex-wrap items-end gap-2",
+            class: "space-y-0 flex flex-wrap items-end gap-2",
             body: fields,
             actions,
         })?;
@@ -489,7 +490,7 @@ impl Rosters {
                     .aria_label(format!("{} on {day}", employee.name))
                     .options(options)
                     .value(value)
-                    .wrapper_class("");
+                    .wrapper_class("mb-0");
                 if entry.is_some_and(|e| e.pending())
                     && self.table.columns.mode() != RowMode::Compact
                 {
@@ -500,7 +501,7 @@ impl Rosters {
                     id: &format!("roster-cell-{}-{day}", employee.id),
                     event: "plan",
                     change: true,
-                    class: "",
+                    class: "space-y-0",
                     body: fields,
                     actions: Html::EMPTY,
                 })?;

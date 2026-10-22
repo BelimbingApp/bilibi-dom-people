@@ -268,6 +268,7 @@ impl Approvals {
             has_company: !self.companies.is_empty(),
             company: Field::named("company_id")
                 .id("attendance-approvals-company")
+                .wrapper_class("max-w-md")
                 .label("Company")
                 .kind(InputKind::Select)
                 .options(choices(&options))
@@ -309,6 +310,7 @@ impl Approvals {
                 let note = Field::named("note")
                     .id(format!("attendance-note-{}", request.id))
                     .label("Decision note")
+                    .wrapper_class("mb-0")
                     .placeholder("Note (required to reject)")
                     .attr("maxlength", "500")
                     .value(self.notes.get(&request.id).cloned().unwrap_or_default());
@@ -341,7 +343,7 @@ impl Approvals {
                     // either action is queued, preserving Bilimbi's two buttons.
                     event: "decision_note",
                     change: true,
-                    class: "",
+                    class: "space-y-0",
                     body: fields,
                     actions: buttons,
                 })?;
