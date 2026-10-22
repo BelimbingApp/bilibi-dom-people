@@ -71,7 +71,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy",
+            "base/menu", "base/party_ids", "base/settings", "base/tenancy", "base/ui",
             "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -90,6 +90,12 @@ inventory::submit! {
                 crate::agent_operations::bind(attendance.clone())?;
                 Ok(attendance)
             },
+        }, Service {
+            id: crate::web::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
         }],
     }
 }
@@ -145,3 +151,41 @@ inventory::submit! { Contribution::new(DEFINITIONS, ADJUSTMENT_WINDOW_KEY, prove
     nullable: false, encrypted: false, minimum: Some(1.0), maximum: Some(366.0), validator: None,
     editor: Some(Editor { group: "People", label: "Adjustment request window", help: "Days, counting today, for which an employee may request a missing clock event.", capability: Some(RULES_MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+// PA5: Bilimbi Attendance's Team menu pages and their facade-owned writes.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::web::PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Roster planning, publication and adjustment decisions write through Attendance; their operation contracts have not been reviewed." },
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.rosters", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/attendance/rosters", service: crate::web::PAGES, operation: "rosters",
+    access: bilibi_module_registry::contributions::Access::Capability(ROSTER_MANAGE), framed: true,
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.approvals", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/attendance/approvals", service: crate::web::PAGES, operation: "approvals",
+    access: bilibi_module_registry::contributions::Access::Capability(ADJUSTMENTS_APPROVE), framed: true,
+}) }
+bilibi_menu::contribute!(
+    "people/attendance",
+    bilibi_menu::MenuItem::page(
+        "people.attendance.rosters",
+        "Rosters",
+        "/people/attendance/rosters"
+    )
+    .icon("clipboard-document-list")
+    .under("people.team")
+    .requires(bilibi_menu::Requirement::Capability(ROSTER_MANAGE))
+    .order(30)
+);
+bilibi_menu::contribute!(
+    "people/attendance",
+    bilibi_menu::MenuItem::page(
+        "people.attendance.approvals",
+        "Attendance approvals",
+        "/people/attendance/approvals"
+    )
+    .icon("shield-check")
+    .under("people.team")
+    .requires(bilibi_menu::Requirement::Capability(ADJUSTMENTS_APPROVE))
+    .order(40)
+);

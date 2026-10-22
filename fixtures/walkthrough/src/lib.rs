@@ -3744,3 +3744,9 @@ mod leave_pages;
 pub async fn leave_pages(url: &str) -> Result<()> {
     leave_pages::run(url).await
 }
+
+// PA5: standalone browser fixture for rosters and attendance approvals.
+mod attendance_pages;
+pub async fn attendance_pages(url: &str) -> Result<()> {
+    attendance_pages::run(url).await
+}
