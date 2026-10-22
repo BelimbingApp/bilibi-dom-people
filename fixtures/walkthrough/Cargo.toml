@@ -77,3 +77,6 @@ bilibi-people-payroll = { path = "../../payroll" }
 
 # Performance (PM1): an independent disposable workflow proof.
 bilibi-people-performance = { path = "../../performance" }
+
+# Progression (PG1): immutable policies and evidence explanations.
+bilibi-people-progression = { path = "../../progression" }
