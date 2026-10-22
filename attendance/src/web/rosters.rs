@@ -403,7 +403,7 @@ impl Rosters {
             id: "attendance-roster-filter",
             event: "filter",
             change: false,
-            class: "space-y-0 flex flex-wrap items-end gap-2",
+            class: "flex flex-wrap items-end gap-2",
             body: fields,
             actions,
         })?;
@@ -501,7 +501,7 @@ impl Rosters {
                     id: &format!("roster-cell-{}-{day}", employee.id),
                     event: "plan",
                     change: true,
-                    class: "space-y-0",
+                    class: "block",
                     body: fields,
                     actions: Html::EMPTY,
                 })?;

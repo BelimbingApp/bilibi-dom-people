@@ -343,7 +343,7 @@ impl Approvals {
                     // either action is queued, preserving Bilimbi's two buttons.
                     event: "decision_note",
                     change: true,
-                    class: "space-y-0",
+                    class: "block",
                     body: fields,
                     actions: buttons,
                 })?;
