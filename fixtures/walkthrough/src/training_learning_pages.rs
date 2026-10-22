@@ -163,14 +163,10 @@ pub async fn control(url: &str, action: &str) -> Result<()> {
                 .await
                 .map_err(|_| Error::Internal)?;
         }
-        "archive-company-two" => {
+        "archive-company-three" => {
             services
                 .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
-                .archive_company(
-                    &admin,
-                    crate::OTHER_COMPANY,
-                    Some("PT8 mounted-page archive refusal proof"),
-                )
+                .archive_company(&admin, 3, Some("PT8 mounted-page archive refusal proof"))
                 .await
                 .map_err(|_| Error::Internal)?;
         }

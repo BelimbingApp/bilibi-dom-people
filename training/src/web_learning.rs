@@ -635,7 +635,7 @@ impl Learning {
                             if eligible.is_none() { self.fail("That record is not available to you."); return Ok(()); }
                             self.prior_id=id;
                         }
-                        self.modal=true; self.item_count=1; self.draft.clear(); self.summary=ErrorSummary::new("learning-errors");
+                        self.modal=true; self.item_count=1; self.draft.clear(); self.flash=None; self.summary=ErrorSummary::new("learning-errors");
                     },
                     "add_item"=>{ if self.modal && self.task==Task::Plans { self.item_count=(self.item_count+1).min(300); } },
                     "save_currencies"=> {
@@ -1244,6 +1244,7 @@ fn join(parts: impl IntoIterator<Item = Html>) -> Html {
 fn button(event: &str, label: &str, value: &str) -> DbResult<Html> {
     render(&Button {
         event,
+        button_type: "button",
         name: "value",
         value,
         body: Html::text(label),
