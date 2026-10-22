@@ -371,7 +371,11 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         event(&mut own, &staff, response)
             .await?
             .html
-            .contains("Response recorded."),
+            .contains("performance-publication")
+            && confirm(&mut own, &staff)
+                .await?
+                .html
+                .contains("Response recorded."),
         "employee response through page",
     )?;
     let detail = saved(performance.review(&manager, 1, review).await)?;
@@ -568,7 +572,9 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         &[("response", "Former link must refuse".into())],
     );
     unlinked_response["record_id"] = json!(corrected_review.id.to_string());
-    let body = event(&mut own, &staff, unlinked_response).await?;
+    event(&mut own, &staff, unlinked_response).await?;
+    users.unlink(&admin, 3).await.map_err(|_| Error::Internal)?;
+    let body = confirm(&mut own, &staff).await?;
     require(
         body.html
             .contains("Your performance records are unavailable")

@@ -521,9 +521,14 @@ impl State {
         // All write-shaped intents reauthorize before inspecting a posted selection.
         if event == "confirm_publication" {
             if let Some(pending) = self.pending.take() {
-                if pending.company == self.company
-                    && self.permitted(scope, pending.command.capability()).await
-                {
+                if pending.company != self.company {
+                    self.message(
+                        StatusKind::Error,
+                        PerformanceError::Unauthorized.to_string(),
+                    );
+                    return Ok(());
+                }
+                if self.permitted(scope, pending.command.capability()).await {
                     let response = matches!(pending.command, Command::Respond(..));
                     match pending
                         .command
@@ -564,16 +569,6 @@ impl State {
             let result = self.prepare(event, payload);
             match result {
                 Ok(command) => {
-                    if let Command::Respond(id, text) = command {
-                        match self.service.respond(scope, self.company, id, &text).await {
-                            Ok(_) => {
-                                self.drafts.remove(&self.active_form);
-                                self.message(StatusKind::Success, "Response recorded.");
-                            }
-                            Err(error) => self.refused(error),
-                        }
-                        return Ok(());
-                    }
                     let publication = matches!(
                         command,
                         Command::PublishDescription(_)
@@ -583,7 +578,11 @@ impl State {
                     let detail = if publication {
                         "Corrections require a new version; existing history is retained.".into()
                     } else {
-                        self.confirmation_detail()
+                        let mut detail = self.confirmation_detail();
+                        if matches!(command, Command::Respond(..)) {
+                            detail.push_str(" This cannot be undone.");
+                        }
+                        detail
                     };
                     self.pending = Some(Pending {
                         command,
@@ -1638,7 +1637,9 @@ impl State {
         let confirmation = if let Some(p) = &self.pending {
             render(&ConfirmDialog {
                 id: "performance-publication",
-                consequence: if matches!(
+                consequence: if matches!(p.command, Command::Respond(..)) {
+                    "Your response will be recorded permanently."
+                } else if matches!(
                     p.command,
                     Command::PublishDescription(_)
                         | Command::PublishTarget(_)
@@ -1649,7 +1650,9 @@ impl State {
                     "This record will be added to permanent history."
                 },
                 detail: &p.detail,
-                confirm: if matches!(
+                confirm: if matches!(p.command, Command::Respond(..)) {
+                    "Record response"
+                } else if matches!(
                     p.command,
                     Command::PublishDescription(_)
                         | Command::PublishTarget(_)
@@ -1659,7 +1662,9 @@ impl State {
                 } else {
                     "Save"
                 },
-                working: if matches!(
+                working: if matches!(p.command, Command::Respond(..)) {
+                    "Recording…"
+                } else if matches!(
                     p.command,
                     Command::PublishDescription(_)
                         | Command::PublishTarget(_)
