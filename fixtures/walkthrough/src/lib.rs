@@ -4112,3 +4112,9 @@ mod training_evaluation;
 // PG1: reuse the Performance fixture, then exercise progression through facades.
 mod progression;
 pub use progression::run as progression;
+
+// Progression pages (PG2): disposable records and current permission changes.
+mod progression_pages;
+pub async fn progression_pages(url: &str, command: &str) -> Result<()> {
+    progression_pages::run(url, command).await
+}
