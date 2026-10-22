@@ -1,5 +1,5 @@
 //! What Claims adds to the shared catalogs (Bilimbi
-//! `Bilimbi.People.Claims.Contributions`): the module descriptor with its two
+//! `Bilimbi.People.Claims.Contributions`): the module descriptor with its three
 //! migrations and the facade service, the four `people.claims.*`
 //! capabilities with the verb `reimburse` and the `tenant_owner` grants, and
 //! the `people.claims.currencies` company setting. The three menu leaves

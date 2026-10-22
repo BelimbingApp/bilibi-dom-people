@@ -325,3 +325,7 @@ an edge.
 ## Assignment directory
 
 `employees_at_any_status(scope, company_id, employee_ids)` returns directory summaries for company assignment pickers. Pass `None` for the company list, or at most 1,000 positive IDs to validate members. It includes pending, probation, active, inactive and terminated employments. Names and work contacts still come through Core; private employment fields stay behind `employment` and its capability. Claims uses this read so assignments can cover employees before or after their working period. `employees`, `employees_by_ids` and `employee` continue to return only working staff.
+
+## Independent decisions
+
+`owns_employee(tx, scope, company_id, employee_id, capability)` lets another People facade refuse decisions on the signed-in account's own employee records. It checks the supplied permission, holds Company → Employment locks, and re-proves the account link on the caller's transaction. It returns true for a matching affiliation at any employment status, false for an unlinked account, and `NotFound` for a missing employee. Claims uses this to keep inactive employees' own claims out of their decision authority. Self-service writes continue to use `lock_self_employee`, which also requires a working status.

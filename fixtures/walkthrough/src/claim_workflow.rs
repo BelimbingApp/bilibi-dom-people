@@ -1,0 +1,782 @@
+//! PC2: running-system proof on the disposable walkthrough database.
+use bilibi_authz::grants::Grants;
+use bilibi_database::{Error, Result};
+use bilibi_module_registry::Services;
+use bilibi_people_claims::{
+    Approval, Claims, ClaimsError, NewCategory, NewClaimType, NewPolicy, NewRequest, Reimbursement,
+    Rejection, APPROVE, REIMBURSE, SUBMIT,
+};
+use bilibi_people_workforce::{EmploymentChange, Workforce};
+use bilibi_tenancy::{Authentication, Scope};
+use bilibi_user::UserService;
+use jiff::civil::date;
+use rust_decimal::Decimal;
+use tokio_postgres::Client;
+const COMPANY: i64 = 1;
+const STAFF: i64 = 3;
+
+fn saved<T>(step: &str, result: std::result::Result<T, ClaimsError>) -> Result<T> {
+    match result {
+        Ok(value) => {
+            println!("PC2 {step}: saved");
+            Ok(value)
+        }
+        Err(error) => {
+            eprintln!("PC2 {step}: {error:?}");
+            Err(Error::Internal)
+        }
+    }
+}
+fn refuses<T>(
+    step: &str,
+    result: std::result::Result<T, ClaimsError>,
+    expected: ClaimsError,
+) -> Result<()> {
+    match result {
+        Err(error) if std::mem::discriminant(&error) == std::mem::discriminant(&expected) => {
+            println!("PC2 {step}: refused ({error})");
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("PC2 {step}: expected {expected:?}, got {error:?}");
+            Err(Error::Internal)
+        }
+        Ok(_) => {
+            eprintln!("PC2 {step}: unexpectedly accepted");
+            Err(Error::Internal)
+        }
+    }
+}
+fn ensure(step: &str, condition: bool) -> Result<()> {
+    if condition {
+        println!("PC2 {step}: proven");
+        Ok(())
+    } else {
+        eprintln!("PC2 {step}: failed");
+        Err(Error::Internal)
+    }
+}
+fn invalid() -> ClaimsError {
+    ClaimsError::Invalid(Vec::new())
+}
+fn amount(value: i64) -> Decimal {
+    Decimal::from(value)
+}
+
+pub(crate) async fn run(
+    services: &Services,
+    client: &Client,
+    admin: &Scope,
+    manager: &Scope,
+    viewer: &Scope,
+    employees: (i64, i64),
+) -> Result<()> {
+    let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
+    let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
+    let users = services.get::<UserService>("core/user.accounts")?;
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
+    let staff_employment = workforce
+        .employment(manager, COMPANY, employees.1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            admin,
+            STAFF,
+            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    for capability in [SUBMIT, APPROVE, REIMBURSE] {
+        grants
+            .set_direct(admin, STAFF, capability, Some(true))
+            .await?;
+    }
+    let staff = authentication
+        .authenticate(client, 1, STAFF, "pc2-proof".into())
+        .await?;
+    saved(
+        "configure currencies",
+        claims
+            .put_currencies(manager, COMPANY, &["USD".into(), "EUR".into()])
+            .await,
+    )?;
+    let category = saved(
+        "create workflow category",
+        claims
+            .create_category(
+                manager,
+                COMPANY,
+                &NewCategory {
+                    code: "claim-workflow".into(),
+                    name: "Workflow claims".into(),
+                },
+            )
+            .await,
+    )?;
+    let mut types = Vec::new();
+    for (code, receipt, eligibility) in [
+        ("limited", "always", "all_employees"),
+        ("threshold", "above_threshold", "all_employees"),
+        ("assigned", "never", "assigned_only"),
+        ("other-currency", "never", "all_employees"),
+    ] {
+        let kind = saved(
+            "create workflow claim type",
+            claims
+                .create_claim_type(
+                    manager,
+                    COMPANY,
+                    &NewClaimType {
+                        category_id: category.id,
+                        code: code.into(),
+                        name: code.into(),
+                        receipt_requirement: receipt.into(),
+                        eligibility: Some(eligibility.into()),
+                    },
+                )
+                .await,
+        )?;
+        saved(
+            "create workflow policy",
+            claims
+                .create_policy(
+                    manager,
+                    COMPANY,
+                    &NewPolicy {
+                        claim_type_id: kind.id,
+                        effective_from: date(2025, 1, 1),
+                        effective_to: None,
+                        currency: if code == "other-currency" {
+                            "EUR".into()
+                        } else {
+                            "USD".into()
+                        },
+                        per_claim_limit: (code == "limited").then(|| amount(100)),
+                        monthly_limit: (code == "limited").then(|| amount(150)),
+                        yearly_limit: (code == "limited").then(|| amount(200)),
+                        receipt_threshold: (receipt == "above_threshold").then(|| amount(20)),
+                    },
+                )
+                .await,
+        )?;
+        types.push(kind.id);
+    }
+    let input = NewRequest {
+        claim_type_id: types[0],
+        incurred_on: date(2025, 1, 10),
+        amount: amount(100),
+        currency: " usd ".into(),
+        description: Some("=SUM(1,2)\r\n\"separate expense\"".into()),
+        receipt_number: Some("  inv   one  ".into()),
+        confirm_duplicate: false,
+    };
+    refuses(
+        "unlinked admin submits",
+        claims.submit_request(admin, COMPANY, &input).await,
+        ClaimsError::NotLinked,
+    )?;
+    refuses(
+        "viewer submits without grant",
+        claims.submit_request(viewer, COMPANY, &input).await,
+        ClaimsError::Unauthorized,
+    )?;
+    refuses(
+        "future expense",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    incurred_on: date(2099, 1, 1),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::FutureIncurredOn,
+    )?;
+    refuses(
+        "no policy on expense date",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    incurred_on: date(2024, 12, 31),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::NoEffectivePolicy,
+    )?;
+    refuses(
+        "currency differs from policy",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    currency: "EUR".into(),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::CurrencyNotAllowed,
+    )?;
+    refuses(
+        "required receipt missing",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    receipt_number: None,
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::ReceiptRequired,
+    )?;
+    refuses(
+        "per claim limit",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(101),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::PerClaimLimitExceeded,
+    )?;
+    refuses(
+        "fractional third decimal",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: Decimal::new(101, 3),
+                    ..input.clone()
+                },
+            )
+            .await,
+        invalid(),
+    )?;
+    refuses(
+        "assignment required on expense date",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    claim_type_id: types[2],
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::ClaimTypeNotAssigned,
+    )?;
+    let first = saved(
+        "submit staff claim",
+        claims.submit_request(&staff, COMPANY, &input).await,
+    )?;
+    ensure(
+        "receipt canonical form",
+        first.receipt_number.as_deref() == Some("INV ONE"),
+    )?;
+    refuses(
+        "normalised duplicate receipt",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(10),
+                    receipt_number: Some("inv one".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::DuplicateReceipt,
+    )?;
+    refuses(
+        "monthly limit",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(51),
+                    receipt_number: Some("two".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::MonthlyLimitExceeded,
+    )?;
+    refuses(
+        "own approval",
+        claims
+            .approve_request(&staff, COMPANY, first.id, &Approval::default())
+            .await,
+        ClaimsError::OwnClaim,
+    )?;
+    refuses(
+        "approval exceeds claim",
+        claims
+            .approve_request(
+                manager,
+                COMPANY,
+                first.id,
+                &Approval {
+                    approved_amount: Some(amount(101)),
+                    decision_reason: None,
+                },
+            )
+            .await,
+        invalid(),
+    )?;
+    refuses(
+        "partial approval needs reason",
+        claims
+            .approve_request(
+                manager,
+                COMPANY,
+                first.id,
+                &Approval {
+                    approved_amount: Some(amount(80)),
+                    decision_reason: Some(" ".into()),
+                },
+            )
+            .await,
+        invalid(),
+    )?;
+    saved(
+        "approve staff claim for 80 with reason",
+        claims
+            .approve_request(
+                manager,
+                COMPANY,
+                first.id,
+                &Approval {
+                    approved_amount: Some(amount(80)),
+                    decision_reason: Some("Adjusted to evidenced expense".into()),
+                },
+            )
+            .await,
+    )?;
+    refuses(
+        "approved claim cannot withdraw",
+        claims.withdraw_request(&staff, COMPANY, first.id).await,
+        ClaimsError::NotWithdrawable,
+    )?;
+    let second = saved(
+        "approved amount frees monthly capacity",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(70),
+                    receipt_number: Some("two".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    refuses(
+        "yearly limit across months",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(51),
+                    incurred_on: date(2025, 2, 1),
+                    receipt_number: Some("three".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+        ClaimsError::YearlyLimitExceeded,
+    )?;
+    refuses(
+        "another employee cannot withdraw",
+        claims.withdraw_request(manager, COMPANY, second.id).await,
+        ClaimsError::NotFound,
+    )?;
+    refuses(
+        "reject needs reason",
+        claims
+            .reject_request(
+                manager,
+                COMPANY,
+                second.id,
+                &Rejection {
+                    decision_reason: "  ".into(),
+                },
+            )
+            .await,
+        invalid(),
+    )?;
+    saved(
+        "reject staff claim",
+        claims
+            .reject_request(
+                manager,
+                COMPANY,
+                second.id,
+                &Rejection {
+                    decision_reason: "Outside this claim's scope".into(),
+                },
+            )
+            .await,
+    )?;
+    saved(
+        "rejected claim releases receipt and limit",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(70),
+                    receipt_number: Some("two".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    let low = NewRequest {
+        claim_type_id: types[1],
+        amount: amount(20),
+        receipt_number: None,
+        description: None,
+        ..input.clone()
+    };
+    saved(
+        "threshold equal needs no receipt",
+        claims.submit_request(&staff, COMPANY, &low).await,
+    )?;
+    refuses(
+        "threshold above needs receipt",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(21),
+                    ..low.clone()
+                },
+            )
+            .await,
+        ClaimsError::ReceiptRequired,
+    )?;
+    refuses(
+        "possible duplicate",
+        claims.submit_request(&staff, COMPANY, &low).await,
+        ClaimsError::PossibleDuplicate,
+    )?;
+    let confirmed = saved(
+        "confirmed possible duplicate",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    confirm_duplicate: true,
+                    ..low.clone()
+                },
+            )
+            .await,
+    )?;
+    ensure("confirmation recorded", confirmed.duplicate_confirmed)?;
+    saved(
+        "withdraw confirmed duplicate",
+        claims.withdraw_request(&staff, COMPANY, confirmed.id).await,
+    )?;
+    refuses(
+        "withdraw twice",
+        claims.withdraw_request(&staff, COMPANY, confirmed.id).await,
+        ClaimsError::NotWithdrawable,
+    )?;
+    let euro = saved(
+        "separate currency submission",
+        claims
+            .submit_request(
+                &staff,
+                COMPANY,
+                &NewRequest {
+                    claim_type_id: types[3],
+                    currency: "EUR".into(),
+                    amount: amount(10),
+                    receipt_number: None,
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    saved(
+        "approve separate currency",
+        claims
+            .approve_request(manager, COMPANY, euro.id, &Approval::default())
+            .await,
+    )?;
+    let manager_claim = saved(
+        "manager submits own expense",
+        claims
+            .submit_request(
+                manager,
+                COMPANY,
+                &NewRequest {
+                    amount: amount(30),
+                    receipt_number: Some("manager expense".into()),
+                    ..input.clone()
+                },
+            )
+            .await,
+    )?;
+    saved(
+        "staff approves manager's expense",
+        claims
+            .approve_request(&staff, COMPANY, manager_claim.id, &Approval::default())
+            .await,
+    )?;
+    let batch = saved(
+        "create USD hand off",
+        claims.create_handoff_batch(manager, COMPANY, " usd ").await,
+    )?;
+    ensure(
+        "one currency batch totals",
+        batch.currency == "USD" && batch.request_count == 2 && batch.total_amount == amount(110),
+    )?;
+    refuses(
+        "no approved USD left",
+        claims.create_handoff_batch(manager, COMPANY, "USD").await,
+        ClaimsError::NothingToHandOff,
+    )?;
+    let euro_batch = saved(
+        "create EUR hand off",
+        claims.create_handoff_batch(manager, COMPANY, "EUR").await,
+    )?;
+    ensure(
+        "currencies remain separate",
+        euro_batch.request_count == 1 && euro_batch.total_amount == amount(10),
+    )?;
+    let export = saved(
+        "export stored batch",
+        claims.handoff_export(manager, COMPANY, batch.id).await,
+    )?;
+    ensure(
+        "CSV formula neutralisation and RFC 4180 quoting",
+        export
+            .content
+            .contains("\"'=SUM(1,2)\r\n\"\"separate expense\"\"\"")
+            && export.content.ends_with("\r\n"),
+    )?;
+    refuses(
+        "viewer exports CSV",
+        claims.handoff_export(viewer, COMPANY, batch.id).await,
+        ClaimsError::Unauthorized,
+    )?;
+    refuses(
+        "batch is company scoped",
+        claims.handoff_export(manager, 2, batch.id).await,
+        ClaimsError::NotFound,
+    )?;
+    refuses(
+        "manager cannot reimburse mixed own batch",
+        claims
+            .reimburse_batch(manager, COMPANY, batch.id, &Reimbursement::default())
+            .await,
+        ClaimsError::OwnClaim,
+    )?;
+    let status=client.query_one("SELECT count(*) FROM people_claim_submissions WHERE handoff_batch_id=$1 AND status='approved'", &[&batch.id]).await?.get::<_,i64>(0);
+    ensure("own-claim batch refusal rolls back all", status == 2)?;
+    saved(
+        "independent admin pays USD batch",
+        claims
+            .reimburse_batch(
+                admin,
+                COMPANY,
+                batch.id,
+                &Reimbursement {
+                    payment_reference: Some("=payment,\"reference\"".into()),
+                },
+            )
+            .await,
+    )?;
+    refuses(
+        "empty reimbursement batch",
+        claims
+            .reimburse_batch(admin, COMPANY, batch.id, &Reimbursement::default())
+            .await,
+        ClaimsError::NothingToReimburse,
+    )?;
+    saved(
+        "individual EUR reimbursement",
+        claims
+            .reimburse_request(manager, COMPANY, euro.id, &Reimbursement::default())
+            .await,
+    )?;
+    let history = saved(
+        "read status history",
+        claims
+            .request_events(manager, COMPANY, employees.1, first.id)
+            .await,
+    )?;
+    ensure(
+        "submission approval reimbursement history",
+        history
+            .iter()
+            .map(|e| e.to_status.as_str())
+            .collect::<Vec<_>>()
+            == ["submitted", "approved", "reimbursed"]
+            && history[1].reason.as_deref() == Some("Adjusted to evidenced expense"),
+    )?;
+    let ids = saved(
+        "payroll source type IDs",
+        claims
+            .requested_claim_type_ids(manager, COMPANY, date(2025, 1, 1), date(2025, 12, 31))
+            .await,
+    )?;
+    ensure(
+        "only live types in payroll source",
+        ids.contains(&types[0])
+            && ids.contains(&types[1])
+            && ids.contains(&types[3])
+            && !ids.contains(&types[2]),
+    )?;
+    let events=client.query("SELECT name,version,payload FROM base_events WHERE publisher='people/claims' AND subject=$1 ORDER BY id", &[&format!("claim:{}",first.id)]).await?;
+    ensure(
+        "versioned events committed in order",
+        events.len() == 2
+            && events[0].get::<_, i32>("version") == 1
+            && events[0].get::<_, String>("name") == bilibi_people_claims::REQUEST_APPROVED
+            && events[1].get::<_, String>("name") == bilibi_people_claims::REQUEST_REIMBURSED,
+    )?;
+    let payload = events[0].get::<_, serde_json::Value>("payload");
+    ensure(
+        "exact event amount and category",
+        payload["approved_amount"] == "80.00"
+            && payload["category_code"] == "claim-workflow"
+            && payload["claim_id"] == first.id,
+    )?;
+    println!(
+        "PC2 browser download: /people/claims/handoff/{COMPANY}/{}",
+        batch.id
+    );
+
+    // An old scope must not keep acting after grants or the account link change.
+    grants.set_direct(admin, STAFF, SUBMIT, Some(false)).await?;
+    refuses(
+        "grant revoked on old scope",
+        claims.submit_request(&staff, COMPANY, &low).await,
+        ClaimsError::Unauthorized,
+    )?;
+    grants.set_direct(admin, STAFF, SUBMIT, Some(true)).await?;
+    users
+        .unlink(admin, STAFF)
+        .await
+        .map_err(|_| Error::Internal)?;
+    refuses(
+        "account unlinked on old scope",
+        claims.submit_request(&staff, COMPANY, &low).await,
+        ClaimsError::NotLinked,
+    )?;
+    refuses(
+        "unlinked scope cannot read former claims",
+        claims.self_requests(&staff, COMPANY).await,
+        ClaimsError::NotLinked,
+    )?;
+    // Relink a different account to prove the employee check independent of submitter.
+    users.unlink(admin, 1).await.map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            admin,
+            1,
+            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let pending = saved(
+        "old employee pending claims",
+        claims.employee_requests(admin, COMPANY, employees.1).await,
+    )?
+    .into_iter()
+    .find(|r| r.status == "submitted")
+    .ok_or(Error::Internal)?;
+    let current = workforce
+        .employment(admin, COMPANY, employees.1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    workforce
+        .update_employment(
+            admin,
+            COMPANY,
+            current.id,
+            &EmploymentChange {
+                status: Some("inactive".into()),
+                ..EmploymentChange::at(current.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    refuses(
+        "relinked account cannot approve linked inactive employee claim",
+        claims
+            .approve_request(manager, COMPANY, pending.id, &Approval::default())
+            .await,
+        ClaimsError::OwnClaim,
+    )?;
+    users.unlink(admin, 1).await.map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            admin,
+            1,
+            bilibi_affiliation::AffiliationId::new(1).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let current = workforce
+        .employment(admin, COMPANY, employees.1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    workforce
+        .update_employment(
+            admin,
+            COMPANY,
+            current.id,
+            &EmploymentChange {
+                status: Some("active".into()),
+                ..EmploymentChange::at(current.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            admin,
+            STAFF,
+            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+
+    for sql in ["UPDATE people_claim_request_events SET reason='changed' WHERE request_id=$1", "DELETE FROM people_claim_request_events WHERE request_id=$1", "UPDATE people_claim_handoff_batches SET total_amount=1 WHERE id=(SELECT handoff_batch_id FROM people_claim_submissions WHERE id=$1)", "UPDATE people_claim_submissions SET handoff_batch_id=NULL WHERE id=$1"] {
+        ensure("database preserves history and hand off",client.execute(sql,&[&first.id]).await.is_err())?;
+    }
+    Ok(())
+}

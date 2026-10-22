@@ -258,6 +258,9 @@ impl Claims {
         writable(tx.sql(), scope, company_id).await?;
         authorization::authorize(tx.sql(), scope, company_id, capability).await?;
         let unlocked = requests::find(tx.sql(), scope.tenant(), company_id, id, false).await?;
+        if unlocked.status != from {
+            return Err(ClaimsError::NotDecidable);
+        }
         self.refuse_own(&tx, scope, company_id, &unlocked, capability)
             .await?;
         let old = requests::find(tx.sql(), scope.tenant(), company_id, id, true).await?;
@@ -365,8 +368,7 @@ impl Claims {
                     .employees_at_any_status(scope, company, Some(page))
                     .await?
                     .require_current()
-                    .map_err(|_| ClaimsError::EmployeeNotFound)?
-                    .into_iter(),
+                    .map_err(|_| ClaimsError::EmployeeNotFound)?,
             );
         }
         let client = self.db.get().await.map_err(Error::from)?;
