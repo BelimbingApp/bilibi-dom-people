@@ -1100,10 +1100,12 @@ impl Learning {
                 .iter()
                 .map(|r| {
                     let (content, status) = self.record_content(r)?;
-                    Ok(FlexRow::new(format!("learning-{}", r.id()))
+                    let mut row = FlexRow::new(r.id().to_string())
                         .slot("record", content)
                         .slot("status", status)
-                        .slot("decisions", self.decisions(r)?))
+                        .slot("decisions", self.decisions(r)?);
+                    row.dom_id = Some(format!("learning-{}", r.id()));
+                    Ok(row)
                 })
                 .collect::<DbResult<Vec<_>>>()?;
             let mut table = FlexTable::new("learning-records", self.columns.flex_columns(), rows);
