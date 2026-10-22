@@ -142,7 +142,14 @@ impl Table {
                 id,
                 names
                     .iter()
-                    .map(|(id, label)| BuiltinColumn::new(id, label))
+                    .map(|(id, label)| {
+                        let column = BuiltinColumn::new(id, label);
+                        if ["version", "entitlement", "cap", "year"].contains(id) {
+                            column.right()
+                        } else {
+                            column
+                        }
+                    })
                     .collect(),
             )
             .map_err(|_| Error::Internal)?,
@@ -1178,7 +1185,12 @@ fn form(
         event,
         change,
         class: "mt-3",
-        body: render(&Fields { fields })?,
+        body: render(&Fields {
+            fields: fields
+                .into_iter()
+                .map(|field| field.wrapper_class("mb-0"))
+                .collect(),
+        })?,
         actions: render(&Button {
             id: &format!("{id}-submit"),
             button_type: "submit",
