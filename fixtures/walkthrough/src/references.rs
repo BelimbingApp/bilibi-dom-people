@@ -6,9 +6,7 @@
 //! another tenant's company, a revoked grant, an archived company, a repeated
 //! key, a restricted delete, an alias under another kind or company). The
 //! grant stays for the running app.
-use crate::{
-    refused, saved, show, COMPANY, MANAGER, OTHER_COMPANY, OTHER_TENANT_COMPANY,
-};
+use crate::{refused, saved, show, COMPANY, MANAGER, OTHER_COMPANY, OTHER_TENANT_COMPANY};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
