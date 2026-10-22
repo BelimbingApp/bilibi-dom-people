@@ -435,7 +435,9 @@ impl State {
             AttendanceError::CompanyArchived => error.to_string(),
             AttendanceError::EffectivePeriodOverlap => error.to_string(),
             AttendanceError::Invalid(ref fields) if creating => {
-                if fields.iter().any(|f| f.message == "has already been taken") {
+                if matches!(self.area, Area::Shifts | Area::Locations)
+                    && fields.iter().any(|f| f.message == "has already been taken")
+                {
                     format!(
                         "That code is already used by another {}.",
                         if self.area == Area::Shifts {
