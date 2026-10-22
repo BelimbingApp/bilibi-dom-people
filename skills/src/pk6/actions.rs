@@ -70,6 +70,7 @@ pub(super) struct Actions {
     history_table: Table,
     history: Vec<crate::ActionEvent>,
     history_id: Option<i64>,
+    progress_id: Option<i64>,
     pending: Option<Pending>,
     can_propose: bool,
     can_approve: bool,
@@ -128,6 +129,7 @@ impl Actions {
             )?,
             history: vec![],
             history_id: None,
+            progress_id: None,
             pending: None,
             can_propose: false,
             can_approve: false,
@@ -270,10 +272,21 @@ impl Actions {
             "actions_grid" => self.table.event(payload),
             "history_grid" => self.history_table.event(payload),
             "dismiss_confirm" => self.pending = None,
+            "hide_progress" => self.progress_id = None,
+            "show_progress" => {
+                self.load(scope, false).await?;
+                self.progress_id = id(payload, "id").filter(|id| {
+                    self.rows
+                        .iter()
+                        .any(|v| v.action.id == *id && self.progressable(&v.action))
+                });
+                return Ok(false);
+            }
             "select_company" => {
                 self.company.id = id(payload, "company_id");
                 self.pending = None;
                 self.history_id = None;
+                self.progress_id = None;
                 self.draft.clear();
                 self.errors.clear();
                 self.request_key = key();
@@ -613,6 +626,21 @@ impl Actions {
         )
     }
     fn controls(&self, v: &ActionView) -> Result<Html> {
+        if !self.table.compact() {
+            return self.progress_controls(v);
+        }
+        let a = &v.action;
+        let mut controls = Html::EMPTY;
+        if self.can_approve && a.status == "proposed" {
+            controls.push(&button("approve_action", "Approve", a.id)?);
+        }
+        if self.progressable(a) && !["completed", "cancelled"].contains(&a.status.as_str()) {
+            controls.push(&button("show_progress", "Progress", a.id)?);
+        }
+        controls.push(&button("show_history", "History", a.id)?);
+        Ok(controls)
+    }
+    fn progress_controls(&self, v: &ActionView) -> Result<Html> {
         let a = &v.action;
         let mut h = Html::EMPTY;
         if self.can_approve && a.status == "proposed" {
@@ -807,6 +835,29 @@ impl Actions {
                     },
                 )?,
             )?);
+            if self.table.compact() {
+                if let Some(v) = self.progress_id.and_then(|id| {
+                    self.rows
+                        .iter()
+                        .find(|v| v.action.id == id && self.progressable(&v.action))
+                }) {
+                    let mut detail = record_facts(
+                        "action-progress-facts",
+                        &[
+                            ("Employee", v.action.employee_name.clone()),
+                            ("Skill", v.skill_name.clone().unwrap_or_default()),
+                            ("Objective", v.action.objective.clone()),
+                        ],
+                    )?;
+                    detail.push(&self.progress_controls(v)?);
+                    detail.push(&button("hide_progress", "Close", v.action.id)?);
+                    body.push(&section(
+                        &format!("action-progress-{}", v.action.id),
+                        "Action progress",
+                        detail,
+                    )?);
+                }
+            }
             if let Some(aid) = self.history_id {
                 let rows = self
                     .history
@@ -915,6 +966,7 @@ impl LiveState<Scope, Error> for Actions {
                     self.owned = q.get("audience").is_some_and(|a| a == "owned");
                     self.pending = None;
                     self.history_id = None;
+                    self.progress_id = None;
                     true
                 }
                 LiveInput::Refresh => true,

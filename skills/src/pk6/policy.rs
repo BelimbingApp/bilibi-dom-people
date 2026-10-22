@@ -55,6 +55,7 @@ pub(super) struct PolicyPage {
     can_requests: bool,
     can_perform: bool,
     pending: Option<Pending>,
+    selected_reassessment: Option<i64>,
     flash: Flash,
     policy_draft: HashMap<String, String>,
     type_draft: HashMap<String, String>,
@@ -124,6 +125,7 @@ impl PolicyPage {
             can_requests: false,
             can_perform: false,
             pending: None,
+            selected_reassessment: None,
             flash: Flash::default(),
             policy_draft: HashMap::new(),
             type_draft: HashMap::new(),
@@ -252,9 +254,18 @@ impl PolicyPage {
             "due_grid" => self.due_table.event(payload),
             "ledger_grid" => self.ledger_table.event(payload),
             "dismiss_confirm" => self.pending = None,
+            "hide_reassessment" => self.selected_reassessment = None,
+            "show_reassessment" => {
+                self.load(scope, false).await?;
+                self.selected_reassessment = id(payload, "id").filter(|id| {
+                    self.can_perform && self.requests.iter().any(|r| r.request.id == *id)
+                });
+                return Ok(false);
+            }
             "select_company" => {
                 self.company.id = id(payload, "company_id");
                 self.pending = None;
+                self.selected_reassessment = None;
                 self.policy_draft.clear();
                 self.type_draft.clear();
                 return Ok(true);
@@ -621,28 +632,15 @@ impl PolicyPage {
             .map(|r| {
                 let mut controls = button("cancel_reassessment", "Cancel", r.request.id)?;
                 if self.can_perform {
-                    controls.push(&form(
-                        &format!("reassessment-form-{}", r.request.id),
-                        "perform_reassessment",
-                        vec![
-                            hidden("id", r.request.id),
-                            field("assessed_level", "Assessed level")
-                                .id(format!("reassessment-level-{}", r.request.id))
-                                .kind(InputKind::Number)
-                                .attr("min", "0")
-                                .attr("max", "20")
-                                .required(),
-                            field("evidence", "Evidence")
-                                .id(format!("reassessment-evidence-{}", r.request.id))
-                                .attr("maxlength", "2000")
-                                .required(),
-                            field("assessed_on", "Assessed on")
-                                .id(format!("reassessment-date-{}", r.request.id))
-                                .kind(InputKind::Date)
-                                .value(crate::assessments::today().to_string()),
-                        ],
-                        "Perform reassessment",
-                    )?);
+                    if self.requests_table.compact() {
+                        controls.push(&button(
+                            "show_reassessment",
+                            "Perform reassessment",
+                            r.request.id,
+                        )?);
+                    } else {
+                        controls.push(&reassessment_form(r)?);
+                    }
                 }
                 Ok(row("reassessment-request", r.request.id)
                     .slot("employee", Html::text(&r.employee_name))
@@ -658,7 +656,7 @@ impl PolicyPage {
                     .slot("controls", controls))
             })
             .collect::<Result<Vec<_>>>()?;
-        section(
+        let mut body = section(
             "skills-reassessments",
             "Reassessment requests",
             self.requests_table.render(
@@ -666,8 +664,32 @@ impl PolicyPage {
                 rows,
                 "No reassessment requests are waiting.",
             )?,
-        )
+        )?;
+        if self.requests_table.compact() && self.can_perform {
+            if let Some(r) = self
+                .selected_reassessment
+                .and_then(|id| self.requests.iter().find(|r| r.request.id == id))
+            {
+                let mut detail = record_facts(
+                    "reassessment-detail-facts",
+                    &[
+                        ("Employee", r.employee_name.clone()),
+                        ("Skill", r.skill_name.clone().unwrap_or_default()),
+                        ("Reason", r.request.reason.clone()),
+                    ],
+                )?;
+                detail.push(&reassessment_form(r)?);
+                detail.push(&button("hide_reassessment", "Close", r.request.id)?);
+                body.push(&section(
+                    &format!("reassessment-detail-{}", r.request.id),
+                    "Reassessment",
+                    detail,
+                )?);
+            }
+        }
+        Ok(body)
     }
+
     fn reminders(&self) -> Result<Html> {
         if !self.can_remind {
             return Ok(Html::EMPTY);
@@ -849,6 +871,7 @@ impl LiveState<Scope, Error> for PolicyPage {
                 LiveInput::Params(q) => {
                     self.company.id = params::positive_id(q.get("company_id").map(String::as_str));
                     self.pending = None;
+                    self.selected_reassessment = None;
                     self.policy_draft.clear();
                     self.type_draft.clear();
                     true
@@ -888,27 +911,53 @@ fn policy_result<T>(flash: &mut Flash, result: crate::Result<T>, success: &str) 
 
 fn type_toggle(kind: &crate::ActionType) -> Result<Html> {
     let id = format!("toggle-action-type-{}", kind.id);
-    let mut fields = render(&hidden("id", kind.id).id(format!("{id}-id")))?;
-    fields.push(&render(
+    let mut body = render(&hidden("id", kind.id).id(format!("{id}-id")))?;
+    body.push(&render(
         &field("active", "")
             .id(format!("{id}-active"))
             .kind(InputKind::Hidden)
             .value((!kind.active).to_string()),
     )?);
+    body.push(&render(&Button {
+        button_type: "submit",
+        body: Html::text(if kind.active {
+            "Deactivate"
+        } else {
+            "Reactivate"
+        }),
+        ..Button::default()
+    })?);
     render(&Form {
         id: &id,
         event: "toggle_action_type",
         change: false,
         class: "inline",
-        body: fields,
-        actions: render(&Button {
-            button_type: "submit",
-            body: Html::text(if kind.active {
-                "Deactivate"
-            } else {
-                "Reactivate"
-            }),
-            ..Button::default()
-        })?,
+        body,
+        actions: Html::EMPTY,
     })
+}
+
+fn reassessment_form(r: &ReassessmentView) -> Result<Html> {
+    form(
+        &format!("reassessment-form-{}", r.request.id),
+        "perform_reassessment",
+        vec![
+            hidden("id", r.request.id),
+            field("assessed_level", "Assessed level")
+                .id(format!("reassessment-level-{}", r.request.id))
+                .kind(InputKind::Number)
+                .attr("min", "0")
+                .attr("max", "20")
+                .required(),
+            field("evidence", "Evidence")
+                .id(format!("reassessment-evidence-{}", r.request.id))
+                .attr("maxlength", "2000")
+                .required(),
+            field("assessed_on", "Assessed on")
+                .id(format!("reassessment-date-{}", r.request.id))
+                .kind(InputKind::Date)
+                .value(crate::assessments::today().to_string()),
+        ],
+        "Perform reassessment",
+    )
 }

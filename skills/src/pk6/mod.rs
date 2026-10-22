@@ -168,6 +168,9 @@ impl Table {
     fn event(&mut self, payload: &Value) {
         self.columns.handle(&params::string_values(payload));
     }
+    fn compact(&self) -> bool {
+        self.columns.mode() == bilibi_ui::flex_table::RowMode::Compact
+    }
     fn render(&self, caption: &str, rows: Vec<FlexRow>, empty: &str) -> Result<Html> {
         let none = rows.is_empty();
         let mut t = FlexTable::new(&self.columns.id, self.columns.flex_columns(), rows)
@@ -437,4 +440,19 @@ struct View<'a> {
 struct Confirmation<'a> {
     dialog: ConfirmDialog<'a>,
     banner: &'a Html,
+}
+
+fn record_facts(id: &str, fields: &[(&str, String)]) -> Result<Html> {
+    render(&bilibi_ui::Facts {
+        id,
+        items: fields
+            .iter()
+            .map(|(title, value)| bilibi_ui::Fact {
+                title,
+                value: Html::text(value),
+                ..bilibi_ui::Fact::default()
+            })
+            .collect(),
+        ..bilibi_ui::Facts::default()
+    })
 }

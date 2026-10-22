@@ -238,6 +238,26 @@ async fn main() -> Result<()> {
             .any(|r| r.action.id == action.id && r.action.status == "in_progress"),
         "confirmation ignores a replacement target",
     )?;
+    let html = event(
+        &mut page,
+        &staff,
+        json!({"type":"actions_grid", "op":"zoom_preset", "preset":"compact"}),
+    )
+    .await?;
+    check(
+        !html.contains(&format!("id=\"hold-form-{}\"", action.id)),
+        "compact action rows keep progress forms out of the row",
+    )?;
+    let html = event(
+        &mut page,
+        &staff,
+        json!({"type":"show_progress", "id":action.id.to_string()}),
+    )
+    .await?;
+    check(
+        html.contains(&format!("id=\"hold-form-{}\"", action.id)),
+        "compact rows open the selected action's progress form",
+    )?;
     event(
         &mut page,
         &staff,
