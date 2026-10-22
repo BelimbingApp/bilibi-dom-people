@@ -62,10 +62,14 @@ pub enum ProgressionError {
     NotCurrent(NotCurrent),
     #[error("This company is archived and read-only")]
     CompanyArchived,
-    #[error(transparent)]
-    Skills(#[from] bilibi_people_skills::SkillsError),
-    #[error(transparent)]
-    Performance(#[from] bilibi_people_performance::PerformanceError),
+    #[error(
+        "The record is unavailable. Check your company, employee link and evidence permissions."
+    )]
+    Skills(#[source] bilibi_people_skills::SkillsError),
+    #[error(
+        "The record is unavailable. Check your company, employee link and evidence permissions."
+    )]
+    Performance(#[source] bilibi_people_performance::PerformanceError),
     #[error(transparent)]
     Failed(Error),
 }
@@ -103,6 +107,32 @@ impl From<WorkforceError> for ProgressionError {
 impl From<NotCurrent> for ProgressionError {
     fn from(error: NotCurrent) -> Self {
         Self::NotCurrent(error)
+    }
+}
+impl From<bilibi_people_skills::SkillsError> for ProgressionError {
+    fn from(error: bilibi_people_skills::SkillsError) -> Self {
+        use bilibi_people_skills::SkillsError as E;
+        match error {
+            E::Unauthorized => Self::Unauthorized,
+            E::NotCurrent(error) => Self::NotCurrent(error),
+            E::Unavailable => Self::EmployeeUnavailable,
+            E::CompanyArchived => Self::CompanyArchived,
+            E::Failed(error) => error.into(),
+            other => Self::Skills(other),
+        }
+    }
+}
+impl From<bilibi_people_performance::PerformanceError> for ProgressionError {
+    fn from(error: bilibi_people_performance::PerformanceError) -> Self {
+        use bilibi_people_performance::PerformanceError as E;
+        match error {
+            E::Unauthorized => Self::Unauthorized,
+            E::NotCurrent(error) => Self::NotCurrent(error),
+            E::Unavailable => Self::EmployeeUnavailable,
+            E::CompanyArchived => Self::CompanyArchived,
+            E::Failed(error) => error.into(),
+            other => Self::Performance(other),
+        }
     }
 }
 impl From<bilibi_company::WriteError> for ProgressionError {
