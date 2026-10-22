@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PE2: independent detail-page proof block, defined at the end.
+    employee_detail::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        staff_employment.id,
+    )
+    .await?;
+
     // PT2: the appended participation/evidence proof block.
     participation::run(
         &services,
@@ -3747,6 +3758,8 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
 
+// Employee detail (PE2): versioned inline edits and live review confirmation.
+mod employee_detail;
 // PC3: browser records and two-session checks, run after the default fixture.
 mod claims_page;
 /// Adds My claims browser records, or changes the fixture staff account's access.

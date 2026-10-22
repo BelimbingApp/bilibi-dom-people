@@ -842,6 +842,7 @@ impl Workforce {
                 scope.mutation_context("people.workforce.update_employment"),
             )
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
         let tenant = scope.tenant();
         let current = employments::lock(tx.sql(), tenant, company_id, employee_id)
