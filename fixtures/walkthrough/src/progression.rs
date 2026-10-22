@@ -676,6 +676,78 @@ pub async fn run(url: &str) -> Result<()> {
         "published deletion",
     )
     .await?;
+    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
+    let company = match companies
+        .create_company(
+            &admin,
+            &bilibi_company::organisation::NewCompany {
+                name: "PG1 archive proof".into(),
+                code: Some("pg1-archive".into()),
+                ..Default::default()
+            },
+        )
+        .await?
+    {
+        bilibi_company::organisation::CreateOutcome::Created(company) => company,
+        other => {
+            eprintln!("PG1 company refused: {other:?}");
+            return Err(Error::Internal);
+        }
+    };
+    saved(
+        companies
+            .archive_company(&admin, company.id, Some("PG1 immutable company proof"))
+            .await,
+    )?;
+    refused(
+        pg.draft(&admin, company.id, &performance_only).await,
+        |e| matches!(e, ProgressionError::CompanyArchived),
+        "archived company refuses policy write",
+    )?;
+
+    // Revoke permission in another session while a write waits for the company.
+    let mut blocker = db.get().await?;
+    let transaction = blocker.transaction().await?;
+    let blocker_pid: i32 = transaction
+        .query_one("SELECT pg_backend_pid()", &[])
+        .await?
+        .get(0);
+    transaction
+        .query_one(
+            "SELECT id FROM companies WHERE tenant_id=1 AND id=1 FOR UPDATE",
+            &[],
+        )
+        .await?;
+    let pending_pg = pg.clone();
+    let pending_scope = manager.clone();
+    let pending_input = DraftInput {
+        code: "pg1_waiting_grant".into(),
+        ..performance_only.clone()
+    };
+    let waiting =
+        tokio::spawn(async move { pending_pg.draft(&pending_scope, 1, &pending_input).await });
+    let mut reached_lock = false;
+    for _ in 0..100 {
+        reached_lock=client.query_one("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",&[&blocker_pid]).await?.get(0);
+        if reached_lock {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    prove(reached_lock, "second session waits for company lock")?;
+    grants
+        .set_direct(&admin, 1, POLICY_MANAGE, Some(false))
+        .await?;
+    transaction.rollback().await?;
+    refused(
+        waiting.await.map_err(|_| Error::Internal)?,
+        |e| matches!(e, ProgressionError::Unauthorized),
+        "grant revoked while write waited for company lock",
+    )?;
+    grants
+        .set_direct(&admin, 1, POLICY_MANAGE, Some(true))
+        .await?;
+
     let count:i64=client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=1 AND auditable_type='people_progression_policy_versions'",&[]).await?.get(0);
     prove(count >= 30, "every progression write is audited")?;
     println!("PG1 proof complete: {count} audited policy changes");
