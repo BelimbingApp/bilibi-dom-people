@@ -1,0 +1,4 @@
+{% import "forms.html" as forms %}
+<div class="grid gap-2 sm:grid-cols-2">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>

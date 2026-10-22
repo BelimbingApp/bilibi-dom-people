@@ -2,7 +2,7 @@
 
 Leave manages a company's leave balances, requests, approvals and year-end carry-forward.
 
-Module ID: `people/leave`, crate `bilibi-people-leave`. This README is the owner contract. The parity reference is [Bilimbi Leave](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md). PL1 provides the schema, policies and ledger; PL2 provides requests and carry-forward; PL3 provides My leave and Leave approvals; PL5 provides the reviewed entry operation. The policies page follows in PL4.
+Module ID: `people/leave`, crate `bilibi-people-leave`. This README is the owner contract. The parity reference is [Bilimbi Leave](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md). PL1 provides the schema, policies and ledger; PL2 provides requests and carry-forward; PL3 provides My leave and Leave approvals; PL5 provides the reviewed entry operation. PL4 provides the Leave policies page.
 
 ## Pages
 
@@ -185,3 +185,20 @@ BILIBI_ENV=development BIND_ADDR=127.0.0.1:32172 APP_ORIGIN=http://localhost:321
 ```
 
 Use a private loopback port you own. The development production seeds configure the copy as Dev; setting the environment alone does not enable HTTP on a freshly installed walkthrough database. Keep `APP_ORIGIN` equal to the address you open in Chrome. The running app executes the walkthrough's three jobs: the operator's job completes with capped carry and expiry entries, the revoked actor's job cancels as `actor_refused`, and the unfinished-year job cancels as `year_not_ended`. Stop your app and drop the disposable database when finished.
+
+
+## Leave policies page
+
+Open People › Settings › Leave policies to set a company's leave year, request rules, types and entitlement versions. The company chooser includes unarchived companies you may manage; its selection stays in the address so reload and Back restore it. If the selected company becomes unavailable while the page is open, the chooser asks you to select an available company.
+
+Add a leave type, then add its first policy version. Each version shows its effective dates, yearly entitlement and optional carry-forward cap. The type, policy-version and skipped-balance lists use the shared FlexTable and ListColumns for column selection, arrangement and compact rows. They keep Bilimbi's row order and do not add sorting or pagination.
+
+Grant entitlements for a leave year, or queue carry-forward from an ended year. Confirmations keep the company, year and action on the server; Cancel and Escape change nothing. Archive and Restore also ask for confirmation. The carry-forward section shows the previous year's carried count and the latest skips, oldest year first, naming the pending or earlier year to resolve. When more than 200 balances were skipped, the notice shows both the displayed and full counts. Refresh the page after the worker runs to see its result.
+
+Every write-shaped event checks the current policy-management permission and company access before calling Leave, which checks them again inside its transaction. A grant revoked while the page is open refuses the next action and clears employee names and write controls. Form refusals preserve submitted values. The page uses the shared flash dismissal event and keeps messages through table changes.
+
+
+For the PL4 browser checks, run `cargo run -p bilibi-people-walkthrough --bin leave-policy-scenarios -- deny` while the manager's page is open, then try its next action. Run the same command with `allow` to restore access. After installing the walkthrough, `skips` creates 201 types with earlier unclosed balances through Leave and carries the next year, so the page can show the cut-short notice. Run `skips` once per disposable database. These commands use `DATABASE_URL` and `BILIBI_ENV=development`, like the walkthrough above.
+
+
+Platform limitation: Workforce's company summary exposes only `archived`, so the chooser uses the Platform's unarchived-company contract. Bilimbi filters `status == "active"`; pending and suspended companies cannot yet be distinguished through this public read. Restoring that exact filter needs Core's organisation read to expose the full status through Workforce.
