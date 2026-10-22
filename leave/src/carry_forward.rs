@@ -70,6 +70,16 @@ impl Leave {
             }
         };
         authorization::authorize(tx.sql(), scope, company_id, POLICIES_MANAGE).await?;
+        // Bilimbi CarryForwardWorker admits only active companies. Core's
+        // writable guard above already owns and locks this company; read
+        // the lifecycle classification under that same lock, without adding
+        // the unrelated company-page view capability to a delegated job.
+        if execution.is_some() && !tx.sql().query_one(
+            "SELECT status = 'active' FROM companies WHERE tenant_id=$1 AND id=$2 AND deleted_at IS NULL",
+            &[&scope.tenant(), &company_id],
+        ).await.map_err(Error::from)?.get::<_, bool>(0) {
+            return Err(LeaveError::Unauthorized);
+        }
         let company = self.current_company(scope, company_id).await?;
         let rules = self.read_rules(tx.sql(), scope, &company).await?;
         let (_, last_day) = rules.year_range(year)?;
