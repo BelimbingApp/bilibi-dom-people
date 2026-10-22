@@ -625,9 +625,11 @@ impl Policies {
                 let policy = (|| {
                     Ok(NewPolicy {
                         effective_from: value(v, "policy[effective_from]")
+                            .trim()
                             .parse()
                             .map_err(|_| LeaveError::InvalidPolicy)?,
                         entitlement: value(v, "policy[entitlement]")
+                            .trim()
                             .parse::<Decimal>()
                             .map_err(|_| LeaveError::InvalidPolicy)?,
                         carry_forward_cap: if value(v, "policy[carry_forward_cap]")
@@ -638,6 +640,7 @@ impl Policies {
                         } else {
                             Some(
                                 value(v, "policy[carry_forward_cap]")
+                                    .trim()
                                     .parse::<Decimal>()
                                     .map_err(|_| LeaveError::InvalidPolicy)?,
                             )
