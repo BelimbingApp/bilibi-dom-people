@@ -40,6 +40,12 @@ async fn main() -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
+    // Match the existing disposable walkthrough's explicit Dev setup.
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
     let admin = services
         .get::<Authentication>("base/tenancy.authentication")?
         .authenticate(&**client, 1, 4, "organisation-explorer-proof".into())
