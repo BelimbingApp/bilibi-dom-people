@@ -2852,6 +2852,16 @@ async fn employee_workspace_proof(
     // Leave a reader-only account for the running app after proving the
     // ungranted reader refusal above; personal views still need only VIEW.
     grants.set_direct(admin, VIEWER, VIEW, Some(true)).await?;
+    // The fixture viewer has no affiliation (hence no own-company axis).
+    // Give explicit company reach while keeping every People write denied.
+    grants
+        .set_direct(
+            admin,
+            VIEWER,
+            "admin.company.tenant-wide.manage",
+            Some(true),
+        )
+        .await?;
     prove(
         !success(workspace.employees(viewer, COMPANY).await)?.is_empty(),
         "reader can list employees after a view grant",
