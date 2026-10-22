@@ -1,8 +1,9 @@
 //! What Training adds to the shared catalogs (Bilimbi
 //! `Bilimbi.People.Training.Contributions`): the module descriptor with its
-//! catalog migration and facade service, and the catalog capabilities under
+//! catalog and governance migrations and facade service, and catalog capabilities under
 //! the `people` Authz domain. Bilimbi grants no Training key to a system
-//! role: an administrator grants them. The participation, governance,
+//! role: an administrator grants them. Governance contributes its keys and setting
+//! in `governance.rs`. The participation,
 //! evaluation and passport keys, the three verbs they add (`recommend`,
 //! `answer`, `generate`), the eight menu leaves and the company settings land
 //! with their slices beside this block.
@@ -20,8 +21,23 @@ pub const COURSES_MANAGE: &str = "people.training.courses.manage";
 pub const SESSIONS_VIEW: &str = "people.training.sessions.view";
 /// Adds events and sessions, and picks among the active courses for them.
 pub const SESSIONS_MANAGE: &str = "people.training.sessions.manage";
-/// Every catalog capability.
-pub const CAPABILITIES: [&str; 4] = [COURSES_VIEW, COURSES_MANAGE, SESSIONS_VIEW, SESSIONS_MANAGE];
+/// Every Training capability currently implemented.
+pub const CAPABILITIES: [&str; 14] = [
+    COURSES_VIEW,
+    COURSES_MANAGE,
+    SESSIONS_VIEW,
+    SESSIONS_MANAGE,
+    crate::REQUESTS_SUBMIT,
+    crate::REQUESTS_RECOMMEND,
+    crate::REQUESTS_REVIEW,
+    crate::REQUESTS_APPROVE,
+    crate::REQUESTS_VIEW,
+    crate::PLANS_SUBMIT,
+    crate::PLANS_APPROVE,
+    crate::PLANS_VIEW,
+    crate::BUDGETS_VIEW,
+    crate::BUDGETS_MANAGE,
+];
 
 macro_rules! provenance {
     () => {
@@ -46,7 +62,7 @@ inventory::submit! {
         migrations: &[(
             "people-training-001-catalog",
             include_str!("../migrations/001-catalog.sql"),
-        )],
+        ), ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql"))],
         services: &[Service {
             id: SERVICE,
             factory: |services| {

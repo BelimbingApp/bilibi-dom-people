@@ -915,6 +915,8 @@ pub async fn run(url: &str) -> Result<()> {
         staff_employment.id,
     )
     .await?;
+    // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
+    training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
@@ -3714,6 +3716,8 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// PT3: executable learning governance proofs.
+mod training_governance;
 // Attendance workflows (PA2): standalone executable block on the prepared database.
 mod attendance_workflows;
 pub async fn attendance_workflows(url: &str) -> Result<()> {
@@ -3722,3 +3726,8 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
 
 // Employee detail (PE2): versioned inline edits and live review confirmation.
 mod employee_detail;
+// Payroll foundation (PY1): run after the default fixture prepared the database.
+mod payroll;
+pub async fn payroll(url: &str) -> Result<()> {
+    payroll::run(url).await
+}

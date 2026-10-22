@@ -19,12 +19,20 @@
 //! window of at most 366 days, at most 500 rows, and the company's own zone
 //! (Base DateTime's `localization.timezone`) bounds its days.
 //!
-//! This slice (PT1 of the port plan) is the catalog facade; the Courses and
+//! The catalog and learning governance share this facade. The Courses and
 //! Sessions & calendar pages (PT6) and the menu leaves land with them.
 //! See `README.md`.
 mod catalog;
 mod clock;
 mod contributions;
+mod governance;
+mod governance_store;
+mod governance_types;
+pub use governance::{
+    BUDGETS_MANAGE, BUDGETS_VIEW, CURRENCIES_KEY, PLANS_APPROVE, PLANS_SUBMIT, PLANS_VIEW,
+    REQUESTS_APPROVE, REQUESTS_RECOMMEND, REQUESTS_REVIEW, REQUESTS_SUBMIT, REQUESTS_VIEW,
+};
+pub use governance_types::*;
 
 pub use bilibi_people_workforce::{FieldError, Freshness};
 pub use clock::{day_start, local_instant};
@@ -58,6 +66,49 @@ pub type Result<T> = std::result::Result<T, TrainingError>;
 /// its pages show (`Training.Web.Support.message/1`).
 #[derive(Debug, thiserror::Error)]
 pub enum TrainingError {
+    #[error("Enter currency codes as three uppercase letters, separated by commas.")]
+    InvalidCurrencies,
+    #[error("This currency is not enabled for the company.")]
+    CurrencyUnavailable,
+    #[error("A budget policy already covers part of that period for this currency.")]
+    OverlappingPolicy,
+    #[error("Another correction has already replaced this budget policy.")]
+    SupersededBudget,
+    #[error("Approved requests in that period already exceed this allocation. Enter an allocation at least equal to the committed amount.")]
+    BudgetBelowCommitments,
+    #[error("Requests approved under this policy fall outside the corrected period. Keep their proposed dates within it.")]
+    CommitmentsOutsidePeriod,
+    #[error("No budget policy covers this request's currency and proposed date. Ask the budget operator to allocate one.")]
+    BudgetUnavailable,
+    #[error("This approval exceeds the effective budget. Ask the budget operator to review the allocation.")]
+    BudgetExceeded,
+    #[error("This employee is outside your current reporting line.")]
+    OutsideTeam,
+    #[error(
+        "No current employee is linked to your login. Ask an operator to check your employee link."
+    )]
+    EmployeeUnavailable,
+    #[error("You cannot review or approve your own learning record.")]
+    SelfApproval,
+    #[error("Only the accountable owner can do that.")]
+    NotOwner,
+    #[error("Enter a reason for this decision.")]
+    ReasonRequired,
+    #[error("A plan needs at least one learning item.")]
+    ItemsRequired,
+    #[error(
+        "That action is unavailable in the record's current state. Refresh and review it again."
+    )]
+    InvalidTransition,
+    #[error("Another amendment has already replaced this plan.")]
+    SupersededPlan,
+    #[error("The end date must be on or after the start date.")]
+    InvalidPeriod,
+    #[error("A plan can link only an approved team request.")]
+    RequestUnapproved,
+    #[error("Check required fields, dates and amounts. Amounts must be nonnegative with up to four decimal places.")]
+    InvalidLearningValues,
+
     /// A denied or unknown capability, or a company outside the actor's reach.
     #[error("You cannot do that for this company.")]
     Unauthorized,
