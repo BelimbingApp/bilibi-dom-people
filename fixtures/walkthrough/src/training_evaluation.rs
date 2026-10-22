@@ -321,7 +321,7 @@ pub(crate) async fn run(
                     capacity: 3,
                     time_zone: "Asia/Kuala_Lumpur".into(),
                     starts_local: "2026-01-31T22:00".into(),
-                    ends_local: "2026-01-31T23:30".into(),
+                    ends_local: "2026-02-01T00:30".into(),
                 },
             )
             .await,
@@ -348,7 +348,7 @@ pub(crate) async fn run(
                 manager,
                 COMPANY,
                 session.id,
-                "2026-01-31T15:29:00Z".parse().map_err(|_| Error::Invalid)?,
+                "2026-01-31T16:29:00Z".parse().map_err(|_| Error::Invalid)?,
             )
             .await,
         TrainingError::SessionNotFinished,
@@ -359,7 +359,7 @@ pub(crate) async fn run(
                 manager,
                 COMPANY,
                 session.id,
-                "2026-01-31T15:30:00Z".parse().map_err(|_| Error::Invalid)?,
+                "2026-01-31T16:30:00Z".parse().map_err(|_| Error::Invalid)?,
             )
             .await,
     )?;
@@ -371,7 +371,7 @@ pub(crate) async fn run(
                 .reviews
                 .iter()
                 .filter(|r| r.kind == EvaluationKind::Evaluation)
-                .all(|r| r.due_on == "2026-01-31"),
+                .all(|r| r.due_on == "2026-02-01"),
     )?;
     let replay = saved(
         training
@@ -574,7 +574,7 @@ pub(crate) async fn run(
             .evaluation_reminders(
                 manager,
                 COMPANY,
-                "2026-02-07".parse().map_err(|_| Error::Invalid)?,
+                "2026-02-08".parse().map_err(|_| Error::Invalid)?,
             )
             .await,
     )?;
@@ -587,7 +587,7 @@ pub(crate) async fn run(
             .evaluation_reminders(
                 manager,
                 COMPANY,
-                "2026-02-07".parse().map_err(|_| Error::Invalid)?,
+                "2026-02-08".parse().map_err(|_| Error::Invalid)?,
             )
             .await,
     )?;
