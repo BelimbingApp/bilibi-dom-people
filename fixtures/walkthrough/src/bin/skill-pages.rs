@@ -116,6 +116,7 @@ async fn main() -> Result<()> {
         REMINDERS_SEND,
         REASSESSMENTS_SUBMIT,
         REASSESSMENTS_EXECUTE,
+        ASSESSMENTS_SUBMIT,
     ] {
         grants.set_direct(&admin, 1, cap, Some(true)).await?;
     }
@@ -134,6 +135,23 @@ async fn main() -> Result<()> {
         .into_iter()
         .find(|s| s.active)
         .ok_or(Error::Internal)?;
+    if mode == "request" {
+        saved(
+            skills
+                .request_reassessment(&manager, 1, employee, skill.id, "PK6 browser reassessment")
+                .await,
+        )?;
+        println!("PK6 browser reassessment requested");
+        return Ok(());
+    }
+    if mode == "archive-company-three" {
+        services
+            .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
+            .archive_company(&admin, 3, Some("PK6 archived-company browser proof"))
+            .await
+            .map_err(|_| Error::Invalid)?;
+        return Ok(());
+    }
     let kind = saved(
         skills
             .create_action_type(
