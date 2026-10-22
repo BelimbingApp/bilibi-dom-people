@@ -1,5 +1,6 @@
 //! Employees workbench, mirroring Bilimbi EmployeeWorkspace.Web.IndexLive.
-//! PE1 adds People's employment creation dialog; PE2 owns the detail route.
+//! Employment creation and detail editing use the Workforce owner.
+mod detail;
 use crate::{EmployeeWorkspace, NewSavedView, SavedView, WorkspaceError, VIEW};
 use askama::Template;
 use bilibi_affiliation::{AffiliationService, Search as AffiliationSearch};
@@ -55,12 +56,25 @@ impl Pages {
     }
 }
 impl Page<Scope, Error> for Pages {
-    fn title(&self, _: &str) -> Option<&'static str> {
-        Some("Employees")
+    fn title(&self, operation: &str) -> Option<&'static str> {
+        Some(if operation == "employee" {
+            "Employee workbench"
+        } else {
+            "Employees"
+        })
     }
     fn render<'a>(&'a self, request: PageRequest<'a, Scope>) -> PageFuture<'a, Error> {
         Box::pin(async move {
             let scope = request.scope.ok_or(Error::Unauthorized)?;
+            if request.operation == "employee" {
+                let mut state = detail::Detail::new(self.0.clone(), &request)?;
+                state.load(scope).await?;
+                return Ok(PageBody {
+                    html: state.render()?,
+                    live: true,
+                    title: None,
+                });
+            }
             let mut state = Employees::new(self.0.clone(), request.query, request.framed)?;
             state.load(scope).await?;
             Ok(PageBody {
@@ -72,6 +86,11 @@ impl Page<Scope, Error> for Pages {
     }
     fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
         Box::pin(async move {
+            if request.operation == "employee" {
+                let state: Box<dyn LiveState<Scope, Error>> =
+                    Box::new(detail::Detail::new(self.0.clone(), &request)?);
+                return Ok(Some(state));
+            }
             let state: Box<dyn LiveState<Scope, Error>> = Box::new(Employees::new(
                 self.0.clone(),
                 request.query,
@@ -693,14 +712,20 @@ impl Employees {
             .into_iter()
             .map(|e| {
                 let id = e.id.to_string();
-                let href = format!("/people/employees/{id}");
+                let href = params::address(
+                    &format!("/people/employees/{id}"),
+                    &HashMap::from([(
+                        "company_id".into(),
+                        e.employee.platform_company_id.to_string(),
+                    )]),
+                );
                 Ok(FlexRow::new(&id)
                     .slot("number", Html::text(&e.employee.employee_number))
                     .slot(
                         "name",
                         render(&RecordLink {
                             workspace: self.framed,
-                            kind: "employee",
+                            kind: "people/workforce",
                             record_id: &id,
                             href: &href,
                             class: "",

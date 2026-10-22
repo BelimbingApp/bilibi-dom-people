@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PE2: independent detail-page proof block, defined at the end.
+    employee_detail::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        staff_employment.id,
+    )
+    .await?;
+
     // PT2: the appended participation/evidence proof block.
     participation::run(
         &services,
@@ -935,6 +946,8 @@ pub async fn run(url: &str) -> Result<()> {
         },
     )
     .await?;
+    // PT8: independent Learning page browser setup after prior unlink proofs.
+    training_learning_pages::run(&services, &admin, &manager, staff_employment.id).await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
@@ -3747,6 +3760,8 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
 
+// Employee detail (PE2): versioned inline edits and live review confirmation.
+mod employee_detail;
 // PC3: browser records and two-session checks, run after the default fixture.
 mod claims_page;
 /// Adds My claims browser records, or changes the fixture staff account's access.
@@ -3768,6 +3783,13 @@ pub async fn leave_pages(url: &str) -> Result<()> {
 
 // Skills reassessments and development actions (slice PK3).
 mod skill_actions;
+// PT8: Learning browser setup, after PT3 account-unlink proofs.
+mod training_learning_pages;
+
+/// PT8: controls a disposable browser proof while its Learning page stays mounted.
+pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
+    training_learning_pages::control(url, action).await
+}
 
 // PA5: standalone browser fixture for rosters and attendance approvals.
 mod attendance_pages;
