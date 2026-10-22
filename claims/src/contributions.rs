@@ -7,8 +7,14 @@
 use crate::{Claims, MAX_CURRENCIES, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, RoleDefinition, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
-use bilibi_module_registry::{Contribution, Layer, Module, Provenance, Service};
+use bilibi_menu::{MenuItem, Requirement};
+use bilibi_module_registry::{
+    contributions::{Access, Method, PageWrites, Pending, Route, PAGE_WRITES, ROUTES},
+    Contribution, Layer, Module, Provenance, Service,
+};
 use bilibi_settings::{Definition, Editor, ScopeKind, Setting, Validator, ValueType, DEFINITIONS};
+use bilibi_tenancy::Scope;
+use bilibi_ui::page::PageService;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -44,7 +50,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy", "core/company",
+            "base/party_ids", "base/menu", "base/settings", "base/tenancy", "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
         migrations: &[
@@ -72,7 +78,14 @@ inventory::submit! {
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 }))
             },
-        }, crate::downloads::SERVICE_DEFINITION],
+        }, crate::downloads::SERVICE_DEFINITION, Service {
+            id: crate::web::SERVICE,
+            factory: |services| {
+                Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(
+                    crate::web::Pages::new(services.get(SERVICE)?)
+                ))))
+            },
+        }],
     }
 }
 
@@ -117,3 +130,24 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
 // Facts for independently composed subscribers, committed with each decision.
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
+
+// Bilimbi Claims.Web.MyClaimsLive and claims/priv/web_routes.exs.
+inventory::submit! {
+    Contribution::new(ROUTES, "people/claims.my_claims", provenance!(), &Route {
+        method: Method::Get, path: "/people/claims", service: crate::web::SERVICE,
+        operation: "my_claims", access: Access::Capability(SUBMIT), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(PAGE_WRITES, crate::web::SERVICE, provenance!(), &PageWrites {
+        service: crate::web::SERVICE, contracts: &[],
+        pending: Pending::Every { reason: "Self-service submission and withdrawal use the Claims facade; operation contracts have not been reviewed for these writes." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/claims",
+    MenuItem::page("people.my_work.claims", "My claims", "/people/claims")
+        .under("people.my_work")
+        .requires(Requirement::Capability(SUBMIT))
+        .order(30)
+);
