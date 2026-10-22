@@ -599,6 +599,7 @@ impl MyAttendance {
             let value = |key: &str| self.form.get(key).cloned().unwrap_or_default();
             view.fields = vec![
                 Field::in_form("adjustment", "event_type")
+                    .wrapper_class("mb-0")
                     .label("Clock event")
                     .kind(InputKind::Select)
                     .options(vec![
@@ -612,11 +613,13 @@ impl MyAttendance {
                             .unwrap_or("in"),
                     ),
                 Field::in_form("adjustment", "local_at")
+                    .wrapper_class("mb-0")
                     .label("Time")
                     .kind(InputKind::DatetimeLocal)
                     .required()
                     .value(value("local_at")),
                 Field::in_form("adjustment", "reason")
+                    .wrapper_class("mb-0 sm:col-span-2")
                     .label("Reason")
                     .required()
                     .attr("maxlength", "500")
