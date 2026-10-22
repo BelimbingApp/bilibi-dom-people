@@ -3746,6 +3746,12 @@ pub async fn claim_operations(url: &str, command: Option<&str>) -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
+    // The same explicit Dev mode as the default disposable walkthrough.
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
     if let Some(command) = command {
         let (capability, enabled) = match command {
             "revoke-reimburse" => (bilibi_people_claims::REIMBURSE, false),
