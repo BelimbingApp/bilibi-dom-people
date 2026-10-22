@@ -341,6 +341,7 @@ impl Actions {
                             .collect(),
                     );
                 }
+                self.errors.clear();
                 match self.proposal() {
                     Ok(a) => {
                         self.pending = Some(Pending {
@@ -349,7 +350,12 @@ impl Actions {
                             command: Command::Propose(Box::new(a)),
                         });
                     }
-                    Err(e) => self.flash.error(&message(&e)),
+                    Err(e) => {
+                        if let SkillsError::Invalid(errors) = &e {
+                            self.errors.clone_from(errors);
+                        }
+                        self.flash.error(&message(&e));
+                    }
                 }
             }
             "approve_action"
@@ -405,7 +411,7 @@ impl Actions {
                         }
                         let Ok(Some(due)) = date(text(payload, "complete[reassessment_due_on]"))
                         else {
-                            self.flash.error("Choose a valid date.");
+                            self.flash.error("Check the entered values.");
                             return Ok(false);
                         };
                         Command::Complete(aid, evidence.chars().take(2001).collect(), due)
@@ -439,8 +445,10 @@ impl Actions {
     }
     fn proposal(&self) -> crate::Result<ActionInput> {
         let v = |k: &str| self.draft.get(k).map(String::as_str).unwrap_or_default();
+        let invalid =
+            |k: &'static str| SkillsError::Invalid(vec![crate::FieldError::new(k, "is invalid")]);
         let required_id =
-            |k: &str| params::positive_id(Some(v(k))).ok_or(SkillsError::InvalidAction);
+            |k: &'static str| params::positive_id(Some(v(k))).ok_or_else(|| invalid(k));
         let source = if let Some(id) = params::positive_id(Some(v("assessment_id"))) {
             ActionSource::Assessment(id)
         } else {
@@ -449,10 +457,10 @@ impl Actions {
                 skill_id: required_id("skill_id")?,
                 starting_level: v("starting_level")
                     .parse()
-                    .map_err(|_| SkillsError::InvalidAction)?,
+                    .map_err(|_| invalid("starting_level"))?,
                 target_level: v("target_level")
                     .parse()
-                    .map_err(|_| SkillsError::InvalidAction)?,
+                    .map_err(|_| invalid("target_level"))?,
                 criticality: v("criticality").into(),
                 mandatory: false,
                 reason: v("manual_reason").into(),
@@ -468,8 +476,8 @@ impl Actions {
             intervention: v("intervention").into(),
             expected_evidence: v("expected_evidence").into(),
             next_steps: None,
-            start_on: date(v("start_on"))?,
-            due_on: date(v("due_on"))?,
+            start_on: date(v("start_on")).map_err(|_| invalid("start_on"))?,
+            due_on: date(v("due_on")).map_err(|_| invalid("due_on"))?,
         };
         Ok(ActionInput {
             source,

@@ -379,7 +379,7 @@ impl PolicyPage {
                         return Ok(false);
                     }
                     let Ok(assessed_on) = date(text(payload, "assessed_on")) else {
-                        self.flash.error("Choose a valid date.");
+                        self.flash.error("Check the entered values.");
                         return Ok(false);
                     };
                     Command::Perform(
@@ -879,7 +879,7 @@ struct PolicyLayout {
 // Match PolicyLive's refusal when a grant changes between the page check and
 // the facade's transaction check.
 fn policy_result<T>(flash: &mut Flash, result: crate::Result<T>, success: &str) -> bool {
-    if matches!(result, Err(SkillsError::Unauthorized)) {
+    if matches!(&result, Err(SkillsError::Unauthorized)) {
         flash.error("You no longer have permission to change this company's skills policy.");
         false
     } else {
