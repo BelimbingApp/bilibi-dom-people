@@ -1002,6 +1002,37 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     ] {
         sql_refuses(client, label, sql, id).await?;
     }
+    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
+    companies
+        .archive_company(
+            c.admin,
+            super::OTHER_COMPANY,
+            Some("PK2 archived-company proof"),
+        )
+        .await
+        .map_err(|error| {
+            eprintln!("PK2 archive: {error:?}");
+            Error::Internal
+        })?;
+    refuses(
+        "archived company refuses the next write",
+        skills
+            .submit_assessment(
+                c.manager,
+                super::OTHER_COMPANY,
+                &AssessmentInput {
+                    request_key: "pk2-archived".into(),
+                    ..base.clone()
+                },
+            )
+            .await,
+        |e| {
+            matches!(
+                e,
+                SkillsError::CompanyArchived | SkillsError::NotFound | SkillsError::Unauthorized
+            )
+        },
+    )?;
     let audit=client.query_one("SELECT count(*)::bigint FROM base_audit_mutations WHERE tenant_id=$1 AND auditable_type='people_skill_score'",&[&super::TENANT]).await?;
     check(
         "score projection changes are audited",
