@@ -346,8 +346,9 @@ impl Learning {
             .list
             .filters
             .get("company_id")
-            .filter(|s| !s.is_empty());
-        self.company = if let Some(value) = selected {
+            .filter(|s| !s.is_empty())
+            .cloned();
+        self.company = if let Some(value) = selected.as_deref() {
             params::positive_id(Some(value)).filter(|id| self.companies.iter().any(|c| c.id == *id))
         } else {
             self.companies.first().map(|c| c.id)
@@ -363,6 +364,11 @@ impl Learning {
             self.error = Some("Choose an active company.".into());
             return Ok(());
         };
+        // Bind the initial default once. Losing this company's reach must
+        // refuse the old form, never retarget it to the next available company.
+        self.list
+            .filters
+            .insert("company_id".into(), company.to_string());
         for cap in [
             LEARNING_VIEW,
             REQUESTS_SUBMIT,
