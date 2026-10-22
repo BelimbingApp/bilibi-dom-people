@@ -13,9 +13,23 @@ use rust_decimal::Decimal;
 
 pub(super) async fn run(services: &Services) -> Result<()> {
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
-    let admin = auth.authenticated(TENANT, super::ADMIN).await?;
-    let manager = auth.authenticated(TENANT, MANAGER).await?;
-    let staff = auth.authenticated(TENANT, STAFF).await?;
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let client = db.get().await?;
+    let admin = auth
+        .authenticate(
+            &**client,
+            TENANT,
+            super::ADMIN,
+            "claim-operations-proof".into(),
+        )
+        .await?;
+    let manager = auth
+        .authenticate(&**client, TENANT, MANAGER, "claim-operations-proof".into())
+        .await?;
+    let staff = auth
+        .authenticate(&**client, TENANT, STAFF, "claim-operations-proof".into())
+        .await?;
+    drop(client);
     let grants = services.get::<Grants>("base/authz.grants")?;
     // Viewer can read the queue but cannot pay, batch, or export.
     grants
