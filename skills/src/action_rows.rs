@@ -151,7 +151,7 @@ pub(crate) async fn insert(w: &mut Write<'_>, new: Action, key: String) -> Resul
         let reassessment_due_on=new.reassessment_due_on.map(|d|d.to_string());
         let r=sql.query_one(&format!("INSERT INTO people_skill_actions (tenant_id,company_id,request_key,employee_id,employee_name,skill_id,source_assessment_id,action_type_id,starting_level,target_level,gap_at_start,criticality,mandatory,priority_multiplier,priority_score,priority_explanation,manual_reason,objective,intervention,expected_evidence,owner_employee_id,coordinator_employee_id,provider_employee_id,provider_name,start_on,due_on,status,closure,approved_by_user_id,approved_at,completed_at,completion_evidence,reassessment_due_on,post_assessment_id,post_level,improvement,next_steps,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::text::date,$26::text::date,$27,$28,$29,$30::text::timestamp,$31::text::timestamp,$32,$33::text::date,$34,$35,$36,$37,$38) RETURNING {}",action_columns()), &[&tenant,&company,&key,&new.employee_id,&new.employee_name,&new.skill_id,&new.source_assessment_id,&new.action_type_id,&new.starting_level,&new.target_level,&new.gap_at_start,&new.criticality,&new.mandatory,&new.priority_multiplier,&new.priority_score,&new.priority_explanation,&new.manual_reason,&new.objective,&new.intervention,&new.expected_evidence,&new.owner_employee_id,&new.coordinator_employee_id,&new.provider_employee_id,&new.provider_name,&start_on,&due_on,&new.status,&new.closure,&new.approved_by_user_id,&approved_at,&completed_at,&new.completion_evidence,&reassessment_due_on,&new.post_assessment_id,&new.post_level,&new.improvement,&new.next_steps,&new.created_by_user_id]).await?;
         let row=action(&r)?;
-        let event=insert_event(sql,tenant,company,row.id,actor,"proposed",None,Some("proposed"),None,None).await?;
+        let event=insert_event(sql,(tenant,company,row.id,actor),"proposed",(None,Some("proposed")),None,None).await?;
         let mut audit=serde_json::to_value(&row).map_err(|_|Error::Internal)?;
         audit["request_key"]=key.into();
         Ok((row.clone(),vec![rows::created("people_skill_action",row.id,&audit),rows::created("people_skill_action_event",event.id,&event)]))
@@ -174,7 +174,7 @@ pub(crate) async fn save(
         let reassessment_due_on=new.reassessment_due_on.map(|d|d.to_string());
         let r=sql.query_one(&format!("UPDATE people_skill_actions SET action_type_id=$4,objective=$5,intervention=$6,expected_evidence=$7,owner_employee_id=$8,coordinator_employee_id=$9,provider_employee_id=$10,provider_name=$11,start_on=$12::text::date,due_on=$13::text::date,status=$14,closure=$15,approved_by_user_id=$16,approved_at=$17::text::timestamp,completed_at=$18::text::timestamp,completion_evidence=$19,reassessment_due_on=$20::text::date,post_assessment_id=$21,post_level=$22,improvement=$23,next_steps=$24,updated_at=(now() AT TIME ZONE 'UTC') WHERE tenant_id=$1 AND company_id=$2 AND id=$3 RETURNING {}",action_columns()), &[&tenant,&company,&old.id,&new.action_type_id,&new.objective,&new.intervention,&new.expected_evidence,&new.owner_employee_id,&new.coordinator_employee_id,&new.provider_employee_id,&new.provider_name,&start_on,&due_on,&new.status,&new.closure,&new.approved_by_user_id,&approved_at,&completed_at,&new.completion_evidence,&reassessment_due_on,&new.post_assessment_id,&new.post_level,&new.improvement,&new.next_steps]).await?;
         let row=action(&r)?;
-        let event=insert_event(sql,tenant,company,row.id,actor,&kind,Some(&old.status),Some(&row.status),event.comment.as_deref(),event.evidence.as_deref()).await?;
+        let event=insert_event(sql,(tenant,company,row.id,actor),&kind,(Some(&old.status),Some(&row.status)),event.comment.as_deref(),event.evidence.as_deref()).await?;
         Ok((row.clone(),vec![rows::changed("people_skill_action",row.id,&old,&row),rows::created("people_skill_action_event",event.id,&event)]))
     })).await?)
 }
@@ -192,13 +192,9 @@ pub(crate) async fn comment(
         Box::pin(async move {
             let event = insert_event(
                 sql,
-                tenant,
-                company,
-                id,
-                actor,
+                (tenant, company, id, actor),
                 "commented",
-                None,
-                None,
+                (None, None),
                 Some(&comment),
                 evidence.as_deref(),
             )
@@ -215,16 +211,14 @@ pub(crate) async fn comment(
 
 async fn insert_event(
     sql: &impl GenericClient,
-    tenant: i64,
-    company: i64,
-    id: i64,
-    actor: i64,
+    identity: (i64, i64, i64, i64),
     kind: &str,
-    from: Option<&str>,
-    to: Option<&str>,
+    statuses: (Option<&str>, Option<&str>),
     comment: Option<&str>,
     evidence: Option<&str>,
 ) -> DbResult<ActionEvent> {
+    let (tenant, company, id, actor) = identity;
+    let (from, to) = statuses;
     let r=sql.query_one(&format!("INSERT INTO people_skill_action_events (tenant_id,company_id,action_id,actor_user_id,event_type,from_status,to_status,comment,evidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING {}",event_row_columns()), &[&tenant,&company,&id,&actor,&kind,&from,&to,&comment,&evidence]).await?;
     event_row(&r)
 }
