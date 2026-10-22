@@ -882,7 +882,7 @@ impl State {
             .options(
                 self.companies
                     .iter()
-                    .map(|c| Choice::new(c.id.to_string(), &c.name))
+                    .map(|c| Choice::new(&c.name, c.id.to_string()))
                     .collect(),
             );
         let company_form = html(&Form {
