@@ -1,0 +1,35 @@
+{# Bilimbi Attendance.Web settings pages, composed from Platform UI. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id=id, variant=bilibi_ui::PageVariant::Form) %}
+{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}
+{{ tabs }}
+{% if has_company %}<div class="mt-5">{{ company_form }}</div>{% endif %}
+{% if available %}
+<div class="mt-5 space-y-4">
+{% if !is_rules && !is_allowances %}
+{% call ui::section_heading(title=section, description=hint) %}{% endcall %}
+{{ table }}
+{% endif %}
+{% if is_allowances %}
+{% call ui::section_heading(title="Add effective-dated rule", description=hint) %}{% endcall %}
+{% endif %}
+{% call ui::card() %}
+{% call forms::form(id=form_id, event=form_event, actions=submit) %}
+<div class="{% if is_rules %}space-y-4{% else %}grid gap-2 sm:grid-cols-2{% endif %}">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
+{% endcall %}
+{% endcall %}
+{% if is_allowances %}
+{% call ui::section_heading(title="Rule history") %}{% endcall %}
+{{ table }}
+{% endif %}
+</div>
+{% else %}<div class="mt-5">{{ empty }}</div>{% endif %}
+{{ confirmation }}
+{% endcall %}
+</div>

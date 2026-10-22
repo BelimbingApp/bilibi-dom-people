@@ -4109,6 +4109,10 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
 
+// PG1: reuse the Performance fixture, then exercise progression through facades.
+mod progression;
+pub use progression::run as progression;
+
 // PY3: approved private documents and retention, after the default walkthrough.
 mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
