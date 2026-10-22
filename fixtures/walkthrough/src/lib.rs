@@ -812,6 +812,24 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    organisation::run(
+        &services,
+        &client,
+        organisation::Cast {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_user: MANAGER,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+            contractor_employment: contractor_employment.id,
+        },
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -828,6 +846,8 @@ pub async fn run(url: &str) -> Result<()> {
 
     // Claims assignment pickers include the pending employment PW1 created.
     claims::all_status_members(&services, &manager, COMPANY).await?;
+
+    references::run(&services, &grants, &client, &admin, &manager, &viewer).await?;
 
     // Skills assessments (PK2): its own proof block at the end.
     assessments::run(
@@ -1505,6 +1525,9 @@ async fn pw1(
 
 // Leave (slice PL1).
 mod leave;
+
+// Reference data (slice PD1).
+mod references;
 
 // ---- Skills catalog (PK1) --------------------------------------------------
 //
@@ -2497,6 +2520,9 @@ async fn skills_catalog(
 
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
+
+// ---- Organisation (PO1): its own block, run from the end of `run` ----
+mod organisation;
 
 // Skills assessments (slice PK2).
 mod assessments;
