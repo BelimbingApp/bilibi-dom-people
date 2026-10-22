@@ -75,6 +75,8 @@ fn spec() -> Result<Arc<ListSpec>> {
     ListSpec {
         page_sizes: vec![25, 50, 100],
         default_page_size: 50,
+        invalid_page_size: bilibi_ui::InvalidPageSize::Default,
+        omit_blank: vec!["search".into()],
         filters: BTreeMap::from([
             ("company_id".into(), Filter::string("")),
             ("as_of".into(), Filter::string(&today().to_string())),
