@@ -1,0 +1,29 @@
+# Bilimbi People Payroll foundation, mounted at apps/domains/people.
+[package]
+name = "bilibi-people-payroll"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bilibi-authz.workspace = true
+bilibi-company.workspace = true
+bilibi-database.workspace = true
+bilibi-module-registry.workspace = true
+bilibi-party-ids.workspace = true
+bilibi-settings.workspace = true
+bilibi-tenancy.workspace = true
+bilibi-people-settings = { path = "../settings" }
+bilibi-people-workforce = { path = "../workforce" }
+bilibi-people-attendance = { path = "../attendance" }
+bilibi-people-leave = { path = "../leave" }
+bilibi-people-claims = { path = "../claims" }
+inventory.workspace = true
+jiff = "0.2.38"
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio-postgres.workspace = true
