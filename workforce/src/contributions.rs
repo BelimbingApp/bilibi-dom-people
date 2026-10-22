@@ -43,7 +43,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/principal_directory", "base/settings", "base/tenancy",
+            "base/ports", "base/principal_directory", "base/settings", "base/tenancy",
             "core/affiliation", "core/company", "core/person",
         ],
         migrations: &[(
@@ -60,6 +60,7 @@ inventory::submit! {
                     affiliations: services.get(bilibi_affiliation::SERVICE)?,
                     directory: services.get("base/principal_directory.directory")?,
                     authentication: services.get("base/tenancy.authentication")?,
+                    ports: services.get(bilibi_ports::SERVICE)?,
                 }))
             },
         }],

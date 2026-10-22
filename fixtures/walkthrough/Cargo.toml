@@ -8,9 +8,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-# `cargo run -p bilibi-people-walkthrough` is the Workforce walkthrough that
-# prepares the database; each later block is a binary under src/bin.
-default-run = "bilibi-people-walkthrough"
 
 [dependencies]
 bilibi-affiliation.workspace = true
@@ -31,13 +28,14 @@ jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
 
-# Attendance (port plan row PA1): the attendance core walkthrough block.
-bilibi-people-attendance = { path = "../../attendance" }
+# PW1: the department Core Company adds for the employment change.
+bilibi-company.workspace = true
+serde_json.workspace = true
 
 # Leave (slice PL1).
 bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
 
-# Attendance transaction interleavings (PA1).
-bilibi-company.workspace = true
+# Attendance (PA1).
+bilibi-people-attendance = { path = "../../attendance" }
 bilibi-settings.workspace = true

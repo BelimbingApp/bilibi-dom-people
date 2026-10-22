@@ -268,7 +268,8 @@ impl Attendance {
         let employee_id = self
             .workforce
             .authorize_self(scope, company_id, SELF_VIEW)
-            .await?;
+            .await?
+            .employee_id;
         self.list_days(scope, company_id, employee_id).await
     }
 

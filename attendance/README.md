@@ -72,7 +72,7 @@ All five live under the Authz domain `people` and are granted by an administrato
 
 ## Self-service seam
 
-`self_days` resolves the signed-in account's employee through `Workforce::authorize_self`, which this slice adds to Workforce as the smallest seam for the account link (port plan row PW1 owns the full self-service surface, including `with_self_employee_lock` for writes): the affiliation the account's session carries (`Scope::actor().affiliation()`) must be employed in the explicit company in one of its working statuses, re-proved through Base Authentication and resolved on every call, so an account unlinked or relinked while a page stays connected answers for its former employee no more.
+`self_days` uses Workforce's `authorize_self` and the returned `SelfEmployee.employee_id`. Workforce re-proves the account through Base Authentication on each call and resolves its affiliation to a working employment in the requested company. An account unlinked between calls is refused even when a caller retains an earlier scope. PW1 owns this proof and the employment lock used by self-service writes.
 
 ## Database
 
