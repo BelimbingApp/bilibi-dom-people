@@ -82,10 +82,8 @@ inventory::submit! {
             "people-skills-002-assessments",
             include_str!("../migrations/002-assessments.sql"),
         )],
+        // Factories resolve earlier services in this module; install the facade first.
         services: &[Service {
-            id: crate::pk6::PAGES,
-            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
-        }, Service {
             id: SERVICE,
             factory: |services| {
                 Ok(Arc::new(Skills {
@@ -97,6 +95,9 @@ inventory::submit! {
                     queue: services.get("base/queue.store")?,
                 }))
             },
+        }, Service {
+            id: crate::pk6::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
         }, Service {
             id: crate::reminder_worker::SERVICE,
             factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::reminder_worker::ReminderWorker(services.get(SERVICE)?))))),
