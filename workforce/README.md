@@ -321,3 +321,7 @@ from other rows do not wait on it.
 the same edges. No People sibling: every other People module depends on
 this one, and Organisation answers the position scan through a port, not
 an edge.
+
+## Assignment directory
+
+`employees_at_any_status(scope, company_id, employee_ids)` returns directory summaries for company assignment pickers. Pass `None` for the company list, or at most 1,000 positive IDs to validate members. It includes pending, probation, active, inactive and terminated employments. Names and work contacts still come through Core; private employment fields stay behind `employment` and its capability. Claims uses this read so assignments can cover employees before or after their working period. `employees`, `employees_by_ids` and `employee` continue to return only working staff.

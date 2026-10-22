@@ -770,6 +770,26 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // Claims (slice PC1): currencies, catalog, policies and assignments, on
+    // the employments created above.
+    claims::run(
+        &services,
+        &client,
+        claims::Context {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            contractor: &contractor,
+            staff_user: STAFF,
+            tenant: TENANT,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+        },
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -784,6 +804,9 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // Claims assignment pickers include the pending employment PW1 created.
+    claims::all_status_members(&services, &manager, COMPANY).await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -791,6 +814,9 @@ pub async fn run(url: &str) -> Result<()> {
     Ok(())
 }
 
+// Slice blocks, each its own module, added at the end so parallel slices
+// do not clash on merge.
+mod claims;
 // ---------------------------------------------------------------------------
 // PW1: employment records and self-service. Reads the private employment
 // facts and the summary, changes and ends employments through the
