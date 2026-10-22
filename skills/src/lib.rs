@@ -23,10 +23,14 @@
 //! first holds the company's writable lock, so an archived company is
 //! refused and a company's writes are serialized.
 //!
-//! This is the catalog slice (PK1 of the port plan). Assessments (PK2),
-//! reassessment requests and development actions (PK3) and reminders (PK7)
-//! add their tables and functions beside these; the pages land in PK4–PK6.
+//! Catalog and assessments (PK1–PK2) share this facade. Reassessment and
+//! development action writes (PK3) and reminders (PK7) follow; pages land
+//! in PK4–PK6.
 //! See `README.md`.
+mod access;
+mod assessment_api;
+mod assessment_types;
+mod assessments;
 mod catalog;
 mod contributions;
 mod policy;
@@ -34,10 +38,14 @@ mod positions;
 mod profiles;
 mod rows;
 mod scales;
+mod standing;
 mod validate;
 
+pub use assessment_types::*;
 pub use contributions::{
-    CAPABILITIES, CATALOG_MANAGE, CATALOG_VIEW, POLICY_MANAGE, PROFILES_PUBLISH,
+    ASSESSMENTS_APPROVE, ASSESSMENTS_MANAGE, ASSESSMENTS_REVIEW, ASSESSMENTS_SUBMIT,
+    ASSESSMENTS_VIEW, CAPABILITIES, CATALOG_MANAGE, CATALOG_VIEW, POLICY_MANAGE, PROFILES_PUBLISH,
+    REASSESSMENTS_SUBMIT, SELF_VIEW,
 };
 pub use policy::{Policy, PolicyChanges, POLICY_KEYS};
 
@@ -138,6 +146,42 @@ pub enum SkillsError {
     Ambiguous,
     #[error("Enter whole numbers within the shown limits.")]
     InvalidPolicy,
+    #[error("That employee is outside the people you may act on.")]
+    OutOfReach,
+    #[error("You cannot assess yourself.")]
+    SelfAssessment,
+    #[error("You cannot decide on work you did or that concerns you.")]
+    SelfApproval,
+    #[error("No published requirement covers that skill for this employee.")]
+    NoRequirement,
+    #[error("That skill is not available.")]
+    AssessmentSkillUnavailable,
+    #[error("That level is not on the requirement's proficiency scale.")]
+    AssessmentLevelNotOnScale,
+    #[error("That submission was already used for a different record.")]
+    KeyConflict,
+    #[error("An assessment cannot be dated in the future.")]
+    FutureAssessment,
+    #[error("The validity date cannot be before the assessment date.")]
+    InvalidValidity,
+    #[error("That assessment cannot be corrected.")]
+    NotSupersedable,
+    #[error("Only the original assessor can correct a returned assessment.")]
+    NotOriginalAssessor,
+    #[error("That assessment already has a correction.")]
+    AlreadySuperseded,
+    #[error("That item is no longer pending.")]
+    NotPending,
+    #[error("Only a verified assessment can be finalized.")]
+    NotVerified,
+    #[error("A note is required to return an assessment.")]
+    NoteRequired,
+    #[error("That could not be done.")]
+    InvalidAssessment,
+    #[error("That could not be done.")]
+    InvalidNote,
+    #[error("A working employee must be linked to your account.")]
+    Unavailable,
     /// Refused values, in the words a form shows beside each field.
     #[error("Check the entered values.")]
     Invalid(Vec<FieldError>),
@@ -161,6 +205,7 @@ impl From<WorkforceError> for SkillsError {
             WorkforceError::NotFound => Self::NotFound,
             WorkforceError::CompanyArchived => Self::CompanyArchived,
             WorkforceError::Invalid(errors) => Self::Invalid(errors),
+            WorkforceError::NotLinked => Self::Unavailable,
             WorkforceError::Failed(error) => Self::Failed(error),
             _ => Self::NotFound,
         }

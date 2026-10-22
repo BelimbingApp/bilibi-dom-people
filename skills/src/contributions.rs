@@ -78,6 +78,9 @@ inventory::submit! {
         migrations: &[(
             "people-skills-001-catalog",
             include_str!("../migrations/001-catalog.sql"),
+        ), (
+            "people-skills-002-assessments",
+            include_str!("../migrations/002-assessments.sql"),
         )],
         services: &[Service {
             id: SERVICE,
