@@ -65,6 +65,19 @@ impl UiPage<Scope, Error> for Pages {
     }
 }
 
+// One vocabulary supplies detail labels and optional scalar columns.
+bilibi_ui::record_fields! { mod review_fields {
+    PERIOD: bilibi_ui::RecordField::new("period", "Period"),
+    OUTCOME: bilibi_ui::RecordField::new("outcome", "Outcome"),
+    RATIONALE: bilibi_ui::RecordField::new("rationale", "Rationale").excluded("Long review rationale stays in the detail."),
+    CUTOFF: bilibi_ui::RecordField::new("cutoff", "Cutoff"),
+    CORRECTION: bilibi_ui::RecordField::new("correction", "Correction").excluded("Long correction reasons stay in the detail."),
+    RELEASED: bilibi_ui::RecordField::new("released", "Released"),
+    EVIDENCE: bilibi_ui::RecordField::new("evidence", "Evidence").excluded("Pinned evidence is a nested collection."),
+    TARGET: bilibi_ui::RecordField::new("target", "Target").excluded("Pinned targets are a nested collection."),
+    RESPONSE: bilibi_ui::RecordField::new("response", "Response").excluded("Responses are a nested collection."),
+} }
+
 const TABLES: [(&str, &[(&str, &str)]); 7] = [
     (
         "performance-reviews",
@@ -170,6 +183,13 @@ impl List {
                     .map(|(key, label)| BuiltinColumn::new(key, label))
                     .collect(),
             )
+            .map(|columns| {
+                if index <= 1 {
+                    columns.with_record_fields(review_fields::ALL.iter().copied())
+                } else {
+                    columns
+                }
+            })
             .map_err(|_| Error::Internal)?,
         })
     }
@@ -872,6 +892,30 @@ impl State {
         body.push(&render(&pagination)?);
         Ok(body)
     }
+    fn review_slots(&self, row: FlexRow, record: &Review) -> UiResult<FlexRow> {
+        Ok(row
+            .slot(
+                "period",
+                Html::text(&format!("{} – {}", record.period_start, record.period_end)),
+            )
+            .slot("outcome", Html::text(&record.outcome))
+            .slot(
+                "cutoff",
+                instant(
+                    &self.display,
+                    &format!("list-cutoff-{}", record.id),
+                    &record.cutoff_at,
+                )?,
+            )
+            .slot(
+                "released",
+                if let Some(at) = &record.released_at {
+                    instant(&self.display, &format!("list-released-{}", record.id), at)?
+                } else {
+                    Html::text("Pending independent release")
+                },
+            ))
+    }
     fn reviews_table(&self) -> UiResult<Html> {
         let rows = self
             .reviews
@@ -886,6 +930,7 @@ impl State {
                     .slot("version", Html::text(&r.version.to_string()))
                     .slot("state", Html::text(&r.status))
                     .slot("outcome", Html::text(&r.outcome));
+                row = self.review_slots(row, r)?;
                 row.actions = action("select", "Read", r.id)?;
                 Ok(row)
             })
@@ -910,6 +955,7 @@ impl State {
                         let mut row = FlexRow::new(format!("release-{}", r.id))
                             .slot("employee", Html::text(&self.employee(r.employee_id)))
                             .slot("rationale", Html::text(&r.rationale));
+                        row = self.review_slots(row, r)?;
                         row.actions = action("select", "Read", r.id)?;
                         row.actions
                             .push(&action("request_release", "Release", r.id)?);
@@ -1205,6 +1251,9 @@ impl State {
                     field = field.checked(value.and_then(Value::as_str) == Some("true"));
                 }
             }
+            if matches!(*key, "note" | "response") {
+                field = field.required();
+            }
             body.push(&render(&field)?);
         }
         let body = render(&Form {
@@ -1247,22 +1296,22 @@ impl State {
         let r = &detail.review;
         let mut facts = vec![
             Fact {
-                title: "Period",
+                title: review_fields::get(review_fields::PERIOD.id).label,
                 value: Html::text(&format!("{} – {}", r.period_start, r.period_end)),
                 ..Fact::default()
             },
             Fact {
-                title: "Outcome",
+                title: review_fields::get(review_fields::OUTCOME.id).label,
                 value: Html::text(&r.outcome),
                 ..Fact::default()
             },
             Fact {
-                title: "Rationale",
+                title: review_fields::get(review_fields::RATIONALE.id).label,
                 value: Html::text(&r.rationale),
                 ..Fact::default()
             },
             Fact {
-                title: "Cutoff",
+                title: review_fields::get(review_fields::CUTOFF.id).label,
                 value: instant(
                     &self.display,
                     &format!("review-cutoff-{}", r.id),
@@ -1271,12 +1320,12 @@ impl State {
                 ..Fact::default()
             },
             Fact {
-                title: "Correction",
+                title: review_fields::get(review_fields::CORRECTION.id).label,
                 value: Html::text(r.change_reason.as_deref().unwrap_or("Original version")),
                 ..Fact::default()
             },
             Fact {
-                title: "Released",
+                title: review_fields::get(review_fields::RELEASED.id).label,
                 value: if let Some(at) = &r.released_at {
                     instant(&self.display, &format!("review-released-{}", r.id), at)?
                 } else {
@@ -1287,7 +1336,7 @@ impl State {
         ];
         for evidence in &detail.observations {
             facts.push(Fact {
-                title: "Evidence",
+                title: review_fields::get(review_fields::EVIDENCE.id).label,
                 value: Html::text(&format!(
                     "{} · {} · {}",
                     evidence.evidence, evidence.source_reference, evidence.source_version
@@ -1297,7 +1346,7 @@ impl State {
         }
         for target in &detail.targets {
             facts.push(Fact {
-                title: "Target",
+                title: review_fields::get(review_fields::TARGET.id).label,
                 value: Html::text(&format!(
                     "Target version {}: {}",
                     target.version, target.target
@@ -1307,7 +1356,7 @@ impl State {
         }
         for response in &detail.responses {
             facts.push(Fact {
-                title: "Response",
+                title: review_fields::get(review_fields::RESPONSE.id).label,
                 value: Html::text(&response.response),
                 ..Fact::default()
             });

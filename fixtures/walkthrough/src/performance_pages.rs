@@ -379,6 +379,22 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         detail.responses.len() == 1 && detail.responses[0].response == "PM2 response from page",
         "response retained on the released version",
     )?;
+    // Keep a view-only account available for the browser proof as well.
+    grants.set_direct(&admin, 2, pm::VIEW, Some(true)).await?;
+    let viewer = auth
+        .authenticate(&**client, 1, 2, "walkthrough".into())
+        .await?;
+    let mut readonly = mount(&page, &viewer, "reviews", &query).await?;
+    let body = refresh(&mut readonly, &viewer).await?;
+    require(
+        body.html.contains("Review drafting is read-only") && !body.html.contains("create_review"),
+        "view-only reader sees the reference's withheld controls",
+    )?;
+    let body = event(&mut readonly, &viewer, form("create_definition", &[])).await?;
+    require(
+        body.html.contains("You cannot do that for this company."),
+        "forged write from the view-only page is refused",
+    )?;
     println!("PM2 page proof complete");
     Ok(())
 }
