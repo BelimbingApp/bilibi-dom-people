@@ -1,7 +1,6 @@
 //! Attendance (`people/attendance`, Bilimbi `Bilimbi.People.Attendance`):
 //! company-scoped clock facts, day projections, shift templates, clocking
-//! locations and the company's attendance rules. Rosters, adjustments and
-//! allowance rules follow in port plan row PA2.
+//! locations, rosters, adjustments, allowance rules and company rules.
 //!
 //! This is the module's one facade. Pages, operations and other People
 //! modules call [`Attendance`], resolved from the registry as [`SERVICE`];
@@ -21,13 +20,19 @@
 //!
 //! See `README.md`.
 mod access;
+mod adjustments;
 mod agent_operations;
+mod allowances;
 mod clock;
 mod contributions;
 mod locations;
+mod rosters;
 mod rules;
 mod shifts;
+mod workflow;
 
+pub use adjustments::{AdjustmentRequest, NewAdjustment, PendingAdjustment};
+pub use allowances::{AllowanceRule, NewAllowanceRule};
 pub use clock::{ClockEvent, ClockInput, Day, DayStatus, EventType, DAYS_SHOWN};
 pub use contributions::{
     ADJUSTMENTS_APPROVE, ADJUSTMENT_WINDOW_KEY, ALLOWANCES_MANAGE, CAPABILITIES, CLOCK_RECORD,
@@ -35,6 +40,10 @@ pub use contributions::{
     SELF_VIEW, TIMEZONE_KEY,
 };
 pub use locations::{ClockingLocation, NewClockingLocation, MAX_RADIUS_METERS};
+pub use rosters::{
+    PublishedShift, Roster, RosterEmployee, RosterEntry, RosterValue, MAX_ROSTER_DAYS,
+    MAX_ROSTER_EMPLOYEES, SELF_ROSTER_DAYS,
+};
 pub use rules::{RuleChanges, Rules};
 pub use shifts::{NewShiftTemplate, ShiftTemplate};
 
@@ -103,6 +112,38 @@ pub enum AttendanceError {
     /// Refused values, in the words a form shows beside each field.
     #[error("Invalid input")]
     Invalid(Vec<FieldError>),
+    #[error("Choose a period of 1 to 31 days.")]
+    InvalidPeriod,
+    #[error("That shift template is retired.")]
+    ShiftUnavailable,
+    #[error("Enter a valid date and time.")]
+    InvalidTime,
+    #[error("The time cannot be in the future.")]
+    FutureTime,
+    #[error("That date is outside the adjustment request window.")]
+    OutsideWindow,
+    #[error("A request for this clock event already exists.")]
+    DuplicateRequest,
+    #[error("This request key was already used for a different clock event.")]
+    RequestKeyConflict,
+    #[error("This request has already been decided.")]
+    NotPending,
+    #[error("You cannot decide your own attendance request.")]
+    SelfApproval,
+    #[error("Add a note explaining the rejection.")]
+    NoteRequired,
+    #[error("Keep the note within 500 characters.")]
+    NoteTooLong,
+    #[error("Invalid decision")]
+    InvalidDecision,
+    #[error("The employee is no longer working in this company.")]
+    EmployeeUnavailable,
+    #[error("Clocking is unavailable for this account.")]
+    SelfClockUnavailable,
+    #[error("This code already has an overlapping effective period.")]
+    EffectivePeriodOverlap,
+    #[error("Choose an earlier end date.")]
+    InvalidEndDate,
     /// A database or capture failure; never a refusal.
     #[error(transparent)]
     Failed(Error),

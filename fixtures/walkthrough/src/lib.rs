@@ -3716,3 +3716,9 @@ mod training;
 
 // PT2: attendance revisions, capacity, private evidence and purge recovery.
 mod participation;
+
+// Attendance workflows (PA2): standalone executable block on the prepared database.
+mod attendance_workflows;
+pub async fn attendance_workflows(url: &str) -> Result<()> {
+    attendance_workflows::run(url).await
+}
