@@ -13,9 +13,9 @@ use bilibi_ui::{
         LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
         PageFuture, PageRequest,
     },
-    params, Badge, BadgeKind, BuiltinColumn, Button, ButtonVariant, Choice, ColumnsOutcome,
-    ConfirmDialog, EmptyState, Field, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns,
-    ListSpec, ListState, LocationAction, LocationReport, StatusKind, TableEmpty, NO_FLASH,
+    params, Badge, BadgeKind, BuiltinColumn, Button, Choice, ColumnsOutcome, ConfirmDialog,
+    EmptyState, Field, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec,
+    ListState, LocationAction, LocationReport, StatusKind, TableEmpty, NO_FLASH,
 };
 use jiff::{tz::TimeZone, Timestamp};
 use rust_decimal::Decimal;
@@ -635,7 +635,6 @@ impl MyAttendance {
             ];
             view.submit = render(&Button {
                 button_type: "submit",
-                variant: ButtonVariant::Primary,
                 body: Html::text("Submit request"),
                 ..Default::default()
             })?;
