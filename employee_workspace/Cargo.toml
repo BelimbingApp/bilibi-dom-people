@@ -1,0 +1,29 @@
+# Bilimbi People EmployeeWorkspace, mounted in the Bilibi workspace.
+[package]
+name = "bilibi-people-employee-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+askama.workspace = true
+bilibi-affiliation.workspace = true
+bilibi-authz.workspace = true
+bilibi-company.workspace = true
+bilibi-database.workspace = true
+bilibi-menu.workspace = true
+bilibi-module-registry.workspace = true
+bilibi-party-ids.workspace = true
+bilibi-person.workspace = true
+bilibi-people-settings = { path = "../settings" }
+bilibi-people-workforce = { path = "../workforce" }
+bilibi-tenancy.workspace = true
+bilibi-ui.workspace = true
+inventory.workspace = true
+jiff = "0.2.38"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio-postgres.workspace = true
