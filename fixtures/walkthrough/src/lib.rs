@@ -4112,3 +4112,7 @@ mod training_evaluation;
 // PM2: performance page mounts and live-event workflow on disposable data.
 mod performance_pages;
 pub use performance_pages::run as performance_pages;
+
+// PG1: reuse the Performance fixture, then exercise progression through facades.
+mod progression;
+pub use progression::run as progression;
