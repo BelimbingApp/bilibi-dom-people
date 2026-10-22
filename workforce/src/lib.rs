@@ -98,6 +98,10 @@ pub enum WorkforceError {
     /// An agent Person: employees are humans.
     #[error("An agent is not an employee")]
     NotHuman,
+    /// The signed-in account is not linked to a working employee of the
+    /// company (Bilimbi `:not_linked`).
+    #[error("Your account is no longer linked to a working employee in this company.")]
+    NotLinked,
     /// Refused values, in the words a form shows beside each field.
     #[error("Invalid input")]
     Invalid(Vec<FieldError>),
@@ -532,6 +536,58 @@ impl Workforce {
         .await?;
         tx.commit().await?;
         Ok(employment)
+    }
+
+    /// The working employee the signed-in account is linked to in this
+    /// company, resolved now (Bilimbi `Authorization.self_employee/2`): the
+    /// employment holding the affiliation the account's session carries
+    /// (`Scope::actor().affiliation()`), in the explicit company, in one of
+    /// the company's working statuses. An account with no affiliation, one
+    /// affiliated elsewhere, or a linked employee who is not working here
+    /// is `NotLinked`. Resolved on every call, so an account unlinked or
+    /// relinked while a page stays connected answers for its former
+    /// employee no more.
+    ///
+    /// Interim seam for the Attendance core (port plan row PA1): PW1 moves
+    /// this beside `authorize_self` and `with_self_employee_lock`, which
+    /// re-proves the link under the employment lock for self-service writes.
+    pub async fn self_employee(&self, scope: &Scope, company_id: i64) -> Result<i64> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        let Some(affiliation) = scope.actor().affiliation() else {
+            return Err(WorkforceError::NotLinked);
+        };
+        let company = live_company(&**client, scope, company_id)
+            .await
+            .map_err(|_| WorkforceError::NotLinked)?;
+        let statuses = self
+            .company_working_statuses(&**client, scope, &company)
+            .await?;
+        employments::by_affiliation(&**client, scope.tenant(), company.id, affiliation.get())
+            .await?
+            .filter(|row| {
+                statuses
+                    .iter()
+                    .any(|status| *status == row.employment.status)
+            })
+            .map(|row| row.employment.id)
+            .ok_or(WorkforceError::NotLinked)
+    }
+
+    /// Authorizes a self-service capability for the company, then resolves
+    /// the actor's own working employee (Bilimbi `authorize_self/3`):
+    /// `Unauthorized` or `NotFound` from the capability check, else the
+    /// employee id or `NotLinked`.
+    pub async fn authorize_self(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        capability: &str,
+    ) -> Result<i64> {
+        {
+            let client = self.db.get().await.map_err(Error::from)?;
+            authorization::authorize(&**client, scope, company_id, capability).await?;
+        }
+        self.self_employee(scope, company_id).await
     }
 
     async fn company_working_statuses(

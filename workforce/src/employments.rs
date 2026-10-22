@@ -112,6 +112,26 @@ pub(crate) async fn reporting_to(
         .collect()
 }
 
+/// The employment holding one affiliation in the company, at any status,
+/// or `None` (an affiliation is employed at most once).
+pub(crate) async fn by_affiliation(
+    client: &impl GenericClient,
+    tenant: i64,
+    company_id: i64,
+    affiliation_id: i64,
+) -> Result<Option<Row_>> {
+    client
+        .query_opt(
+            &format!("SELECT {COLUMNS} {FROM} WHERE e.tenant_id = $1 AND e.company_id = $2 AND e.affiliation_id = $3"),
+            &[&tenant, &company_id, &affiliation_id],
+        )
+        .await
+        .map_err(Error::from)?
+        .as_ref()
+        .map(read)
+        .transpose()
+}
+
 /// One employment of the company at any status, or `None`.
 pub(crate) async fn find(
     client: &impl GenericClient,

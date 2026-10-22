@@ -27,3 +27,7 @@ bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
+
+# Attendance (port plan row PA1): the attendance core walkthrough block.
+bilibi-people-attendance = { path = "../../attendance" }
+rust_decimal.workspace = true
