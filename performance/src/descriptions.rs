@@ -192,7 +192,11 @@ impl Performance {
         if !(0..=8).contains(&input.precision) {
             return Err(PerformanceError::Invalid(vec![FieldError::new(
                 "precision",
-                "must be between 0 and 8",
+                if input.precision < 0 {
+                    "must be greater than or equal to 0"
+                } else {
+                    "must be less than or equal to 8"
+                },
             )]));
         }
         if value["direction"] == "rubric" && value["rubric"].as_str().is_none_or(str::is_empty) {

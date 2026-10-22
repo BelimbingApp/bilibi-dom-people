@@ -14,11 +14,15 @@ pub(crate) fn clean(input: &impl Serialize, required: &[&'static str]) -> Result
             let text = text.trim().to_owned();
             if text.chars().count() > 8000 {
                 // FieldError owns a static field key; known inputs are checked below.
-                let field = required
-                    .iter()
-                    .copied()
-                    .find(|f| *f == key)
-                    .unwrap_or("values");
+                let field = match key.as_str() {
+                    "rubric" => "rubric",
+                    "effective_to" => "effective_to",
+                    _ => required
+                        .iter()
+                        .copied()
+                        .find(|f| *f == key)
+                        .unwrap_or("values"),
+                };
                 errors.push(FieldError::new(
                     field,
                     "should be at most 8000 character(s)",
