@@ -152,3 +152,11 @@ Recent days shows the latest 31 recorded days. Upcoming shifts shows only publis
 To request an adjustment, choose Clock in or Clock out, enter the missed time in the company’s attendance time zone, and give a reason. A successful submission clears the form and mints a new request key. Refused submissions keep the entered values. A pending request can be cancelled after a confirmation; the server holds the selected request until confirmation or dismissal.
 
 Every event refreshes the account’s current employment and company rules. Every write checks the self-service permission again before calling Attendance, which rechecks it under the company and employment locks. Revoking access or unlinking the account withdraws the page’s records and controls on the next event.
+
+For the PA4 browser proof, run the main People walkthrough on a disposable database, then:
+
+```sh
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin my-attendance -- seed
+```
+
+Sign in as `manager@example.test` with the Platform fixture password. The page shows 31 of 32 recorded days, a shift and a rest day, and a pending request. A draft replacement and the published shift on day 15 stay outside this view. Run the same binary with `off`, `location` or `on` to change clocking policy; `revoke` and `restore` change the manager’s self-service grant. `unlink` and `link` change the manager’s account link; `link-staff` links the staff account for the empty-state proof. Account link changes end the affected account’s sessions, so sign in again afterwards.
