@@ -3790,3 +3790,9 @@ mod training_learning_pages;
 pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
     training_learning_pages::control(url, action).await
 }
+
+// PK7: recipient notifications, reminder recovery and operator worker proof.
+mod skill_reminders;
+pub async fn skill_reminders(url: &str) -> Result<()> {
+    skill_reminders::run(url).await
+}

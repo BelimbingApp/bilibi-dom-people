@@ -1,7 +1,7 @@
 //! Bilimbi Skills.Reminders: due rules, period claims and durable delivery.
 use crate::{
-    access, assessments, policy, rows, standing, DueReminder, Reminder, Result, Skills,
-    SkillsError, Write, ASSESSMENTS_MANAGE,
+    access, policy, rows, standing, DueReminder, Reminder, Result, Skills, SkillsError, Write,
+    ASSESSMENTS_MANAGE,
 };
 use bilibi_database::Error;
 use bilibi_notifications::Notice;
@@ -295,9 +295,11 @@ pub(super) async fn deliver(
         .begin_reminders(&mut client, scope, company, "send_reminder", execution)
         .await?;
     let row = locked(&w, id).await?;
-    if row.state == "sent"
-        || (retry_as_of.is_some() && !retryable(&w, id, retry_as_of.unwrap()).await?)
-    {
+    let eligible = match retry_as_of {
+        Some(day) => retryable(&w, id, day).await?,
+        None => true,
+    };
+    if row.state == "sent" || !eligible {
         w.tx.rollback().await?;
         return Ok(Delivery::Skipped);
     }
@@ -322,11 +324,11 @@ pub(super) async fn deliver(
         .map_err(Error::from)?
         .map(|r| r.get(0));
     let notice = notice(&row, skill.as_deref().unwrap_or("A skill"))?;
-    match skills
+    let notified = skills
         .notifications
         .notify(&mut w.tx, scope, &[row.recipient_user_id], &notice)
-        .await
-    {
+        .await;
+    match notified {
         Ok(()) => {
             state(&mut w, row, None).await?;
             w.tx.commit().await?;
