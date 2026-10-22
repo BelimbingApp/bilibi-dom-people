@@ -59,6 +59,7 @@ inventory::submit! {
                     settings: services.get("base/settings.store")?,
                     affiliations: services.get(bilibi_affiliation::SERVICE)?,
                     directory: services.get("base/principal_directory.directory")?,
+                    authentication: services.get("base/tenancy.authentication")?,
                 }))
             },
         }],

@@ -72,7 +72,7 @@ All five live under the Authz domain `people` and are granted by an administrato
 
 ## Self-service seam
 
-`self_days` resolves the signed-in account's employee through `Workforce::authorize_self`, which this slice adds to Workforce as the smallest seam for the account link (port plan row PW1 owns the full self-service surface, including `with_self_employee_lock` for writes): the affiliation the account's session carries (`Scope::actor().affiliation()`) must be employed in the explicit company in one of its working statuses, resolved on every call, so an account unlinked or relinked while a page stays connected answers for its former employee no more.
+`self_days` resolves the signed-in account's employee through `Workforce::authorize_self`, which this slice adds to Workforce as the smallest seam for the account link (port plan row PW1 owns the full self-service surface, including `with_self_employee_lock` for writes): the affiliation the account's session carries (`Scope::actor().affiliation()`) must be employed in the explicit company in one of its working statuses, re-proved through Base Authentication and resolved on every call, so an account unlinked or relinked while a page stays connected answers for its former employee no more.
 
 ## Database
 
@@ -87,7 +87,7 @@ BILIBI_ENV=development cargo run -p bilibi-people-walkthrough
 BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance
 ```
 
-The first binary creates the employments. The second proves attendance: the rules with their refusals, shift templates and clocking locations added and retired, clock facts recorded for Sam Staff (replay, conflict, a cross-midnight close, a clock-out past the maximum length, a lone clock-out, the location rule against HQ before and after it is retired), the days as the operator and as `staff@example.test` see them, and PostgreSQL refusing what the facade never attempts. The queued-write proof holds the company lock while a clock or shift creation waits, then commits a location requirement or revoked grant. Both waiting calls refuse and leave no fact or template.
+The first binary creates the employments. The second proves attendance: the rules with their refusals, shift templates and clocking locations added and retired, clock facts recorded for Sam Staff (replay, conflict, a cross-midnight close, a clock-out past the maximum length, a lone clock-out, the location rule against HQ before and after it is retired), the days as the operator and as `staff@example.test` see them, and PostgreSQL refusing what the facade never attempts. The queued-write proof holds the company lock while a clock or shift creation waits, then commits a location requirement or revoked grant. Both waiting calls refuse and leave no fact or template. It also unlinks the employee account through Core User, refuses a self-read with its earlier scope, then restores the link.
 
 ## Dependencies
 

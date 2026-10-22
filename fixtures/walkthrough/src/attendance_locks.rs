@@ -1,6 +1,6 @@
 //! Running-database proof: a clock or rules write waiting on the company
 //! lock must observe a rule change or capability revocation ahead of it.
-use super::{COMPANY, MANAGER, RULES_MANAGE};
+use super::{COMPANY, MANAGER, RULES_MANAGE, STAFF};
 use bilibi_company::organisation;
 use bilibi_database::{Db, Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
@@ -38,6 +38,7 @@ pub(super) async fn run(
     services: &Services,
     admin: &Scope,
     manager: &Scope,
+    staff: &Scope,
     employee: i64,
 ) -> Result<()> {
     let attendance = services.get::<Attendance>(bilibi_people_attendance::SERVICE)?;
@@ -165,5 +166,35 @@ pub(super) async fn run(
         return Err(Error::Internal);
     }
     println!("both queued refusals left no clock or template rows");
+
+    let users = services.get::<bilibi_user::UserService>("core/user.accounts")?;
+    let person = staff.actor().person().ok_or(Error::Invalid)?;
+    let affiliation = staff.actor().affiliation().ok_or(Error::Invalid)?;
+    users
+        .unlink(admin, STAFF)
+        .await
+        .map_err(|_| Error::Internal)?;
+    match attendance.self_days(staff, COMPANY).await {
+        Err(AttendanceError::NotLinked) => {
+            println!("account unlinked after scope creation: own days refused (NotLinked)")
+        }
+        other => {
+            eprintln!("unlinked account had unexpected result: {other:?}");
+            return Err(Error::Internal);
+        }
+    }
+    users
+        .link_person(admin, STAFF, person)
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(admin, STAFF, affiliation)
+        .await
+        .map_err(|_| Error::Internal)?;
+    attendance
+        .self_days(staff, COMPANY)
+        .await
+        .map_err(|_| Error::Internal)?;
+    println!("restored account link: own days available again");
     Ok(())
 }

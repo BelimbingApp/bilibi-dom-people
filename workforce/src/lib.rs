@@ -275,6 +275,7 @@ pub struct Workforce {
     settings: Arc<Settings>,
     affiliations: Arc<AffiliationService>,
     directory: Arc<PrincipalDirectory>,
+    authentication: Arc<bilibi_tenancy::Authentication>,
 }
 
 impl Workforce {
@@ -553,7 +554,25 @@ impl Workforce {
     /// re-proves the link under the employment lock for self-service writes.
     pub async fn self_employee(&self, scope: &Scope, company_id: i64) -> Result<i64> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let Some(affiliation) = scope.actor().affiliation() else {
+        // The caller may retain a scope across operations. Re-prove its
+        // account through the authentication owner before using its link.
+        let fresh = self
+            .authentication
+            .reprove(&**client, scope)
+            .await
+            .map_err(|error| match error {
+                Error::Unauthorized | Error::Forbidden | Error::NotFound => {
+                    WorkforceError::NotLinked
+                }
+                other => other.into(),
+            })?;
+        if fresh.actor().affiliation() != scope.actor().affiliation()
+            || fresh.actor().person() != scope.actor().person()
+            || fresh.actor().organisation() != scope.actor().organisation()
+        {
+            return Err(WorkforceError::NotLinked);
+        }
+        let Some(affiliation) = fresh.actor().affiliation() else {
             return Err(WorkforceError::NotLinked);
         };
         let company = live_company(&**client, scope, company_id)

@@ -1458,7 +1458,7 @@ pub async fn attendance(url: &str) -> Result<()> {
         attendance.self_days(&manager, COMPANY).await,
     );
 
-    attendance_locks::run(&db, &services, &admin, &manager, staff_employee).await?;
+    attendance_locks::run(&db, &services, &admin, &manager, &staff, staff_employee).await?;
 
     // PostgreSQL itself refuses what the facade never attempts.
     for (step, sql) in [
