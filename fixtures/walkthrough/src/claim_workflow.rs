@@ -707,6 +707,43 @@ pub(crate) async fn run(
         batch.id
     );
 
+    // Separate transactions contend on the same company/employee locks.
+    let racing = NewRequest {
+        amount: amount(7),
+        ..low.clone()
+    };
+    let (one, two) = tokio::join!(
+        claims.submit_request(&staff, COMPANY, &racing),
+        claims.submit_request(&staff, COMPANY, &racing)
+    );
+    let race_claim = match (one, two) {
+        (Ok(saved), Err(ClaimsError::PossibleDuplicate))
+        | (Err(ClaimsError::PossibleDuplicate), Ok(saved)) => saved,
+        outcomes => {
+            eprintln!("PC2 concurrent submission outcome: {outcomes:?}");
+            return Err(Error::Internal);
+        }
+    };
+    println!("PC2 concurrent duplicate submits: one saved, one refused");
+    saved(
+        "approve concurrent winner",
+        claims
+            .approve_request(manager, COMPANY, race_claim.id, &Approval::default())
+            .await,
+    )?;
+    let (one, two) = tokio::join!(
+        claims.create_handoff_batch(manager, COMPANY, "USD"),
+        claims.create_handoff_batch(manager, COMPANY, "USD")
+    );
+    ensure(
+        "concurrent hand off cannot double-claim approved rows",
+        matches!(
+            (one, two),
+            (Ok(_), Err(ClaimsError::NothingToHandOff))
+                | (Err(ClaimsError::NothingToHandOff), Ok(_))
+        ),
+    )?;
+
     // An old scope must not keep acting after grants or the account link change.
     grants.set_direct(admin, STAFF, SUBMIT, Some(false)).await?;
     refuses(

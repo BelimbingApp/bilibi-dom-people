@@ -163,7 +163,7 @@ impl Claims {
             .await?;
         writable(tx.sql(), scope, company_id).await?;
         authorization::authorize(tx.sql(), scope, company_id, REIMBURSE).await?;
-        if tx.sql().query_opt("SELECT id FROM people_claim_handoff_batches WHERE tenant_id=$1 AND company_id=$2 AND id=$3 FOR UPDATE", &[&scope.tenant(),&company_id,&batch_id]).await.map_err(Error::from)?.is_none() {return Err(ClaimsError::NotFound);}
+        if tx.sql().query_opt("SELECT id FROM people_claim_handoff_batches WHERE tenant_id=$1 AND company_id=$2 AND id=$3", &[&scope.tenant(),&company_id,&batch_id]).await.map_err(Error::from)?.is_none() {return Err(ClaimsError::NotFound);}
         let rows=tx.sql().query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND r.handoff_batch_id=$3 AND r.status='approved' ORDER BY r.id",requests::COLUMNS), &[&scope.tenant(),&company_id,&batch_id]).await.map_err(Error::from)?;
         let claims = rows
             .iter()
@@ -173,9 +173,12 @@ impl Claims {
             return Err(ClaimsError::NothingToReimburse);
         }
         let mut prepared = Vec::with_capacity(claims.len());
-        for claim in claims {
-            self.refuse_own(&tx, scope, company_id, &claim, REIMBURSE)
+        // Prove every employment before taking any Claims row locks.
+        for claim in &claims {
+            self.refuse_own(&tx, scope, company_id, claim, REIMBURSE)
                 .await?;
+        }
+        for claim in claims {
             let locked =
                 requests::find(tx.sql(), scope.tenant(), company_id, claim.id, true).await?;
             let new = workflow::reimbursement(&locked, scope.user(), input)?;
