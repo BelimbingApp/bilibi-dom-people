@@ -3703,6 +3703,12 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// Attendance workflows (PA2): standalone executable block on the prepared database.
+mod attendance_workflows;
+pub async fn attendance_workflows(url: &str) -> Result<()> {
+    attendance_workflows::run(url).await
+}
+
 // PL3: standalone fixture for My leave and Leave approvals browser proofs.
 mod leave_pages;
 pub async fn leave_pages(url: &str) -> Result<()> {
