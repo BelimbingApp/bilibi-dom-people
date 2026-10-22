@@ -972,6 +972,7 @@ impl State {
                 }),
                 ..Default::default()
             })?,
+            form_event: if self.area == Area::Rules { "save_rules" } else { "create" },
             form_id: match self.area {
                 Area::Rules => "attendance-rules-form",
                 Area::Shifts => "attendance-shift-form",
@@ -1039,6 +1040,7 @@ struct View<'a> {
     table: Html,
     submit: Html,
     form_id: &'static str,
+    form_event: &'static str,
     hint: &'static str,
     confirmation: Html,
 }
