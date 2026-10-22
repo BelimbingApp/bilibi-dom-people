@@ -1230,7 +1230,7 @@ impl State {
             for error in &self.errors {
                 summary.push(
                     format!("{id}-{}", error.field),
-                    bilibi_ui::forms::error_sentence(&label(&error.field), &error.message),
+                    bilibi_ui::forms::error_sentence(&label(error.field), &error.message),
                 );
             }
             body.push(&render(&summary)?);
