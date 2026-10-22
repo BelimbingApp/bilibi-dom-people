@@ -263,6 +263,7 @@ impl State {
                 )?);
             }
             if let Some(standing) = &self.standing {
+                let mut explanations = Html::EMPTY;
                 for e in &standing.explanations {
                     let mut content = facts(vec![
                         (
@@ -332,13 +333,20 @@ impl State {
                         EmptyState::missing("No criteria", ""),
                         false,
                     )?);
-                    body.push(&card(
+                    explanations.push(&card(
                         &format!("my-progression-{}", e.policy.id),
                         &e.policy.name,
                         "",
                         content,
                     )?);
                 }
+                body.push(&render(&bilibi_ui::Page {
+                    id: "my-progression",
+                    variant: PageVariant::Detail,
+                    class: "space-y-4",
+                    body: explanations,
+                    ..bilibi_ui::Page::default()
+                })?);
             }
         }
         Ok(body)
@@ -348,7 +356,7 @@ impl State {
         if let Some((kind, text)) = &self.flash {
             match kind {
                 StatusKind::Success => flash.success = text,
-                _ => flash.error = text,
+                _ => {}
             }
         }
         flash
@@ -383,6 +391,17 @@ impl State {
                 "Your standing is unavailable",
                 self.unavailable.as_deref().unwrap_or("You cannot do that for this company. Check your progression and evidence permissions."),
             ))?);
+        }
+        if let Some((StatusKind::Error, message)) = &self.flash {
+            let mut notice = render(&PanelNotice {
+                id: "progression-error",
+                kind: NoticeKind::Error,
+                dismiss_event: "clear_error",
+                body: Html::text(message),
+                ..PanelNotice::default()
+            })?;
+            notice.push(&body);
+            body = notice;
         }
         let confirmation = if let Some(policy) = &self.pending {
             render(&ConfirmDialog {

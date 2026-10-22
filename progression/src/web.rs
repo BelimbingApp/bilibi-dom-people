@@ -16,8 +16,8 @@ use bilibi_ui::{
     },
     params, ActionLink, BuiltinColumn, Button, Card, Choice, ConfirmDialog, EmptyState,
     ErrorSummary, Fact, Facts, Field, FlashMap, FlexRow, FlexTable, Form, Html, InputKind,
-    ListColumns, ListSpec, ListState, PageCounts, PageVariant, Pagination, SectionHeading,
-    StatusKind, TableEmpty, NO_FLASH,
+    ListColumns, ListSpec, ListState, NoticeKind, PageCounts, PageVariant, Pagination, PanelNotice,
+    SectionHeading, StatusKind, TableEmpty, NO_FLASH,
 };
 use serde_json::Value;
 use std::{
