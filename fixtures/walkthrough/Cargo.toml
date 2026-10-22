@@ -54,6 +54,9 @@ bilibi-audit.workspace = true
 bilibi-people-organisation = { path = "../../organisation" }
 bilibi-ports.workspace = true
 
+# Leave carry-forward worker proof (slice PL2).
+bilibi-queue.workspace = true
+
 # Attendance (PA1).
 bilibi-people-attendance = { path = "../../attendance" }
 
