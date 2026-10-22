@@ -1,7 +1,8 @@
 //! Bilimbi Training.Participation: append-only facts and import-key replay.
 //! Public operations live on Training, the module's single facade.
 use crate::{
-    catalog, writable, Result, Session, Training, TrainingError, RECORDS_MANAGE, RECORDS_VIEW,
+    catalog, writable, FieldError, Result, Session, Training, TrainingError, RECORDS_MANAGE,
+    RECORDS_VIEW,
 };
 use bilibi_database::{Change, Error, MutationTransaction};
 use bilibi_tenancy::Scope;
@@ -148,12 +149,22 @@ impl Training {
             return Err(TrainingError::EmployeeUnavailable);
         }
         let reason = input.reason.trim();
-        if reason.is_empty()
-            || reason.chars().count() > 2000
-            || input.import_key.trim().is_empty()
-            || input.import_key.chars().count() > 160
-        {
-            return Err(TrainingError::InvalidRecord);
+        let mut errors = Vec::new();
+        for (field, value, maximum) in [
+            ("reason", reason, 2000),
+            ("import_key", input.import_key.as_str(), 160),
+        ] {
+            if value.trim().is_empty() {
+                errors.push(FieldError::new(field, "can't be blank"));
+            } else if value.chars().count() > maximum {
+                errors.push(FieldError::new(
+                    field,
+                    format!("should be at most {maximum} character(s)"),
+                ));
+            }
+        }
+        if !errors.is_empty() {
+            return Err(TrainingError::Invalid(errors));
         }
         let previous = tx.sql().query_opt("SELECT revision, status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 AND employee_id=$4 ORDER BY revision DESC LIMIT 1", &[&scope.tenant(), &company_id, &input.session_id, &input.employee_id]).await.map_err(Error::from)?;
         let revision = previous
