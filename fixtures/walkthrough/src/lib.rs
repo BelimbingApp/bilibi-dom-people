@@ -3725,3 +3725,8 @@ pub async fn payroll(url: &str) -> Result<()> {
 
 // PT8: Learning browser setup, after PT3 account-unlink proofs.
 mod training_learning_pages;
+
+/// PT8: controls a disposable browser proof while its Learning page stays mounted.
+pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
+    training_learning_pages::control(url, action).await
+}
