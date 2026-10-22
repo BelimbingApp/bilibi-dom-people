@@ -35,6 +35,7 @@ mod contributions;
 mod downloads;
 mod handoff;
 mod money;
+mod operations_web;
 mod policies;
 mod requests;
 mod web;

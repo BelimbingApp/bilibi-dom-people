@@ -1,0 +1,23 @@
+{# Bilimbi Attendance.Web.RostersLive, planner upgraded to shared FlexTable. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="attendance-rosters-page") %}
+{% call ui::header(subtitle="Plan a week of shifts and rest days, then publish it to employees.") %}Rosters{% endcall %}
+{{ company }}
+<div class="mt-5">{{ state }}</div>
+{% if available %}
+{{ filter }}
+<div class="flex flex-wrap items-center gap-3 mt-4">
+<p id="attendance-roster-pending" class="text-sm text-ink-muted">{{ pending }}</p>{{ publish }}
+</div>
+{% if no_shifts %}
+<p id="attendance-roster-no-shifts" class="text-sm text-ink-muted mt-4">No active shift templates yet; only rest days can be planned. {{ shifts_link }}</p>
+{% endif %}
+{% if truncated %}<p class="text-xs text-ink-muted">Showing the first employees only; search to narrow the list.</p>{% endif %}
+<div class="mt-4">{{ table }}</div>
+{% endif %}
+{{ confirm }}
+{% endcall %}
+</div>
