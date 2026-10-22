@@ -37,6 +37,7 @@ mod handoff;
 mod money;
 mod policies;
 mod requests;
+mod web;
 mod workflow;
 
 pub use handoff::{HandoffBatch, HandoffExport, HandoffWaiting};
