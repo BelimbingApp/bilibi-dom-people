@@ -1,11 +1,8 @@
 # Claims
 
-Module ID: `people/claims`, crate `bilibi-people-claims`, ported from
-Bilimbi's `Bilimbi.People.Claims`. Claim catalog, effective-dated claim
-policies and assignments (this slice, port plan row PC1); employee claim
-requests, decisions, reimbursement, hand-off and the events Finance Payroll
-reads land in the next slice (PC2), and the three pages after that (PC3,
-PC4, PC5).
+Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
+
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. The My claims, Claim policies and Claim operations pages belong to PC3, PC4 and PC5.
 
 ## Ownership
 
@@ -30,8 +27,7 @@ Every write authorizes its own capability for the scope's signed-in actor at
 the moment it runs, through `bilibi_people_workforce::authorization`; a
 system principal cannot reach the facade. Catalog, currency, policy and
 assignment writes need `people.claims.manage`; self-service reads need
-`people.claims.submit`; `people.claims.approve` and `people.claims.reimburse`
-(the verb this module declares) guard the decisions and payments of PC2.
+`people.claims.submit`; `people.claims.approve` guards decisions and private queues; `people.claims.reimburse` guards payments, hand-off and export.
 Bilimbi grants all four to the Tenant Owner role. No function takes an
 actor, employee or company from input except the company id it authorizes
 first. Reads of a company's categories, claim types, policies and
@@ -76,7 +72,7 @@ An assignment is a named, effective-dated group with the claim types it opens an
 
 ## Self-service
 
-`self_service_employee` and `self_open_claim_types` call `Workforce::authorize_self` on every operation. Workforce re-proves the account link and resolves its working employment in this company. An unlinked or relinked account cannot keep reading its former employee's open types through an old scope. Requests in PC2 can use Workforce's `lock_self_employee` inside their mutation transaction.
+`self_service_employee` and `self_open_claim_types` call `Workforce::authorize_self` on every operation. Workforce re-proves the account link and resolves its working employment in this company. An unlinked or relinked account cannot keep reading its former employee's open types through an old scope. Submission and withdrawal call Workforce's `lock_self_employee` inside their mutation transaction.
 
 ## Schema
 
@@ -102,3 +98,63 @@ account, deactivates and reactivates the catalog, and ends with PostgreSQL
 refusing what the facade never attempts. The viewer, the unlinked admin,
 staff without the grant and the contractor at another company show the
 refusals.
+
+## Requests and decisions
+
+Call `submit_request(scope, company_id, &NewRequest)` for the signed-in employee. The input names the claim type, expense date, amount, currency, description, receipt number and optional duplicate confirmation. It never names an employee or submitter.
+
+The write holds Company → Employment locks and re-proves the account link under the employment lock. It checks that the claim type and category are active, any assignment covers the expense date, and the date is not in the future in the company's time zone. The policy must cover that expense date. Its currency must match the request and remain in the company's allowed currencies.
+
+Amounts are positive, have at most two decimal places and fit `numeric(14,2)`. Receipt rules are `always`, `never`, or strictly `above_threshold`. Receipt references collapse whitespace and uppercase before comparison. A reference already used by this employee's live claim refuses with `DuplicateReceipt`. A claim of the same type, date, amount and currency refuses with `PossibleDuplicate` until `confirm_duplicate` is true; only a real match records `duplicate_confirmed = true`.
+
+Calendar-month and calendar-year limits count every live claim of that type and currency, across policy versions. An approved amount replaces its claimed amount in the sum. Rejected and withdrawn claims release both receipt references and limit usage. The company and employment locks prevent concurrent requests from passing the same remaining limit.
+
+| Call | Permission | Rule |
+| --- | --- | --- |
+| `self_requests`, `self_request_events` | `people.claims.submit` | Resolve the linked employee again on every read. |
+| `withdraw_request` | `people.claims.submit` | Only the linked employee's submitted claims. |
+| `employee_requests`, `request_events`, `claim_queue` | `people.claims.approve` | Private claims and history for this company. |
+| `approve_request` with `Approval` | `people.claims.approve` | Submitted only; absent amount means full approval. A lower amount needs a reason. |
+| `reject_request` with `Rejection` | `people.claims.approve` | Submitted only; a reason is required. |
+| `reimburse_request` with `Reimbursement` | `people.claims.reimburse` | Approved only; payment reference is optional, at most 100 characters. |
+| `requested_claim_type_ids` | Company configuration read | Distinct live types incurred in the inclusive date range, for Payroll. |
+
+An account cannot approve, reject or reimburse a claim it submitted, or a claim of the employee it is linked to now. `Workforce::owns_employee` checks the current account link under the employment lock, including inactive employments. Refusals use `OwnClaim` and `NotDecidable`. Every transition saves one `people_claim_request_events` row, including the decision reason for approval and rejection. A refusal rolls back the request, history, audit and outbox together.
+
+The operator queue accepts `submitted`, `approved`, `rejected` or `reimbursed`. It returns at most 500 records, with submitted claims oldest first and other statuses newest first. Queue rows include employee numbers and names through Workforce and category/type labels through this module's catalog. Employee claim lists sort by newest expense date and then newest id. Returned timestamps are ISO 8601 UTC strings; render them through Base DateTime in a page.
+
+## Hand-off and CSV download
+
+`handoff_waiting` groups approved, unbatched claims by currency. `create_handoff_batch` requires `people.claims.reimburse` and claims every waiting approved request in the chosen currency under the company lock. The stored batch records its creator, time, count and exact approved total. It refuses empty queues with `NothingToHandOff`. A total that cannot fit the batch's `numeric(14,2)` column is a `total_amount` field error.
+
+`handoff_batches` needs `people.claims.approve` and returns the newest 500 batches. `reimburse_batch` needs `people.claims.reimburse`; it pays every still-approved claim in one transaction. One own claim refuses the entire batch before any payment is recorded. A fully paid batch returns `NothingToReimburse`. Already reimbursed claims are skipped when the remaining claims are paid.
+
+Download a batch at **`GET /people/claims/handoff/{company_id}/{id}`**. The `DOWNLOADS` contribution and `Claims::handoff_export` both recheck `people.claims.reimburse`; another company's batch returns not found. The filename is `claim-handoff-{id}.csv`. `FileBody` supplies UTF-8, attachment disposition, `private, no-store`, `nosniff` and the download security policy.
+
+The export re-reads stored claims and their current statuses. It uses Bilimbi's 17 columns: `batch_id`, `claim_id`, `employee_number`, `employee_name`, `category`, `claim_type_code`, `claim_type_name`, `incurred_on`, `currency`, `claimed_amount`, `approved_amount`, `receipt_number`, `description`, `status`, `approved_at`, `reimbursed_at`, `payment_reference`. It uses CRLF rows and RFC 4180 quoting. Formula prefixes (`=`, `+`, `-`, `@`, tab, carriage return or newline), including formulas after leading whitespace, receive an apostrophe before quoting. CSV timestamps are UTC without a zone suffix, as in Bilimbi.
+
+Migration `people-claims-003-workflow-history` makes history rows and batch records immutable. Once handed off, a claim cannot change its batch, approved amount or currency; a batch holds one company and currency. Reimbursement can still add payment facts.
+
+## Events for other Domains
+
+Approval records **`people/claims.request_approved` v1** and payment records **`people/claims.request_reimbursed` v1**, using Base Events inside the same deciding transaction. This includes every individual claim paid through `reimburse_batch`. A refusal publishes nothing. Repeated decisions refuse by status and create no duplicate event.
+
+Both events have subject `claim:{id}`. Their keys are `claim:{id}:approved` and `claim:{id}:reimbursed`, unique within the publisher and tenant. The envelope carries the tenant and version. The JSON payload shared by both is:
+
+```json
+{
+  "company_id": 12,
+  "claim_id": 34,
+  "reference": "CLM-34",
+  "currency": "<company currency>",
+  "approved_amount": "80.00",
+  "approval_date": "2026-10-22",
+  "category_code": "<company category code>"
+}
+```
+
+IDs are JSON integers. `reference` is the stable `CLM-{claim_id}` reference. The approved amount is an exact decimal string, never a floating-point number. `approval_date` is the UTC date of the approval. The reimbursement event also includes `reimbursed_at` (ISO 8601 UTC string) and `payment_reference` (string or null). Neither payload includes employee names, contacts or receipts. Finance consumes these recorded facts into its own projection without a dependency on the People container.
+
+## Workflow proof
+
+The appended PC2 block in `fixtures/walkthrough/src/claim_workflow.rs` runs on the same disposable database. It creates its own catalog and policies through the facade, submits and decides claims, groups currencies, checks CSV quoting and formula neutralisation, and verifies exact event payloads and ordered history. It also proves period limits, duplicate receipts, confirmed duplicates, own-claim refusals, batch rollback, grant revocation, account unlinking and relinking to an inactive employee. PostgreSQL refuses changes to the stored history and hand-off records.

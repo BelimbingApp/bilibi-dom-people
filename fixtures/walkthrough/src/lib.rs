@@ -830,6 +830,18 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // PL2: requests, reservations, decisions and ordered carry-forward.
+    let leave_staff_scope = leave_requests::run(
+        &services,
+        &db,
+        &admin,
+        &manager,
+        &viewer,
+        COMPANY,
+        manager_employment.id,
+    )
+    .await?;
+
     // PW1: employment records and self-service.
     pw1(
         &services,
@@ -843,6 +855,9 @@ pub async fn run(url: &str) -> Result<()> {
         &contractor_employment,
     )
     .await?;
+
+    // PL2: an open page's old scope must not survive PW1's account unlink.
+    leave_requests::after_unlink(&services, &admin, &leave_staff_scope, COMPANY).await?;
 
     // Claims assignment pickers include the pending employment PW1 created.
     claims::all_status_members(&services, &manager, COMPANY).await?;
@@ -859,6 +874,17 @@ pub async fn run(url: &str) -> Result<()> {
         &viewer,
         manager_employment.id,
         staff_employment.id,
+    )
+    .await?;
+
+    // PC2: requests, decisions, hand-off, transactional events and refusals.
+    claim_workflow::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
     )
     .await?;
 
@@ -2517,6 +2543,8 @@ async fn skills_catalog(
     Ok(())
 }
 
+// PC2: the workflow proof lives in its own block.
+mod claim_workflow;
 // Reviewed Leave entry operation (slice PL5).
 mod entry_operation;
 
@@ -2896,6 +2924,8 @@ async fn employee_workspace_proof(
     println!("PE1 browser: manager@example.test can add PE1 New Employee; viewer@example.test can read employees and manage only their own views.");
     Ok(())
 }
+// Leave requests and carry-forward (slice PL2).
+mod leave_requests;
 
 // ---------------------------------------------------------------------------
 // Attendance core (port plan row PA1). Runs after `run` against the same
