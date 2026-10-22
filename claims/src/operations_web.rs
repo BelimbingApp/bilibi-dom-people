@@ -949,6 +949,7 @@ impl Operations {
                     .id("claim-operations-empty"),
             )?,
             heading: label(self.tab()),
+            heading_id: if self.tab() == "batches" { "claim-batches-heading" } else { "claim-queue-heading" },
             description: if self.tab() == "batches" { "A batch groups approved claims of one currency for finance or payroll. Export it as a CSV, then mark it reimbursed once paid." } else { "" },
             waiting: self.waiting_table()?,
             table: if self.company.is_none() {
@@ -1026,6 +1027,7 @@ struct View<'a> {
     tabs: Html,
     empty: Html,
     heading: &'a str,
+    heading_id: &'a str,
     description: &'a str,
     waiting: Html,
     table: Html,

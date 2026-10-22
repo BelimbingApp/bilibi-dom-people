@@ -7,8 +7,8 @@
 {% call ui::header(subtitle="Decide claims, record reimbursement, and hand approved claims off.") %}Claim operations{% endcall %}
 {% if available %}
 {{ filters }}{{ tabs }}
-{% call ui::section_heading(id="claim-queue-heading", title=heading, description=description) %}{% endcall %}
-{% call ui::card(role="region", labelledby="claim-queue-heading") %}
+{% call ui::section_heading(id=heading_id, title=heading, description=description) %}{% endcall %}
+{% call ui::card(role="region", labelledby=heading_id) %}
 {{ waiting }}{{ table }}
 {% endcall %}
 {% if truncated %}<p class="mt-2 text-xs text-ink-muted">Showing the first 500 claims.</p>{% endif %}
