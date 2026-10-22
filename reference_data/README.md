@@ -90,3 +90,7 @@ blank code and an overlong kind, a taken and a foreign alias, a repeated
 calendar exception, another tenant's company, a revoked grant and an archived
 company, then PostgreSQL refusing a duplicate key, deleting an entry that has
 an alias, and an alias under another kind or company.
+
+### Employment-type choices port
+
+`people/reference_data.employment_types` accepts exactly `{"company_id": 1}` and answers an array of active employment-type choices, each `{"code": "…", "label": "…"}`, ordered by label and id. The provider calls `ReferenceData::list_on` on the caller's connection and scope. This is the same capability-free company configuration read as `list`; a missing or foreign company is `NotFound`. Workforce uses it for the employment dialog without a dependency cycle. `list_on` also lets a caller read company reference configuration within its existing transaction.

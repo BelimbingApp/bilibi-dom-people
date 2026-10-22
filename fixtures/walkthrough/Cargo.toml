@@ -54,6 +54,8 @@ bilibi-audit.workspace = true
 bilibi-people-organisation = { path = "../../organisation" }
 bilibi-ports.workspace = true
 
+# Employee Workspace (PE1): facade and directory interaction proof.
+bilibi-people-employee-workspace = { path = "../../employee_workspace" }
 # Leave carry-forward worker proof (slice PL2).
 bilibi-queue.workspace = true
 
