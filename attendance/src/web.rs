@@ -514,7 +514,15 @@ impl MyAttendance {
                         )
                     };
                     FlexRow::new(&s.on_date)
-                        .slot("date", Html::text(&s.on_date))
+                        .slot(
+                            "date",
+                            Html::text(
+                                &s.on_date
+                                    .parse::<jiff::civil::Date>()
+                                    .map(|date| date.strftime("%a %d %b").to_string())
+                                    .unwrap_or_else(|_| s.on_date.clone()),
+                            ),
+                        )
                         .slot("shift", Html::text(&label))
                 })
                 .collect();
