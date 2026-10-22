@@ -157,7 +157,7 @@ an empty object on the absent side of a creation).
 
 Bilimbi grants neither to a system role; an administrator grants them. Both
 live under the Authz domain `people`; `view` and `manage` are verbs Base
-declares. The explorer (PO2) opens under `view`, offers its assign and end
+declares. The explorer opens under `view`, offers its assign and end
 controls to an actor holding `manage`, and refuses the event, with Bilimbi's
 sentence "You no longer have permission to change this company's
 assignments.", when the grant is gone; the facade checks once more.
@@ -202,7 +202,13 @@ The walkthrough also reserves every pool connection except one and proves that a
 
 ## Dependencies
 
-`base/audit`, `base/authz`, `base/database`, `base/module_registry`,
-`base/ports`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo
+`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/menu`, `base/module_registry`,
+`base/ports`, `base/tenancy`, `base/ui`, `core/company`, `people/settings`, `people/workforce`; the Cargo
 manifest lists the same edges. Workforce reaches this module only through
 the port above, never the other way round.
+
+## Explorer browser proof
+
+The walkthrough adds 51 positions for pagination and a title that changes on 1 July 2026. Sign in as `manager@example.test`, open `/people/organisation`, and select 25 rows per page. Follow Next and Back, choose a company with no positions, and compare **As of** dates before and after the title change. Use **Assign**, cancel its confirmation, then confirm an acting assignment. End that assignment on a valid last day and confirm the change. `viewer@example.test` has view permission only and sees neither action.
+
+The active-company picker first obtains authorised summaries through Workforce. Those summaries expose archival state but no status. The page then reads only the candidate companies' active status with a tenant predicate; names still come from Core through Workforce.
