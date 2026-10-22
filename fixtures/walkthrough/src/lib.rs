@@ -770,6 +770,17 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // Reviewed Leave entry operation (slice PL5): separate proof block.
+    entry_operation::run(
+        &services,
+        &db,
+        &admin,
+        COMPANY,
+        staff_employment.id,
+        contractor_employment.id,
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test is now linked to Sam Staff's affiliation with Company 001.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -779,3 +790,6 @@ pub async fn run(url: &str) -> Result<()> {
 
 // Leave (slice PL1).
 mod leave;
+
+// Reviewed Leave entry operation (slice PL5).
+mod entry_operation;

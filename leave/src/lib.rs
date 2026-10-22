@@ -759,14 +759,19 @@ impl Leave {
         new: &NewEntry,
     ) -> Result<LedgerEntry> {
         let mut client = self.db.get().await.map_err(Error::from)?;
+        authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         let mut tx = self
             .begin(&mut client, scope, company_id, "people.leave.record_entry")
             .await?;
         let entry = self
             .record_entry_in(&mut tx, scope, company_id, employee_id, new)
             .await?;
-        tx.commit().await?;
-        Ok(entry)
+        if entry.created {
+            tx.commit().await?;
+        } else {
+            tx.rollback().await?;
+        }
+        Ok(entry.entry)
     }
 
     /// Per-type totals of one working employee and leave year, derived from

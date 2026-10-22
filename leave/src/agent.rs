@@ -101,7 +101,7 @@ impl WriteHandler for Record {
                 .record_entry_in(tx, scope, company, employee, &entry)
                 .await
                 .map_err(refusal)?;
-            Ok(json!(entry).into())
+            Ok(json!(entry.entry).into())
         })
     }
 }
@@ -126,7 +126,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, "people/leave.agent", Proven
         handler:Handler::SafeWrite(&Record), channels:Channels::Every, step_up:&[],
     }],
     guides:&[Guide {
-        key:"people.leave.entries", title:"Opening balances and adjustments",
+        key:"people.leave.entry", title:"Opening balances and adjustments",
         summary:"Review and record a leave balance change with a key that makes retries safe.",
         keywords:&["leave","opening","adjustment","balance","retry"], capability:POLICIES_MANAGE,
         body:include_str!("../entry-guide.md"),

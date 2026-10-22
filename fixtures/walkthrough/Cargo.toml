@@ -31,3 +31,7 @@ tokio-postgres.workspace = true
 # Leave (slice PL1).
 bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
+
+# Reviewed Leave entry operation (slice PL5).
+bilibi-agent-api.workspace = true
+serde_json.workspace = true

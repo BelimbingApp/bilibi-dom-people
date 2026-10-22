@@ -1,6 +1,12 @@
 //! Bilimbi Leave.record_entry/4, shared by the facade and reviewed writes.
-use crate::*;
+use crate::{
+    authorization, ledger, organisation, types, validate_entry, Company, Decimal, Employee, Error,
+    Leave, LeaveError, LeaveType, LedgerEntry, MutationTransaction, NewEntry, Result, Rules, Scope,
+    POLICIES_MANAGE,
+};
 use bilibi_tenancy::ReadClient;
+use serde_json::json;
+use tokio_postgres::GenericClient;
 
 // The operation preview receives an object-safe client, while Core's company
 // guard and Settings take GenericClient. Hold this Leave-owned lock on the
@@ -19,6 +25,10 @@ pub(super) async fn serialize(
     Ok(())
 }
 
+pub(super) struct RecordedEntry {
+    pub entry: LedgerEntry,
+    pub created: bool,
+}
 struct EntryFacts {
     company: Company,
     employee: Employee,
@@ -126,14 +136,17 @@ impl Leave {
         company_id: i64,
         employee_id: i64,
         new: &NewEntry,
-    ) -> Result<LedgerEntry> {
+    ) -> Result<RecordedEntry> {
         serialize(tx.sql(), scope, company_id).await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
         let facts = self
             .entry_facts(tx.sql(), scope, company_id, employee_id, new)
             .await?;
         if let Some(existing) = facts.existing {
-            return Ok(existing);
+            return Ok(RecordedEntry {
+                entry: existing,
+                created: false,
+            });
         }
         let leave_type =
             types::lock_active(tx.sql(), scope.tenant(), company_id, new.leave_type_id)
@@ -160,6 +173,9 @@ impl Leave {
             }],
         )
         .await?;
-        inserted.pop().ok_or(LeaveError::EntryKeyConflict)
+        Ok(RecordedEntry {
+            entry: inserted.pop().ok_or(LeaveError::EntryKeyConflict)?,
+            created: true,
+        })
     }
 }
