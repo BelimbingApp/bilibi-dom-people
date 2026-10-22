@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PT2: the appended participation/evidence proof block.
+    participation::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
     // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
     training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
 
@@ -3708,6 +3719,9 @@ mod assessments;
 
 // PT1: the Training catalog proof block.
 mod training;
+
+// PT2: attendance revisions, capacity, private evidence and purge recovery.
+mod participation;
 
 // PO2: browser proof data, separate from the Organisation service proof.
 mod organisation_explorer;

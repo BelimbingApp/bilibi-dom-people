@@ -8,13 +8,7 @@ pages reach it only through this module's facade; none of them reads its
 tables. This README is the owner contract; the Bilimbi source it ports is
 [`training/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-This is the catalog slice (PT1 of the port plan): migration 001, the
-`Training` facade for courses, events, sessions and the calendar, and the
-four catalog capabilities. PT2 adds participation and evidence, PT3
-requests, plans and budgets, PT4 evaluation and effectiveness, PT5
-passports and insights; the Courses and Sessions & calendar pages, with
-their menu leaves, land in PT6. Until a page lands the sidebar shows no
-Training entry, and an administrator grants the catalog capabilities.
+PT1 and PT2 provide the catalog, attendance records and private evidence through `Training`. The Courses and Sessions & calendar pages land in PT6, and Training records in PT7. Learning requests, plans, budgets, evaluations, passports and insights follow in their own slices. Until the pages land, an administrator grants the eight available Training capabilities.
 
 ## Public API
 
@@ -133,8 +127,12 @@ role: an administrator grants them.
 | `people.training.courses.manage` | Adds and changes courses |
 | `people.training.sessions.view` | Reads events and the calendar (`/people/training/sessions`, PT6) |
 | `people.training.sessions.manage` | Adds events and sessions, and picks among the active courses |
+| `people.training.records.view` | Reads attendance revisions, sessions and private evidence |
+| `people.training.records.manage` | Records attendance and corrections; lists working employees |
+| `people.training.evidence.manage` | Attaches PDF evidence |
+| `people.training.retention.manage` | Purges expired evidence, lists purge holds and retries cleanup |
 
-The ten governance keys and `people.training.currencies` are described below. The remaining 17 keys, the verbs `answer` and `generate`, the eight menu leaves and `people.training.evaluation.*` settings land with their slices.
+The ten governance keys and `people.training.currencies` are described below. The remaining 13 keys, the verbs `answer` and `generate`, the eight menu leaves and `people.training.evaluation.*` settings land with their slices.
 
 ## Walkthrough
 
@@ -152,6 +150,37 @@ zone, a session ending when it starts, a zero capacity, a cross-company
 event and a duplicate code. Run it as the repository README says, with
 `BILIBI_ENV=development` set: the block grants capabilities through Base
 Authz, whose step-up the Platform enforces outside development mode.
+
+## Attendance records
+
+Use `Training::record(scope, company_id, &NewAttendance)` to confirm attendance or record an absence. For example, confirming an employee with key `register-12` creates revision 1. Sending the same session, employee, status and trimmed reason with that key returns the original fact. Changing any of those values with that key returns `ImportConflict`. Use a new key for a correction; history keeps both revisions.
+
+`employee_id` is a Workforce employment ID. A new fact requires a current working employee in that company. Status is `AttendanceStatus::Confirmed` or `Absent`; the trimmed reason must contain 1–2,000 characters, and the import key 1–160 characters. Import keys are company-wide and are not trimmed.
+
+The company writable lock and session row lock protect the revision and capacity decisions. Only each employee's latest revision counts towards capacity. A confirmed correction uses the existing place; an absence releases it. A new confirmation when the session is full returns `AttendanceCapacityExceeded`. Exact replays return the original fact even after later corrections or employment changes, and create no audit mutation.
+
+| Function | Result | Permission |
+| --- | --- | --- |
+| `record` | `AttendanceFact` with its revision, authorship and recorded UTC instant | `records.manage` |
+| `history` | Every revision for a session, ordered by employee then newest revision | `records.view` |
+| `sessions` | At most 500 sessions, newest first | `records.view` |
+| `participation_employees` | Current employee IDs and directory names | `records.manage` |
+
+All permission suffixes above start with `people.training.`. Reads and writes recheck company access. Migration `people-training-002-participation` creates the attendance and evidence tables. Its triggers refuse changed or deleted facts, skipped revisions, over-capacity confirmations and shrinking a session below confirmed attendance. Evidence provenance also refuses updates, deletes and truncation. Composite foreign keys keep sessions, facts and evidence within their tenant and company.
+
+## Private evidence
+
+Call `attach(scope, company_id, fact_id, bytes)` with `evidence.manage`. The fact must exist in the company, and the bytes must start with `%PDF-`. This matches Bilimbi's upload header gate; it does not claim to scan or fully validate an uploaded PDF.
+
+Base Artifacts publishes bytes before Training opens the transaction that links the evidence row. Its concrete `documents::DocumentOwner` has stable owner ID `people/training`; **keep the type and owner ID stable**, because Artifacts persists both. Its callbacks use `workforce::authorization::authorize_company_proof` on the supplied transaction and recheck the permission, active company and fact. Create is checked again before publication. Training then rechecks `evidence.manage` under its company writable lock before recording provenance through `MutationBoundary`. If linking fails, Base still tracks the artifact for expiry and recovery; no untracked file cleanup runs.
+
+`evidence(scope, company_id, fact_id)` lists permanent provenance, including documents whose bytes have expired. `read_evidence` calls Artifacts on every request, so expiry, integrity checks and changed permissions apply immediately. Both require `records.view`.
+
+The `DOWNLOADS` contribution serves `/people/training/evidence/{company_id}/{id}`, where `id` is the artifact UUID. It returns an `evidence.pdf` attachment with `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff` through shared `FileBody`. An unavailable document returns 404. There is no public file path or public storage URL.
+
+An operator configures `artifacts.storage_root`, `artifacts.retention_days`, size limits and purge pacing in Base Settings. `purge`, `purge_holds` and `retry_purge` require `retention.manage` and delegate to Artifacts. Base keeps failed cleanup attempts, waits between retries and holds repeated failures for operator review. Retrying a hold rechecks deletion authority and leaves Training's provenance intact. Training contributes no worker or schedule.
+
+The PT2 block in `fixtures/walkthrough/src/participation.rs` runs against the same disposable database as the existing walkthrough. It creates its records through `Training`, demonstrates a two-connection race for the last place, replay/conflict and corrections, permission revocation with an old scope, PDF round trips, expiry and cleanup failure followed by hold retry. Raw SQL attempts demonstrate the permanent-history guards. Set `BILIBI_TRAINING_PROOF_ROOT` to an absolute private task directory to keep its artifacts for a browser download check; otherwise the block uses a fresh directory under the system temporary folder.
 
 ## Learning requests, plans and budgets
 
