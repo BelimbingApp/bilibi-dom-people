@@ -123,6 +123,16 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .set_direct(c.admin, super::STAFF, capability, Some(true))
             .await?;
     }
+    // An unlinked viewer needs the company axis to reach this company at
+    // all; this does not grant company-wide reach over Skills employees.
+    grants
+        .set_direct(
+            c.admin,
+            super::VIEWER,
+            bilibi_company::TENANT_WIDE,
+            Some(true),
+        )
+        .await?;
     grants
         .set_direct(c.admin, super::VIEWER, ASSESSMENTS_SUBMIT, Some(true))
         .await?;
@@ -298,7 +308,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             && a.gap == requirement.required_level
             && a.priority_multiplier == policy.multiplier(&requirement.criticality) as i32
             && a.priority_score == a.gap * a.priority_multiplier
-            && a.result_band == "major_gap"
+            && a.result_band == "critical_gap"
             && a.next_due_on == Some(date(2028, 4, 1)),
     )?;
     let replay = saved(
@@ -459,6 +469,10 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         ..base.clone()
     };
     let b = saved(skills.submit_assessment(c.manager, company, &b_input).await)?;
+    check(
+        "two-level gap has the major band",
+        b.result_band == "major_gap",
+    )?;
     saved(
         skills
             .review_assessment(
@@ -534,7 +548,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     check(
         "finalized correction excludes every ancestor through a returned node, even when backdated",
         own.scores[0].score.assessment_id == corrected.id
-            && own.scores[0].result_band == "exceeds"
+            && own.scores[0].result_band == "meets"
             && own.scores[0].score.gap == 0,
     )?;
     let older = saved(
@@ -565,7 +579,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 company,
                 &AssessmentInput {
                     assessed_on: Some(date(2026, 9, 29)),
-                    assessed_level: 2,
+                    assessed_level: 3,
                     request_key: "pk2-tied-day".into(),
                     ..base.clone()
                 },
@@ -729,7 +743,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 company,
                 &AssessmentInput {
                     employee_id: report.id,
-                    assessed_level: 2,
+                    assessed_level: 3,
                     request_key: "pk2-indirect".into(),
                     valid_until: Some(date(2026, 10, 22)),
                     ..base.clone()
@@ -764,7 +778,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         employee_id: report.id,
         assessed_on: Some(date(2026, 10, 2)),
         request_key: "pk2-concurrent-retry".into(),
-        assessed_level: 2,
+        assessed_level: 3,
         valid_until: Some(date(2026, 10, 22)),
         ..base.clone()
     };
@@ -903,6 +917,33 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         )
         .await
         .map_err(|_| Error::Internal)?;
+    let exceeds = saved(
+        skills
+            .submit_assessment(
+                c.manager,
+                company,
+                &AssessmentInput {
+                    skill_id: other_skill.id,
+                    assessed_level: 2,
+                    valid_until: Some(date(2026, 10, 22)),
+                    request_key: "pk2-exceeds".into(),
+                    ..base.clone()
+                },
+            )
+            .await,
+    )?;
+    let exceeds = finalized(&skills, c.admin, exceeds).await?;
+    check(
+        "level above its requirement has the exceeds band",
+        exceeds.result_band == "exceeds" && exceeds.gap == 0,
+    )?;
+    check(
+        "standing treats the inclusive due day as overdue, not expired",
+        saved(skills.standing(&staff, company).await)?
+            .scores
+            .iter()
+            .any(|s| s.score.assessment_id == exceeds.id && s.state == "overdue"),
+    )?;
     // Revoked grants and unlinked accounts are checked against this same Scope.
     grants
         .set_direct(c.admin, super::MANAGER, ASSESSMENTS_SUBMIT, Some(false))
