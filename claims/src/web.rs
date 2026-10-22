@@ -234,7 +234,7 @@ impl MyClaims {
             self.pending_withdraw = None;
             self.flash(
                 StatusKind::Error,
-                if permitted {
+                if permitted || self.company.is_none() {
                     UNAVAILABLE
                 } else {
                     NO_PERMISSION
@@ -335,6 +335,7 @@ impl MyClaims {
                 render(&Button {
                     id: &format!("claim-{}-withdraw", r.id),
                     event: "withdraw_claim",
+                    name: "id",
                     value: &r.id.to_string(),
                     body: Html::text("Withdraw"),
                     ..Button::default()
