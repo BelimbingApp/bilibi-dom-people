@@ -335,7 +335,21 @@ impl State {
     }
     async fn load(&mut self, scope: &Scope) -> UiResult<()> {
         // The current company belongs to the authenticated account; forms never choose it.
-        self.company = scope.actor().organisation();
+        self.company = match scope.actor().organisation() {
+            Some(id) => id.get(),
+            None => {
+                let client = self.service.db.get().await?;
+                bilibi_people_workforce::authorization::selectable_companies(
+                    &**client,
+                    scope,
+                    if self.my { SELF_VIEW } else { VIEW },
+                )
+                .await
+                .unwrap_or_default()
+                .first()
+                .map_or(0, |c| c.id)
+            }
+        };
         let client = self.service.db.get().await?;
         self.display = self
             .display_policy
@@ -395,6 +409,26 @@ impl State {
                 self.selected = None;
                 self.pending = None;
             }
+        }
+        if let Some(p) = &self.planning {
+            for (index, total) in [
+                (1, p.drafts.len()),
+                (2, p.descriptions.len()),
+                (3, p.definitions.len()),
+                (4, p.targets.len()),
+                (5, p.observations.len()),
+            ] {
+                let list = &mut self.lists[index].state;
+                list.page = list
+                    .page
+                    .min((total as u64).div_ceil(list.page_size).max(1));
+            }
+        }
+        if let Some(m) = &self.mine {
+            let list = &mut self.lists[6].state;
+            list.page = list
+                .page
+                .min((m.targets.len() as u64).div_ceil(list.page_size).max(1));
         }
         if let Some(id) = self.selected.as_ref().map(|r| r.review.id) {
             self.selected = self.service.review(scope, self.company, id).await.ok();
@@ -480,6 +514,16 @@ impl State {
             let result = self.prepare(event, payload);
             match result {
                 Ok(command) => {
+                    if let Command::Respond(id, text) = command {
+                        match self.service.respond(scope, self.company, id, &text).await {
+                            Ok(_) => {
+                                self.drafts.remove(&self.active_form);
+                                self.message(StatusKind::Success, "Response recorded.");
+                            }
+                            Err(error) => self.refused(error),
+                        }
+                        return Ok(());
+                    }
                     let publication = matches!(
                         command,
                         Command::PublishDescription(_)
@@ -682,6 +726,8 @@ impl State {
             } else {
                 let cutoff = if cutoff.ends_with('Z') || cutoff.ends_with("+00:00") {
                     cutoff.to_owned()
+                } else if cutoff.len() == 16 {
+                    format!("{cutoff}:00Z")
                 } else {
                     format!("{cutoff}Z")
                 };
@@ -798,8 +844,9 @@ impl State {
         let mut body = render(&table)?;
         let page_event = format!("page_{index}");
         let filter_event = format!("filter_{index}");
+        let pagination_id = format!("{}-pagination", TABLES[index].0);
         let mut pagination = Pagination::new(
-            &format!("{}-pagination", TABLES[index].0),
+            &pagination_id,
             PageCounts::new(page, host.state.page_size, total),
             &[10, 25, 50, 100],
         );
@@ -1470,10 +1517,37 @@ impl State {
         let confirmation = if let Some(p) = &self.pending {
             render(&ConfirmDialog {
                 id: "performance-publication",
-                consequence: "This version will become an immutable published record.",
+                consequence: if matches!(
+                    p.command,
+                    Command::PublishDescription(_)
+                        | Command::PublishTarget(_)
+                        | Command::Release(_)
+                ) {
+                    "This version will become an immutable published record."
+                } else {
+                    "This record will be added to permanent history."
+                },
                 detail: &p.detail,
-                confirm: "Publish",
-                working: "Publishing…",
+                confirm: if matches!(
+                    p.command,
+                    Command::PublishDescription(_)
+                        | Command::PublishTarget(_)
+                        | Command::Release(_)
+                ) {
+                    "Publish"
+                } else {
+                    "Save"
+                },
+                working: if matches!(
+                    p.command,
+                    Command::PublishDescription(_)
+                        | Command::PublishTarget(_)
+                        | Command::Release(_)
+                ) {
+                    "Publishing…"
+                } else {
+                    "Saving…"
+                },
                 confirm_event: "confirm_publication",
                 cancel_event: "cancel_publication",
             })?
@@ -1486,7 +1560,11 @@ impl State {
             } else {
                 "Performance reviews"
             },
-            variant: if self.my { "detail" } else { "list" },
+            variant: if self.my {
+                bilibi_ui::PageVariant::Detail
+            } else {
+                bilibi_ui::PageVariant::List
+            },
             flash: self.flash(),
             tabs,
             content: self.content()?,
@@ -1528,7 +1606,7 @@ impl LiveState<Scope, Error> for State {
 #[template(path = "page.html")]
 struct View<'a> {
     title: &'a str,
-    variant: &'a str,
+    variant: bilibi_ui::PageVariant,
     flash: FlashMap<'a>,
     tabs: Html,
     content: Html,

@@ -4108,3 +4108,7 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
+
+// PM2: performance page mounts and live-event workflow on disposable data.
+mod performance_pages;
+pub use performance_pages::run as performance_pages;

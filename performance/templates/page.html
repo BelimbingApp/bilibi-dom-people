@@ -1,8 +1,8 @@
 {% import "components.html" as ui %}
 {% import "feedback.html" as feedback %}
 {% call ui::page(variant=variant) %}
-  {% call feedback::flash_group(flash=flash) %}{% endcall %}
-  {% call ui::header(title=title) %}{% endcall %}
+  {% call feedback::flash_group(messages=flash) %}{% endcall %}
+  {% call ui::header() %}{{ title }}{% endcall %}
   {{ tabs }}
   {{ content }}
   {{ confirmation }}
