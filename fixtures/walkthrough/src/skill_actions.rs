@@ -848,9 +848,10 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         }
     }
     let audit=client.query_one("SELECT count(*)::bigint FROM base_audit_mutations WHERE tenant_id=$1 AND auditable_type IN ('people_skill_action','people_skill_action_event','people_skill_reassessment_request','people_skill_action_type')", &[&super::TENANT]).await?;
+    let kinds=client.query_one("SELECT count(DISTINCT auditable_type)::bigint FROM base_audit_mutations WHERE tenant_id=$1 AND auditable_type IN ('people_skill_action','people_skill_action_event','people_skill_reassessment_request','people_skill_action_type')", &[&super::TENANT]).await?;
     check(
         "action, request, type and event mutations audited",
-        audit.get::<_, i64>(0) > 20,
+        audit.get::<_, i64>(0) > 20 && kinds.get::<_, i64>(0) == 4,
     )?;
     // Keep separate assessment permissions used by PK2's later read proofs.
     for capability in [ASSESSMENTS_REVIEW, ASSESSMENTS_APPROVE] {
