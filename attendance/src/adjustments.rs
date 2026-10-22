@@ -544,7 +544,7 @@ const REQUEST_BY_KEY: &str = concat!(
 const DUPLICATE_REQUEST: &str = concat!(
     "SELECT 1 FROM people_attendance_corrections WHERE tenant_id=$1 AND company_id=$2 AND ",
     "employee_id=$3 AND event_type=$4 AND proposed_at=$5::text::timestamptz AND status IN ",
-    "('pending','approved')",
+    "('pending','approved') LIMIT 1",
 );
 
 const INSERT_REQUEST: &str = concat!(

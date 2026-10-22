@@ -382,7 +382,7 @@ const OPEN_VERSION: &str = concat!(
 const OVERLAPPING_VERSION: &str = concat!(
     "SELECT 1 FROM people_attendance_allowance_policies WHERE tenant_id=$1 AND company_id=$2 AND ",
     "code=$3 AND status='active' AND (effective_until IS NULL OR effective_until >= $4::text::date) ",
-    "AND ($5::text::date IS NULL OR effective_from <= $5::text::date)",
+    "AND ($5::text::date IS NULL OR effective_from <= $5::text::date) LIMIT 1",
 );
 
 const INSERT_RULE: &str = concat!(
