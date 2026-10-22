@@ -983,8 +983,11 @@ fn capitalize(s: &str) -> String {
     })
 }
 fn action(event: &str, label: &str, value: &str) -> Result<Html> {
+    // Live buttons post their native value only when it has a name.
+    // Keep saved-view ids in the event payload through the shared Button.
     render(&Button {
         event,
+        name: "value",
         value,
         body: Html::text(label),
         ..Button::default()
