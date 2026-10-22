@@ -949,8 +949,18 @@ pub async fn run(url: &str) -> Result<()> {
     // PT8: independent Learning page browser setup after prior unlink proofs.
     training_learning_pages::run(&services, &admin, &manager, staff_employment.id).await?;
 
+    // PT4: immutable evaluation, review access and disclosure-controlled snapshots.
+    training_evaluation::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        (manager_employment.id, staff_employment.id),
+    )
+    .await?;
+
     println!(
-        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
+        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
@@ -4090,3 +4100,6 @@ mod attendance_pages;
 pub async fn attendance_pages(url: &str) -> Result<()> {
     attendance_pages::run(url).await
 }
+
+// PT4: the evaluation and effectiveness proof block.
+mod training_evaluation;

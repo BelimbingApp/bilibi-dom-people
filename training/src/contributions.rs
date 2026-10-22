@@ -1,6 +1,7 @@
-//! Training catalog, participation, governance and Learning page contributions.
-//! Bilimbi grants no Training key to a system role; an administrator grants access.
-//! web_learning.rs contributes six Learning routes and three menu leaves.
+//! Training catalog, participation, governance, evaluation and Learning contributions.
+//! Mirrors Bilimbi Training.Contributions. No Training key is granted to a system role.
+//! web_learning.rs contributes six Learning routes and three menu leaves;
+//! evaluation.rs contributes its six capabilities, the answer verb and six settings.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
@@ -21,7 +22,7 @@ pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 19] = [
+pub const CAPABILITIES: [&str; 25] = [
     crate::LEARNING_VIEW,
     COURSES_VIEW,
     COURSES_MANAGE,
@@ -41,6 +42,12 @@ pub const CAPABILITIES: [&str; 19] = [
     crate::PLANS_VIEW,
     crate::BUDGETS_VIEW,
     crate::BUDGETS_MANAGE,
+    crate::EFFECTIVENESS_VIEW,
+    crate::EVALUATION_SUBMIT,
+    crate::EFFECTIVENESS_ANSWER,
+    crate::EFFECTIVENESS_SUMMARY_VIEW,
+    crate::EVALUATION_POLICY_MANAGE,
+    crate::EVALUATION_REMINDERS_MANAGE,
 ];
 
 macro_rules! provenance {
@@ -67,6 +74,7 @@ inventory::submit! {
             ("people-training-001-catalog", include_str!("../migrations/001-catalog.sql")),
             ("people-training-002-participation", include_str!("../migrations/002-participation.sql")),
             ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql")),
+            ("people-training-004-evaluation", include_str!("../migrations/004-evaluation.sql")),
         ],
         services: &[Service {
             id: SERVICE,
