@@ -111,8 +111,8 @@ impl Workforce {
         Ok(())
     }
 
-    /// Active `employment_type` reference entries for the same picker that
-    /// `create_employment` validates. No dependency from Employee Workspace
+    /// Active `employment_type` reference entries for the employment picker.
+    /// No dependency from Employee Workspace
     /// to Reference Data: Workforce owns the employment input contract.
     pub async fn employment_types(
         &self,

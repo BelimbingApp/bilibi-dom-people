@@ -524,6 +524,18 @@ impl Employees {
                 self.person = None;
                 self.success("Employment created successfully.");
             }
+            Err(WorkforceError::DuplicateAffiliation) => {
+                self.errors.push(FieldError::new(
+                    "affiliation_id",
+                    "already has an employment record",
+                ));
+                self.error("This affiliation already has an employment record");
+            }
+            Err(WorkforceError::AffiliationMismatch | WorkforceError::NotHuman) => {
+                self.errors
+                    .push(FieldError::new("affiliation_id", "is invalid"));
+                self.error("Choose a person and their affiliation with this company.");
+            }
             Err(e) => self.refused(e.into(), "Please check the employment details.")?,
         }
         Ok(())

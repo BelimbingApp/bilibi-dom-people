@@ -2791,7 +2791,14 @@ async fn employee_workspace_proof(
         "grant revoked with old scope refuses next write",
     )?;
     grants.set_direct(admin, MANAGER, VIEW, Some(true)).await?;
-    // Reference Data's proof archives the sibling company and leaves it so.
+    // A fixture-only lifecycle change on the disposable database proves the
+    // same facade refuses a company archived after the actor was proved.
+    client
+        .execute(
+            "UPDATE companies SET status='archived' WHERE tenant_id=$1 AND id=$2",
+            &[&manager.tenant(), &OTHER_COMPANY],
+        )
+        .await?;
     prove(
         matches!(
             workspace.save_view(manager, OTHER_COMPANY, &view).await,
@@ -2799,6 +2806,12 @@ async fn employee_workspace_proof(
         ),
         "archived company refuses saved view",
     )?;
+    client
+        .execute(
+            "UPDATE companies SET status='active' WHERE tenant_id=$1 AND id=$2",
+            &[&manager.tenant(), &OTHER_COMPANY],
+        )
+        .await?;
     let persons = services.get::<PersonService>(bilibi_person::SERVICE)?;
     let person = persons
         .create(
