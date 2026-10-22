@@ -4023,3 +4023,7 @@ mod training_learning_pages;
 pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
     training_learning_pages::control(url, action).await
 }
+
+// PM1: separate binary so the performance proof starts from its own empty DB.
+mod performance;
+pub use performance::run as performance;

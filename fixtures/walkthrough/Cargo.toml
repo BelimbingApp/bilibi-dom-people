@@ -74,3 +74,6 @@ bilibi-people-training = { path = "../../training" }
 bilibi-ui.workspace = true
 # Payroll foundation (PY1): the standalone executable proof block.
 bilibi-people-payroll = { path = "../../payroll" }
+
+# Performance (PM1): an independent disposable workflow proof.
+bilibi-people-performance = { path = "../../performance" }
