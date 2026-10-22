@@ -27,3 +27,7 @@ bilibi-web.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
+
+# PW1: the department Core Company adds for the employment change.
+bilibi-company.workspace = true
+serde_json.workspace = true
