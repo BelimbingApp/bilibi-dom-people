@@ -51,6 +51,21 @@ pub async fn authorize(
         .map_err(refusal)
 }
 
+/// Company authorization on the caller's transaction for object-safe owner
+/// callbacks (Artifacts). Uses Core Company's same target proof; never opens
+/// a second connection while the owner holds its reservation/publication lock.
+pub async fn authorize_company_proof(
+    client: &dyn ProofClient,
+    scope: &Scope,
+    company_id: i64,
+    capability: &str,
+) -> Result<bilibi_tenancy::NamedOrganisation> {
+    Directory
+        .target(client, scope, OrganisationId::new(company_id)?, capability)
+        .await
+        .map_err(refusal)
+}
+
 /// Authorizes as [`authorize`] does and returns the company summary, for a
 /// caller that renders the company it was authorized for.
 pub async fn authorize_company(

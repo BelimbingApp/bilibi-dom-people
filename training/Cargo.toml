@@ -10,6 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+bilibi-artifacts.workspace = true
 bilibi-authz.workspace = true
 bilibi-company.workspace = true
 bilibi-database.workspace = true
@@ -20,9 +21,12 @@ bilibi-people-settings = { path = "../settings" }
 bilibi-people-workforce = { path = "../workforce" }
 bilibi-settings.workspace = true
 bilibi-tenancy.workspace = true
+bilibi-ui.workspace = true
 inventory.workspace = true
 jiff = "0.2.38"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio-postgres.workspace = true
+
+rust_decimal.workspace = true
