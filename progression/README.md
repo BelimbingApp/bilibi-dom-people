@@ -30,7 +30,7 @@ Each explanation returns its policy, individual criteria, and combined `Status`:
 
 Migration `people-progression-001-progression` owns `people_progression_policy_versions`, its identity/scope indexes, workflow checks and immutability guard. Dates bind and read as text; publication times are UTC. SQL and validation remain private to this crate.
 
-Run the disposable proof with `PGPASSFILE` and `DATABASE_URL` set:
+Use a fresh disposable database with `PGPASSFILE` and `DATABASE_URL` set. The command runs the Performance fixture in a child process, then starts the Progression proof using those records:
 
 ```sh
 BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin progression
