@@ -275,6 +275,7 @@ impl Actions {
                 self.pending = None;
                 self.history_id = None;
                 self.draft.clear();
+                self.errors.clear();
                 self.request_key = key();
                 return Ok(true);
             }

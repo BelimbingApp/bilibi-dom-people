@@ -180,10 +180,10 @@ impl Table {
         if none {
             t.empty = Some(TableEmpty::State(EmptyState::missing(empty, "").id(
                 match self.columns.id.as_str() {
-                    "actions" => "actions-empty",
-                    "action-types" => "action-types-none",
-                    "reminders-due" => "reminders-none",
-                    _ => "skills-table-empty",
+                    "actions" => "actions-empty".to_owned(),
+                    "action-types" => "action-types-none".to_owned(),
+                    "reminders-due" => "reminders-none".to_owned(),
+                    _ => format!("{}-empty", self.columns.id),
                 },
             )));
         }
