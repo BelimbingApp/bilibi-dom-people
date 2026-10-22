@@ -108,6 +108,7 @@ async fn main() -> Result<()> {
     }
     for cap in [
         ACTIONS_VIEW,
+        ACTIONS_UPDATE,
         ACTIONS_MANAGE,
         ACTIONS_APPROVE,
         CATALOG_MANAGE,
