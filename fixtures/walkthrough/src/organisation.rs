@@ -60,7 +60,10 @@ fn read<T>(step: &str, result: std::result::Result<T, OrganisationError>) -> Opt
             println!("{step}: ok");
             Some(value)
         }
-        error => show(step, error),
+        Err(error) => {
+            show::<()>(step, Err(error));
+            None
+        }
     }
 }
 
@@ -820,5 +823,56 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     ] {
         refused(client, step, sql, manager_ceo.id).await;
     }
+
+    // Hold only a read lock in a separate connection. Revoke the manager's
+    // grant after the write queues on that lock, before allowing it to run.
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let mut locker = db.get().await?;
+    let lock = locker.transaction().await?;
+    let blocker: i32 = lock.query_one("SELECT pg_backend_pid()", &[]).await?.get(0);
+    lock.query_one(
+        "SELECT id FROM companies WHERE tenant_id = $1 AND id = $2 FOR UPDATE",
+        &[&manager.tenant(), &company],
+    )
+    .await?;
+    let facade = organisation.clone();
+    let queued_scope = manager.clone();
+    let pending = tokio::spawn(async move {
+        facade
+            .create_position(&queued_scope, company, &NewPosition::new("QUEUED"))
+            .await
+    });
+    let queued = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting: bool = client
+                .query_one(
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)))",
+                    &[&blocker],
+                )
+                .await?
+                .get(0);
+            if waiting {
+                return Ok::<(), Error>(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+    if !matches!(queued, Ok(Ok(()))) {
+        pending.abort();
+        return Err(Error::Internal);
+    }
+    grants
+        .set_direct(admin, manager_user, MANAGE, Some(false))
+        .await?;
+    lock.rollback().await?;
+    let result = pending.await.map_err(|_| Error::Internal)?;
+    grants
+        .set_direct(admin, manager_user, MANAGE, Some(true))
+        .await?;
+    if !matches!(result, Err(OrganisationError::Unauthorized)) {
+        return Err(Error::Internal);
+    }
+    println!("manager's queued position write after grant revocation: refused (Access denied); no position created");
     Ok(())
 }

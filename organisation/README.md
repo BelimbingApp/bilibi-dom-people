@@ -10,7 +10,7 @@ This is the service slice (PO1 of the port plan): schema, facade and the
 `people/organisation.positions` port. PO2 adds the explorer page
 `/people/organisation` with the menu leaf Team › Organisation
 (`people.team.organisation`, order 20, capability `people.organisation.view`)
-and its `base/menu`, `base/ui` and `people/settings` edges; PO3 exposes the
+and its `base/menu` and `base/ui` edges; PO3 exposes the
 three facade-only writes (`create_position`, `record_version`, `set_parent`)
 as agent operations. Until PO2 the module contributes no page and no leaf: a
 leaf whose route is not mounted would be a dead link.
@@ -22,7 +22,7 @@ PostgreSQL exclusion constraints enforce the non-overlap rules even for
 concurrent writers. Parent links are company-bound and cycle-checked under
 the company lock. Every write authorizes `people.organisation.manage` for the
 scope's signed-in actor and the target company at the moment it runs,
-through the Workforce `Authorization` helpers (a system scope, a grant
+through the Workforce `Authorization` helpers. After acquiring the company lock, every write rechecks its grant, and `assign` checks working membership again (a system scope, a grant
 revoked while a page stays open, or a company outside the actor's reach is
 `Unauthorized`), then holds the company's writable lock inside its mutation
 transaction (an archived company is `CompanyArchived`). The reads need no
@@ -191,11 +191,11 @@ as of four days, walks the keyset scan two positions at a time and refuses a
 cursor for another day, company or a tampered one, calls the port as
 Workforce will, and ends with PostgreSQL refusing an overlapping substantive
 holder, an overlapping version, an own or cross-company parent, an unknown
-kind, an end before the start and an unknown employment.
+kind, an end before the start and an unknown employment. It also queues a position write behind a company lock, revokes the grant through Authz, then proves that the queued write refuses without creating a position.
 
 ## Dependencies
 
 `base/audit`, `base/authz`, `base/database`, `base/module_registry`,
-`base/ports`, `base/tenancy`, `core/company`, `people/workforce`; the Cargo
+`base/ports`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo
 manifest lists the same edges. Workforce reaches this module only through
 the port above, never the other way round.

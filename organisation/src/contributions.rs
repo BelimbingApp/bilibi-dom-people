@@ -40,7 +40,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/audit", "base/authz", "base/database", "base/module_registry", "base/ports",
-            "base/tenancy", "core/company", "people/workforce",
+            "base/tenancy", "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
             "people-organisation-001-positions",

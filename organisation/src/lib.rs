@@ -445,9 +445,6 @@ impl Organisation {
         {
             return Err(OrganisationError::NotFound);
         }
-        self.workforce
-            .employee(scope, company_id, valid.employee_id)
-            .await?;
         let mut tx = self
             .mutations
             .begin(
@@ -459,6 +456,12 @@ impl Organisation {
         let position = positions::find(tx.sql(), company_id, position_id)
             .await?
             .ok_or(OrganisationError::NotFound)?;
+        // Recheck working membership after acquiring the company lock so a
+        // change while this write waited takes effect.
+        self.workforce
+            .employee(scope, company_id, valid.employee_id)
+            .await?
+            .require_current()?;
         if valid.kind == "substantive" {
             self.release_seat(
                 &mut tx,
@@ -773,7 +776,11 @@ impl Organisation {
 
 /// Holds the company's writable lock for the transaction: an archived
 /// company is `CompanyArchived`, a company the scope cannot see `NotFound`.
-async fn lock_company(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
+async fn lock_company(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
     organisation::require_writable(client, scope, company_id, true)
         .await
         .map_err(|error| match error {
@@ -782,5 +789,8 @@ async fn lock_company(client: &impl GenericClient, scope: &Scope, company_id: i6
             WriteError::Access(error) => error.into(),
             _ => OrganisationError::Unauthorized,
         })?;
+    // A grant can be revoked while this transaction waits for the company.
+    // Every write rechecks with its own transaction after acquiring the lock.
+    authorization::authorize(client, scope, company_id, MANAGE).await?;
     Ok(())
 }
