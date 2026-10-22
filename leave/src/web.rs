@@ -727,18 +727,24 @@ impl Policies {
                     .label("Company")
                     .kind(InputKind::Select)
                     .options(choices(&options))
-                    .value(self.company_id.map(|id| id.to_string()).unwrap_or_default())],
+                    // A removed target must not look like the first remaining company.
+                    .prompt(if company.is_none() {
+                        "Choose a company"
+                    } else {
+                        ""
+                    })
+                    .value(company.map(|c| c.id.to_string()).unwrap_or_default())],
                 "Choose company",
                 false,
                 true,
             )?
         };
-        let state = if company.is_none() {
+        let state = if company.is_none() && self.companies.is_empty() {
             render(
                 &EmptyState::missing("No active company is available for leave policies.", "")
                     .id("leave-policies-empty"),
             )?
-        } else if self.rules.is_none() {
+        } else if company.is_none() || self.rules.is_none() {
             render(
                 &EmptyState::missing("Leave policies are unavailable for this company.", "")
                     .id("leave-policies-unavailable"),

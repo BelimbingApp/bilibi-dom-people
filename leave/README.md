@@ -179,7 +179,7 @@ Use a private loopback port you own. The development production seeds configure 
 
 ## Leave policies page
 
-Open People › Settings › Leave policies to set a company's leave year, request rules, types and entitlement versions. The company chooser includes unarchived companies you may manage; its selection stays in the address so reload and Back restore it.
+Open People › Settings › Leave policies to set a company's leave year, request rules, types and entitlement versions. The company chooser includes unarchived companies you may manage; its selection stays in the address so reload and Back restore it. If the selected company becomes unavailable while the page is open, the chooser asks you to select an available company.
 
 Add a leave type, then add its first policy version. Each version shows its effective dates, yearly entitlement and optional carry-forward cap. The type, policy-version and skipped-balance lists use the shared FlexTable and ListColumns for column selection, arrangement and compact rows. They keep Bilimbi's row order and do not add sorting or pagination.
 
