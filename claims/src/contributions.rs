@@ -7,8 +7,14 @@
 use crate::{Claims, MAX_CURRENCIES, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, RoleDefinition, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
-use bilibi_module_registry::{Contribution, Layer, Module, Provenance, Service};
+use bilibi_menu::{MenuItem, Requirement};
+use bilibi_module_registry::{
+    contributions::{Access, Method, PageWrites, Pending, Route, PAGE_WRITES, ROUTES},
+    Contribution, Layer, Module, Provenance, Service,
+};
 use bilibi_settings::{Definition, Editor, ScopeKind, Setting, Validator, ValueType, DEFINITIONS};
+use bilibi_tenancy::Scope;
+use bilibi_ui::page::PageService;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -77,6 +83,13 @@ inventory::submit! {
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::operations_web::Pages::new(
                 services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?,
             ))))),
+        }, Service {
+            id: crate::web::SERVICE,
+            factory: |services| {
+                Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(
+                    crate::web::Pages::new(services.get(SERVICE)?)
+                ))))
+            },
         }],
     }
 }
@@ -144,4 +157,25 @@ bilibi_menu::contribute!(
     .under("people.time_and_expenses")
     .requires(bilibi_menu::Requirement::Capability(APPROVE))
     .order(30)
+);
+
+// Bilimbi Claims.Web.MyClaimsLive and claims/priv/web_routes.exs.
+inventory::submit! {
+    Contribution::new(ROUTES, "people/claims.my_claims", provenance!(), &Route {
+        method: Method::Get, path: "/people/claims", service: crate::web::SERVICE,
+        operation: "my_claims", access: Access::Capability(SUBMIT), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(PAGE_WRITES, crate::web::SERVICE, provenance!(), &PageWrites {
+        service: crate::web::SERVICE, contracts: &[],
+        pending: Pending::Every { reason: "Self-service submission and withdrawal use the Claims facade; operation contracts have not been reviewed for these writes." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/claims",
+    MenuItem::page("people.my_work.claims", "My claims", "/people/claims")
+        .under("people.my_work")
+        .requires(Requirement::Capability(SUBMIT))
+        .order(30)
 );

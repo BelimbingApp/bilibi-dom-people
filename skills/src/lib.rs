@@ -23,11 +23,15 @@
 //! first holds the company's writable lock, so an archived company is
 //! refused and a company's writes are serialized.
 //!
-//! Catalog and assessments (PK1–PK2) share this facade. Reassessment and
-//! development action writes (PK3) and reminders (PK7) follow; pages land
+//! Catalog, assessments, reassessments and development actions (PK1–PK3)
+//! share this facade. Reminders (PK7) follow; pages land
 //! in PK4–PK6.
 //! See `README.md`.
 mod access;
+mod action_api;
+mod action_rows;
+mod action_types;
+mod actions;
 mod assessment_api;
 mod assessment_types;
 mod assessments;
@@ -36,15 +40,18 @@ mod contributions;
 mod policy;
 mod positions;
 mod profiles;
+mod reassessments;
 mod rows;
 mod scales;
 mod standing;
 mod validate;
 
+pub use action_types::*;
 pub use assessment_types::*;
 pub use contributions::{
-    ASSESSMENTS_APPROVE, ASSESSMENTS_MANAGE, ASSESSMENTS_REVIEW, ASSESSMENTS_SUBMIT,
-    ASSESSMENTS_VIEW, CAPABILITIES, CATALOG_MANAGE, CATALOG_VIEW, POLICY_MANAGE, PROFILES_PUBLISH,
+    ACTIONS_APPROVE, ACTIONS_MANAGE, ACTIONS_UPDATE, ACTIONS_VIEW, ASSESSMENTS_APPROVE,
+    ASSESSMENTS_MANAGE, ASSESSMENTS_REVIEW, ASSESSMENTS_SUBMIT, ASSESSMENTS_VIEW, CAPABILITIES,
+    CATALOG_MANAGE, CATALOG_VIEW, POLICY_MANAGE, PROFILES_PUBLISH, REASSESSMENTS_EXECUTE,
     REASSESSMENTS_SUBMIT, SELF_VIEW,
 };
 pub use policy::{Policy, PolicyChanges, POLICY_KEYS};
@@ -182,6 +189,40 @@ pub enum SkillsError {
     InvalidNote,
     #[error("A working employee must be linked to your account.")]
     Unavailable,
+    #[error("You cannot request your own reassessment.")]
+    SelfRequest,
+    #[error("The employee has no current score for that skill.")]
+    NoScore,
+    #[error("A reassessment is already open for that employee and skill.")]
+    AlreadyOpen,
+    #[error("A reason is required.")]
+    ReasonRequired,
+    #[error("Evidence is required.")]
+    EvidenceRequired,
+    #[error("Choose an active action type.")]
+    TypeUnavailable,
+    #[error("This action type needs a trainer, coach or provider.")]
+    ProviderRequired,
+    #[error("Every named person must be a current employee.")]
+    EmployeeUnavailable,
+    #[error("That assessment already has a development action.")]
+    AlreadyProposed,
+    #[error("Only a current gap or an expired critical skill needs an action.")]
+    NotActionable,
+    #[error("Only the employee's current assessment can start an action.")]
+    AssessmentNotCurrent,
+    #[error("The action cannot move from its current status.")]
+    InvalidTransition,
+    #[error("Only a proposed action can be changed this way.")]
+    NotProposed,
+    #[error("That is not a finalized reassessment after the intervention.")]
+    NotAReassessment,
+    #[error("That could not be done.")]
+    NotPendingReassessment,
+    #[error("That could not be done.")]
+    CommentRequired,
+    #[error("That could not be done.")]
+    InvalidAction,
     /// Refused values, in the words a form shows beside each field.
     #[error("Check the entered values.")]
     Invalid(Vec<FieldError>),

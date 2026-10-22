@@ -2,7 +2,7 @@
 
 Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
 
-Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. The Claim operations page is implemented here; My claims and Claim policies belong to PC3 and PC4.
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`, and Claim operations at `/people/claims/operations`. Claim policies is delivered separately.
 
 ## Ownership
 
@@ -174,3 +174,17 @@ Every write-shaped event rechecks the queue permission and the action's permissi
 For browser proof, first run the default People walkthrough on a disposable database. Initialize its stored Dev role with `BILIBI_ENV=development ./target/debug/bilibi-web seed-production`, then run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin claim-operations`. It creates separate records through the Claims facade and gives the fixture viewer queue access with reimbursement explicitly denied. Sign in as the fixture manager to exercise all five tabs, or as the viewer to check withheld controls.
 
 While a manager review is open, run the same fixture binary with `revoke-reimburse` or `revoke-approve` to prove that the next event refuses it. Restore the grant with `restore-reimburse` or `restore-approve`. These commands call Authz and refuse a database without the walkthrough accounts.
+
+## My claims
+
+Open **People → My work → My claims** to submit an expense and follow its decision. The page uses the signed-in account’s company and working employee; neither can be chosen in the form.
+
+The open claim types table shows each category, currency, limits and receipt rule. The submission form asks for the type, expense date, amount, currency, receipt number and description. When the same type, date and amount already exist, it keeps the entered details and asks you to confirm that this is a separate expense. A repeated receipt number is refused even when that confirmation is checked.
+
+Submitted claims show their status, approved amount and decision reason. A reimbursed claim also shows its payment date. **Withdraw** first asks for confirmation; Cancel and Escape leave the claim unchanged. The server keeps the selected claim, and confirmation checks ownership and status again through `Claims::withdraw_request`.
+
+Both lists use `FlexTable` with `ListColumns` for column selection, order and compact rows. Bilimbi’s page has no sorting, filters or pagination, so those controls are absent here. `ListState` validates the page’s URL state. The page is available in a workspace tile and declares its facade writes through `PageWrites` with a pending operation-contract allowance.
+
+Every page update resolves the account’s current employee link again. Every write event checks `people.claims.submit` before parsing input, and the facade checks again under its locks. A revoked grant or removed link clears the private rows, form and pending withdrawal. Refusals stay on the page as messages; field validation also appears beside the fields and in an error summary.
+
+For browser checks on a disposable database, first run the default People walkthrough, then run `cargo run -p bilibi-people-walkthrough --bin claims-page -- relink` followed by `cargo run -p bilibi-people-walkthrough --bin claims-page -- prepare`. The relink step restores the staff account after other slices’ account-link refusal proofs. Sign in as `staff@example.test` to see submitted, partly approved, rejected and reimbursed expenses, plus three open receipt rules. The same binary accepts `revoke`/`restore` and `unlink`/`relink` to change that account while its page is open.
