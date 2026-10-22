@@ -83,10 +83,7 @@ impl Approvals {
         let client = self.core.db.get().await?;
         self.companies =
             match authorization::selectable_companies(&**client, scope, REQUESTS_APPROVE).await {
-                Ok(companies) => companies
-                    .into_iter()
-                    .filter(|c| c.status == "active")
-                    .collect(),
+                Ok(companies) => companies.into_iter().filter(|c| !c.archived).collect(),
                 Err(error) => {
                     refusal(error.into())?;
                     vec![]
@@ -145,7 +142,7 @@ impl Approvals {
         };
         let client = self.core.db.get().await?;
         match authorization::authorize_company(&**client, scope, company, REQUESTS_APPROVE).await {
-            Ok(c) if c.status == "active" => Ok(Some(company)),
+            Ok(c) if !c.archived => Ok(Some(company)),
             Ok(_) => {
                 self.pending = None;
                 self.flash.error("This company is archived and read-only");

@@ -129,18 +129,18 @@ inventory::submit! { Contribution::new(DEFINITIONS, REQUEST_BACKDATE_DAYS_KEY, p
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::worker::validate }) }
 inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
 
-inventory::submit! { Contribution::new(bilibi_agent_api::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_agent_api::PageWrites {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
     service: crate::web::PAGES, contracts: &[],
-    pending: bilibi_agent_api::Pending::Every { reason: "Leave requests, cancellations and decisions write through the Leave facade; their operation contracts have not been reviewed." },
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Leave requests, cancellations and decisions write through the Leave facade; their operation contracts have not been reviewed." },
 }) }
 
-inventory::submit! { Contribution::new(bilibi_module_registry::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::Route {
-    method: bilibi_module_registry::Method::Get, path: "/people/leave/my", service: crate::web::PAGES, operation: "my",
-    access: bilibi_module_registry::Access::Capability(SELF_VIEW), framed: true,
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/my", service: crate::web::PAGES, operation: "my",
+    access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::Route {
-    method: bilibi_module_registry::Method::Get, path: "/people/leave/requests", service: crate::web::PAGES, operation: "requests",
-    access: bilibi_module_registry::Access::Capability(REQUESTS_APPROVE), framed: true,
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/requests", service: crate::web::PAGES, operation: "requests",
+    access: bilibi_module_registry::contributions::Access::Capability(REQUESTS_APPROVE), framed: true,
 }) }
 
 bilibi_menu::contribute!(
