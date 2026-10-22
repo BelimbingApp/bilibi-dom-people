@@ -564,11 +564,7 @@ impl Workforce {
             .await?;
         employments::by_affiliation(&**client, scope.tenant(), company.id, affiliation.get())
             .await?
-            .filter(|row| {
-                statuses
-                    .iter()
-                    .any(|status| *status == row.employment.status)
-            })
+            .filter(|row| statuses.contains(&row.employment.status))
             .map(|row| row.employment.id)
             .ok_or(WorkforceError::NotLinked)
     }
