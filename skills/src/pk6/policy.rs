@@ -720,7 +720,7 @@ impl PolicyPage {
         Ok(result)
     }
     pub(super) fn render(&self) -> Result<String> {
-        let mut body = Html::EMPTY;
+        let body;
         if self.company.selected.is_none() {
             body = render(
                 &EmptyState::missing("No active company is available for skills policy.", "")
