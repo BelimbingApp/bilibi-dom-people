@@ -908,6 +908,9 @@ pub async fn run(url: &str) -> Result<()> {
     // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
     training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
 
+    // PO2: paginated explorer records and a read-only browser account.
+    organisation_explorer::run(&services, &admin, &manager).await?;
+
     // PK3: independent reassessment and development-action proof block.
     skill_actions::run(
         &services,
@@ -3720,6 +3723,8 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// PO2: browser proof data, separate from the Organisation service proof.
+mod organisation_explorer;
 // PT3: executable learning governance proofs.
 mod training_governance;
 // Attendance workflows (PA2): standalone executable block on the prepared database.
