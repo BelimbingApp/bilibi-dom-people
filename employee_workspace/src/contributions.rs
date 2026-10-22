@@ -21,7 +21,8 @@ inventory::submit! {
             "base/party_ids", "base/tenancy", "base/ui", "core/affiliation",
             "core/company", "core/person", "people/settings", "people/workforce",
         ],
-        migrations: &[("people-employee-workspace-001-employee-workspace", include_str!("../migrations/001-employee-workspace.sql"))],
+        migrations: &[("people-employee-workspace-001-employee-workspace", include_str!("../migrations/001-employee-workspace.sql")),
+            ("people-employee-workspace-002-inline-versions", include_str!("../migrations/002-inline-versions.sql"))],
         services: &[
             Service { id: SERVICE, factory: |s| Ok(Arc::new(EmployeeWorkspace::new(
                 s.get::<Db>("base/database.pool")?.as_ref().clone(),
@@ -66,3 +67,10 @@ bilibi_menu::contribute!(
         .requires(Requirement::Capability(VIEW))
         .order(10)
 );
+
+// Bilimbi EmployeeWorkspace.Web.ShowLive.
+inventory::submit! {
+    Contribution::new(ROUTES, "people/employee_workspace.employee", Provenance { module: MODULE, source: file!(), line: line!() }, &Route {
+        method: Method::Get, path: "/people/employees/{id}", service: PAGES, operation: "employee", access: Access::Capability(VIEW), framed: true,
+    })
+}

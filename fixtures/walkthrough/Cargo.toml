@@ -70,6 +70,8 @@ bilibi-datetime.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-people-training = { path = "../../training" }
 
+# PE2: exercise the mounted employee detail page and its inline outcomes.
+bilibi-ui.workspace = true
 # Payroll foundation (PY1): the standalone executable proof block.
 bilibi-people-payroll = { path = "../../payroll" }
 
