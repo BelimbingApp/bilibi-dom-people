@@ -1,19 +1,8 @@
 # Training
 
-Module ID: `people/training`, crate `bilibi-people-training`. A company's
-course catalog, delivery events and session calendar, and later its
-attendance records, evidence, learning requests, plans, budgets,
-evaluations, passports and insights. Other People modules and the Training
-pages reach it only through this module's facade; none of them reads its
-tables. This README is the owner contract; the Bilimbi source it ports is
-[`training/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
+Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-This is the catalog slice (PT1 of the port plan): migration 001, the
-`Training` facade for courses, events, sessions and the calendar, and the
-four catalog capabilities. PT2 adds participation and evidence, PT3
-requests, plans and budgets, PT4 evaluation and effectiveness, PT5
-passports and insights; the Courses and Sessions & calendar pages, with
-their menu leaves, land in PT6. The Learning pages add My learning, Learning requests & reviews and Learning policy and budgets to the sidebar. An administrator grants Training capabilities.
+The catalog and governance migrations and public methods are implemented, along with the six Learning pages below. Participation, evidence, evaluation, passports and insights arrive in their own slices. The Courses and Sessions & calendar pages arrive in PT6. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -133,7 +122,7 @@ role: an administrator grants them.
 | `people.training.sessions.view` | Reads events and the calendar (`/people/training/sessions`, PT6) |
 | `people.training.sessions.manage` | Adds events and sessions, and picks among the active courses |
 
-The ten governance keys and `people.training.currencies` are described below. The remaining 17 keys, the verbs `answer` and `generate`, the remaining menu leaves and `people.training.evaluation.*` settings land with their slices.
+The ten governance keys and `people.training.currencies` are described below. The remaining keys, the verbs `answer` and `generate`, the remaining menu leaves and `people.training.evaluation.*` settings land with their slices.
 
 ## Walkthrough
 

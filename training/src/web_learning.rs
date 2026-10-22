@@ -270,6 +270,7 @@ struct Learning {
     summary: ErrorSummary,
     pending: Option<Decision>,
     banner: Html,
+    instance_notice: String,
     clock: Option<bilibi_datetime::DisplayContext>,
 }
 impl Learning {
@@ -303,6 +304,7 @@ impl Learning {
             summary: ErrorSummary::new("learning-errors"),
             pending: None,
             banner: Html::EMPTY,
+            instance_notice: String::new(),
             clock: None,
         })
     }
@@ -428,8 +430,9 @@ impl Learning {
                 )
                 .await?,
         );
-        self.banner = bilibi_system::Instance::resolve(&self.training.settings, &**client)
-            .await?
+        let instance = bilibi_system::Instance::resolve(&self.training.settings, &**client).await?;
+        self.instance_notice = instance.notice();
+        self.banner = instance
             .banner("learning-instance", "")
             .map_err(|_| Error::Internal)?;
         drop(client);
@@ -909,8 +912,7 @@ impl Learning {
                         ),
                     )
                     .cell("reason", bilibi_ui::Cell::text(&d.reason));
-                if let (Some(clock), Ok(instant)) =
-                    (&self.clock, d.inserted_at.parse::<jiff::Timestamp>())
+                if let (Some(clock), Ok(instant)) = (&self.clock, learning_instant(&d.inserted_at))
                 {
                     let r = clock.render(
                         instant,
@@ -1100,6 +1102,7 @@ impl Learning {
                 .collect::<DbResult<Vec<_>>>()?;
             let mut table = FlexTable::new("learning-records", self.columns.flex_columns(), rows);
             table.event = "grid";
+            table.caption = self.task.title();
             table.zoom = self.columns.zoom;
             table.suggestions = self.columns.flex_suggestions();
             table.add_query = &self.columns.add_query;
@@ -1154,7 +1157,7 @@ impl Learning {
             Html::EMPTY
         };
         let confirmation = if let Some(p) = &self.pending {
-            let dialog=render(&ConfirmDialog { id:"learning-decision-confirm",consequence:&format!("Record {} for this learning record?",p.action),detail:"The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.",confirm:"Record decision",working:"Recording…",confirm_event:"confirm_decision",cancel_event:"cancel_decision" })?;
+            let dialog=render(&ConfirmDialog { id:"learning-decision-confirm",consequence:&format!("Record {} for this learning record?",p.action),detail:&format!("{} The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.", self.instance_notice),confirm:"Record decision",working:"Recording…",confirm_event:"confirm_decision",cancel_event:"cancel_decision" })?;
             // The banner belongs inside the review dialog, beside its consequence.
             // ConfirmDialog has no body slot, so use the shared instance banner immediately before it.
             join([self.banner.clone(), dialog])
@@ -1211,6 +1214,11 @@ impl LiveState<Scope, Error> for Learning {
             })
         })
     }
+}
+// Governance stores inserted_at as a UTC timestamp without a zone marker
+// (003-learning-governance.sql). Attach that declared zone before DisplayPolicy.
+fn learning_instant(value: &str) -> std::result::Result<jiff::Timestamp, jiff::Error> {
+    value.parse().or_else(|_| format!("{value}Z").parse())
 }
 fn posted(payload: &Value, name: &str) -> String {
     payload

@@ -1,12 +1,7 @@
-//! What Training adds to the shared catalogs (Bilimbi
-//! `Bilimbi.People.Training.Contributions`): the module descriptor with its
-//! catalog and governance migrations and facade service, and catalog capabilities under
-//! the `people` Authz domain. Bilimbi grants no Training key to a system
-//! role: an administrator grants them. Governance contributes its keys and setting
-//! in `governance.rs`. The participation,
-//! evaluation and passport keys, the three verbs they add (`recommend`,
-//! `answer`, `generate`), the eight menu leaves and the company settings land
-//! with their slices beside this block.
+//! Bilimbi `Training.Contributions`: catalog and governance migrations and
+//! facade service. Governance contributes its keys and setting in governance.rs;
+//! web_learning.rs contributes the six Learning routes and three menu leaves.
+//! Participation, evaluation, passports and catalog pages arrive in their slices.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};

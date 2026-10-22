@@ -4,7 +4,9 @@ use crate::{COMPANY, MANAGER, STAFF, VIEWER};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
-use bilibi_people_training::{Training, LEARNING_VIEW, SERVICE};
+use bilibi_people_training::{
+    Training, BUDGETS_VIEW, LEARNING_VIEW, PLANS_VIEW, REQUESTS_VIEW, SERVICE,
+};
 use bilibi_people_workforce::Workforce;
 use bilibi_tenancy::Scope;
 use bilibi_user::UserService;
@@ -20,6 +22,14 @@ pub async fn run(
         grants
             .set_direct(admin, user, LEARNING_VIEW, Some(true))
             .await?;
+    }
+    for cap in [
+        "admin.company.tenant-wide.manage",
+        REQUESTS_VIEW,
+        PLANS_VIEW,
+        BUDGETS_VIEW,
+    ] {
+        grants.set_direct(admin, VIEWER, cap, Some(true)).await?;
     }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let employment = workforce
@@ -51,6 +61,6 @@ pub async fn run(
         return Err(Error::Internal);
     }
     // The viewer can open the task hub while requests.submit still refuses.
-    println!("PT8 Learning pages ready: manager and staff have task access; viewer has only the Learning entry grant. Staff is linked for browser request submission; the independent admin can review and approve.");
+    println!("PT8 Learning pages ready: manager and staff have task access; viewer has Learning entry and register read grants. Staff is linked for browser request submission; the independent admin can review and approve.");
     Ok(())
 }
