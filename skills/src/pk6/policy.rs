@@ -720,28 +720,27 @@ impl PolicyPage {
         Ok(result)
     }
     pub(super) fn render(&self) -> Result<String> {
-        let body;
-        if self.company.selected.is_none() {
-            body = render(
+        let body = if self.company.selected.is_none() {
+            render(
                 &EmptyState::missing("No active company is available for skills policy.", "")
                     .id("skills-policy-no-company"),
-            )?;
+            )?
         } else if !self.available {
-            body = render(
+            render(
                 &EmptyState::missing(
                     "Skills policy is unavailable while this company's workforce is not current.",
                     "",
                 )
                 .id("skills-policy-unavailable"),
-            )?;
+            )?
         } else {
-            body = render(&PolicyLayout {
+            render(&PolicyLayout {
                 policy: self.policy_form()?,
                 types: self.types()?,
                 requests: self.requests()?,
                 reminders: self.reminders()?,
-            })?;
-        }
+            })?
+        };
         let confirmation = if let Some(p) = &self.pending {
             confirm(
                 true,
