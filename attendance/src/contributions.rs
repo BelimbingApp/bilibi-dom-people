@@ -67,14 +67,14 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/database", "base/datetime", "base/module_registry",
+            "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy",
             "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
             "people-attendance-001-core",
             include_str!("../migrations/001-core.sql"),
-        )],
+        ), ("people-attendance-002-rosters-adjustments", include_str!("../migrations/002-rosters-adjustments.sql")), ("people-attendance-003-allowance-rules", include_str!("../migrations/003-allowance-rules.sql"))],
         services: &[Service {
             id: SERVICE,
             factory: |services| {
