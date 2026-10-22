@@ -1,7 +1,7 @@
 //! Leave (`people/leave`, Bilimbi `Bilimbi.People.Leave`): a company's leave
 //! types, effective-dated entitlement policies, an append-only balance
 //! ledger, self-service requests with approval, and ordered year-end
-//! carry-forward. The three pages follow in PL3 and PL4.
+//! carry-forward. Self-service and approvals are live pages; policies follow in PL4.
 //!
 //! This is the module's one facade. Other People modules and pages reach it
 //! through [`Leave`], resolved from the registry as [`SERVICE`]; the schema,
@@ -30,6 +30,7 @@ mod ledger;
 mod policies;
 mod requests;
 mod types;
+mod web;
 mod worker;
 
 pub use bilibi_people_workforce::{FieldError, Freshness};

@@ -8,13 +8,7 @@ pages reach it only through this module's facade; none of them reads its
 tables. This README is the owner contract; the Bilimbi source it ports is
 [`training/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-This is the catalog slice (PT1 of the port plan): migration 001, the
-`Training` facade for courses, events, sessions and the calendar, and the
-four catalog capabilities. PT2 adds participation and evidence, PT3
-requests, plans and budgets, PT4 evaluation and effectiveness, PT5
-passports and insights; the Courses and Sessions & calendar pages, with
-their menu leaves, land in PT6. Until a page lands the sidebar shows no
-Training entry, and an administrator grants the catalog capabilities.
+PT1 and PT2 provide the catalog, attendance records and private evidence through `Training`. The Courses and Sessions & calendar pages land in PT6, and Training records in PT7. Learning requests, plans, budgets, evaluations, passports and insights follow in their own slices. Until the pages land, an administrator grants the eight available Training capabilities.
 
 ## Public API
 
@@ -133,10 +127,12 @@ role: an administrator grants them.
 | `people.training.courses.manage` | Adds and changes courses |
 | `people.training.sessions.view` | Reads events and the calendar (`/people/training/sessions`, PT6) |
 | `people.training.sessions.manage` | Adds events and sessions, and picks among the active courses |
+| `people.training.records.view` | Reads attendance revisions, sessions and private evidence |
+| `people.training.records.manage` | Records attendance and corrections; lists working employees |
+| `people.training.evidence.manage` | Attaches PDF evidence |
+| `people.training.retention.manage` | Purges expired evidence, lists purge holds and retries cleanup |
 
-The remaining 27 keys, the verbs `recommend`, `answer` and `generate`, the
-eight menu leaves and the `people.training.currencies` and
-`people.training.evaluation.*` settings land with their slices.
+The ten governance keys and `people.training.currencies` are described below. The remaining 13 keys, the verbs `answer` and `generate`, the eight menu leaves and `people.training.evaluation.*` settings land with their slices.
 
 ## Walkthrough
 
@@ -154,3 +150,71 @@ zone, a session ending when it starts, a zero capacity, a cross-company
 event and a duplicate code. Run it as the repository README says, with
 `BILIBI_ENV=development` set: the block grants capabilities through Base
 Authz, whose step-up the Platform enforces outside development mode.
+
+## Attendance records
+
+Use `Training::record(scope, company_id, &NewAttendance)` to confirm attendance or record an absence. For example, confirming an employee with key `register-12` creates revision 1. Sending the same session, employee, status and trimmed reason with that key returns the original fact. Changing any of those values with that key returns `ImportConflict`. Use a new key for a correction; history keeps both revisions.
+
+`employee_id` is a Workforce employment ID. A new fact requires a current working employee in that company. Status is `AttendanceStatus::Confirmed` or `Absent`; the trimmed reason must contain 1–2,000 characters, and the import key 1–160 characters. Import keys are company-wide and are not trimmed.
+
+The company writable lock and session row lock protect the revision and capacity decisions. Only each employee's latest revision counts towards capacity. A confirmed correction uses the existing place; an absence releases it. A new confirmation when the session is full returns `AttendanceCapacityExceeded`. Exact replays return the original fact even after later corrections or employment changes, and create no audit mutation.
+
+| Function | Result | Permission |
+| --- | --- | --- |
+| `record` | `AttendanceFact` with its revision, authorship and recorded UTC instant | `records.manage` |
+| `history` | Every revision for a session, ordered by employee then newest revision | `records.view` |
+| `sessions` | At most 500 sessions, newest first | `records.view` |
+| `participation_employees` | Current employee IDs and directory names | `records.manage` |
+
+All permission suffixes above start with `people.training.`. Reads and writes recheck company access. Migration `people-training-002-participation` creates the attendance and evidence tables. Its triggers refuse changed or deleted facts, skipped revisions, over-capacity confirmations and shrinking a session below confirmed attendance. Evidence provenance also refuses updates, deletes and truncation. Composite foreign keys keep sessions, facts and evidence within their tenant and company.
+
+## Private evidence
+
+Call `attach(scope, company_id, fact_id, bytes)` with `evidence.manage`. The fact must exist in the company, and the bytes must start with `%PDF-`. This matches Bilimbi's upload header gate; it does not claim to scan or fully validate an uploaded PDF.
+
+Base Artifacts publishes bytes before Training opens the transaction that links the evidence row. Its concrete `documents::DocumentOwner` has stable owner ID `people/training`; **keep the type and owner ID stable**, because Artifacts persists both. Its callbacks use `workforce::authorization::authorize_company_proof` on the supplied transaction and recheck the permission, active company and fact. Create is checked again before publication. Training then rechecks `evidence.manage` under its company writable lock before recording provenance through `MutationBoundary`. If linking fails, Base still tracks the artifact for expiry and recovery; no untracked file cleanup runs.
+
+`evidence(scope, company_id, fact_id)` lists permanent provenance, including documents whose bytes have expired. `read_evidence` calls Artifacts on every request, so expiry, integrity checks and changed permissions apply immediately. Both require `records.view`.
+
+The `DOWNLOADS` contribution serves `/people/training/evidence/{company_id}/{id}`, where `id` is the artifact UUID. It returns an `evidence.pdf` attachment with `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff` through shared `FileBody`. An unavailable document returns 404. There is no public file path or public storage URL.
+
+An operator configures `artifacts.storage_root`, `artifacts.retention_days`, size limits and purge pacing in Base Settings. `purge`, `purge_holds` and `retry_purge` require `retention.manage` and delegate to Artifacts. Base keeps failed cleanup attempts, waits between retries and holds repeated failures for operator review. Retrying a hold rechecks deletion authority and leaves Training's provenance intact. Training contributes no worker or schedule.
+
+The PT2 block in `fixtures/walkthrough/src/participation.rs` runs against the same disposable database as the existing walkthrough. It creates its records through `Training`, demonstrates a two-connection race for the last place, replay/conflict and corrections, permission revocation with an old scope, PDF round trips, expiry and cleanup failure followed by hold retry. Raw SQL attempts demonstrate the permanent-history guards. Set `BILIBI_TRAINING_PROOF_ROOT` to an absolute private task directory to keep its artifacts for a browser download check; otherwise the block uses a fresh directory under the system temporary folder.
+
+## Learning requests, plans and budgets
+
+Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the learning pages are added in PT8.
+
+For example, an employee creates a draft with `create_learning_request`, submits it with a reason, and their direct manager recommends it. HR reviews it before an approver reserves the cost. Every decision remains in `learning_histories`.
+
+| Method | Required capability under `people.training` | Result |
+| --- | --- | --- |
+| `learning_currencies`, `put_learning_currencies` | `budgets.view`, `budgets.manage` respectively | Allowed three-letter uppercase currency codes, initially empty; repeated codes collapse on write |
+| `create_budget_policy`, `supersede_budget_policy` | `budgets.manage` | Immutable allocation for an inclusive date period and currency |
+| `learning_budgets` | `budgets.view` | All policy versions with successor, committed amount and remaining amount |
+| `create_learning_request` | `requests.submit` | Draft owned by the employee currently linked to the signed-in account |
+| `learning_requests` | `requests.submit`, `requests.recommend`, `requests.view` | Own, direct-report or HR register, selected through `LearningAudience` |
+| `decide_learning_request` | The capability for the current step | Updated request and permanent decision |
+| `create_learning_plan`, `amend_learning_plan` | `plans.submit` | Manager-owned draft with 1–300 permanent items |
+| `learning_plans` | `plans.submit` for Team; `plans.view` for Hr | Own plans including drafts, or submitted plans for HR |
+| `decide_learning_plan` | `plans.submit` for submit/cancel; `plans.approve` for approve/reject | Updated plan and permanent decision |
+| `learning_histories` | Same capability and audience as the parent register | Decisions grouped by visible parent ID, oldest first |
+
+`LearningAudience::SelfService` means the current employee's requests, `Team` means current direct reports for requests and the manager's own plans, and `Hr` means the company register. Team and HR request registers hide drafts until a submit decision exists. HR plan registers follow the same rule. Histories apply these visibility rules too; knowing an ID does not expose its draft or decisions. SelfService is not a plan audience.
+
+Requests follow `draft → pending_hod → pending_hr → pending_approval → approved`, through `submit`, `recommend`, `review` and `approve`. A pending step may `reject`; the owner may `cancel` before approval. Every action needs a nonblank reason of at most 4,000 bytes. Each step checks its capability again. Only the current direct manager may recommend, and neither the creator nor an account currently linked to the subject may review or approve.
+
+Plans start as drafts. An owner with a current team may submit or cancel a draft; a separate approver may approve or reject a submitted plan. A plan can link only approved requests of the manager's current direct reports. Amendments create a new version and retain the prior approved version until approval. **Approving an amendment supersedes the prior plan in the same transaction.** A competing amendment cannot then replace it again.
+
+### Budget commitments
+
+`NewBudgetPolicy`, `NewLearningRequest`, `NewLearningPlan` and `NewLearningPlanItem` are the input records. Dates use `YYYY-MM-DD`. Amounts use exact decimal strings: nonnegative, less than `100000000000000`, with at most four decimal places. Output amounts are strings too, preserving the database's four decimal places. Required text is trimmed and bounded to 4,000 characters. The service derives employee, manager, author and impersonator identities itself.
+
+An approval needs an enabled currency and an active policy covering the proposed date. It snapshots that policy's ID and the request's estimated cost; approval above the remaining allocation is refused. Committed totals sum approved costs in the policy's currency and inclusive period. Remaining is allocation minus commitments, calculated together in one SQL snapshot.
+
+A correction retains the prior currency and cannot overlap another active policy, replace an already superseded policy, exclude an earlier commitment's date, or reduce the allocation below commitments. Earlier policy rows and approval snapshots remain unchanged. Removing an enabled currency prevents new requests, policies and approvals in it; it does not erase history.
+
+Migration `people-training-003-learning-governance` creates the six Bilimbi governance tables. Scoped foreign keys keep links in the same company; employee links reference Workforce employment IDs. PostgreSQL guards immutable policies, items and decisions, permanent content, terminal states, valid transitions, effective budgets and commitments. Writes take the company lock, recheck authorization, then use `MutationBoundary`; every inserted or updated record, including histories and superseded plans, produces its own audit change. Self-service writes re-prove the account under Workforce's employment lock. The governance advisory lock also serializes budget trigger checks for the same company.
+
+The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It creates records through these methods on a disposable database and fails if an expected transition or refusal differs.
