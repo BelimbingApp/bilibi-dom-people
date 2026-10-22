@@ -175,9 +175,9 @@ impl Table {
         if none {
             table.empty = Some(TableEmpty::State(EmptyState::missing(empty, "").id(
                 match self.columns.id.as_str() {
-                    "leave-types" => "leave-types-empty",
+                    "leave-types" => "",
                     "leave-policy-versions" => "leave-policies-none",
-                    _ => "leave-carry-skipped-empty",
+                    _ => "",
                 },
             )));
         }
