@@ -42,6 +42,7 @@ mod contributions;
 mod paging;
 mod port;
 mod positions;
+mod web;
 
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{CAPABILITIES, MANAGE, POSITIONS_PORT, VIEW};

@@ -1,0 +1,11 @@
+{# Bilimbi Organisation.Web.ExplorerLive, composed with shared Bilibi UI. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="organisation-explorer-page", variant=bilibi_ui::PageVariant::List) %}
+{% call ui::header(subtitle="Positions and their holders on the selected date.") %}Organisation{% endcall %}
+{{ filters }}{{ unavailable }}{{ table }}{{ pagination }}
+{% endcall %}
+{{ dialog }}{{ confirmation }}
+</div>

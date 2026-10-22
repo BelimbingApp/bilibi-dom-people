@@ -908,6 +908,9 @@ pub async fn run(url: &str) -> Result<()> {
     // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
     training_governance::run(&services, &client, &admin, &manager, staff_employment.id).await?;
 
+    // PO2: paginated explorer records and a read-only browser account.
+    organisation_explorer::run(&services, &admin, &manager).await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -3706,6 +3709,8 @@ mod assessments;
 // PT1: the Training catalog proof block.
 mod training;
 
+// PO2: browser proof data, separate from the Organisation service proof.
+mod organisation_explorer;
 // PT3: executable learning governance proofs.
 mod training_governance;
 // Attendance workflows (PA2): standalone executable block on the prepared database.
