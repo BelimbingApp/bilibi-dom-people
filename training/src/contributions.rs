@@ -21,7 +21,22 @@ pub const SESSIONS_VIEW: &str = "people.training.sessions.view";
 /// Adds events and sessions, and picks among the active courses for them.
 pub const SESSIONS_MANAGE: &str = "people.training.sessions.manage";
 /// Every catalog capability.
-pub const CAPABILITIES: [&str; 4] = [COURSES_VIEW, COURSES_MANAGE, SESSIONS_VIEW, SESSIONS_MANAGE];
+pub const CAPABILITIES: [&str; 14] = [
+    COURSES_VIEW,
+    COURSES_MANAGE,
+    SESSIONS_VIEW,
+    SESSIONS_MANAGE,
+    crate::REQUESTS_SUBMIT,
+    crate::REQUESTS_RECOMMEND,
+    crate::REQUESTS_REVIEW,
+    crate::REQUESTS_APPROVE,
+    crate::REQUESTS_VIEW,
+    crate::PLANS_SUBMIT,
+    crate::PLANS_APPROVE,
+    crate::PLANS_VIEW,
+    crate::BUDGETS_VIEW,
+    crate::BUDGETS_MANAGE,
+];
 
 macro_rules! provenance {
     () => {
@@ -46,7 +61,7 @@ inventory::submit! {
         migrations: &[(
             "people-training-001-catalog",
             include_str!("../migrations/001-catalog.sql"),
-        )],
+        ), ("people-training-003-learning-governance", include_str!("../migrations/003-learning-governance.sql"))],
         services: &[Service {
             id: SERVICE,
             factory: |services| {
