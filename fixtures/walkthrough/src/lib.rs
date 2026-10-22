@@ -3708,3 +3708,10 @@ mod attendance_workflows;
 pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
+
+// PC3: browser records and two-session checks, run after the default fixture.
+mod claims_page;
+/// Adds My claims browser records, or changes the fixture staff account's access.
+pub async fn claims_page(url: &str, action: &str) -> Result<()> {
+    claims_page::run(url, action).await
+}

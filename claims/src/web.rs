@@ -515,7 +515,7 @@ impl LiveState<Scope, Error> for MyClaims {
             Ok(LiveBody {
                 html: self.render()?,
                 rows: self.requests.len() + self.open.len(),
-                query: Some(self.list.to_params()),
+                query: self.list.to_params(),
                 ..LiveBody::default()
             })
         })
