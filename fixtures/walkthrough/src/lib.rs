@@ -1458,6 +1458,8 @@ pub async fn attendance(url: &str) -> Result<()> {
         attendance.self_days(&manager, COMPANY).await,
     );
 
+    attendance_locks::run(&db, &services, &admin, &manager, staff_employee).await?;
+
     // PostgreSQL itself refuses what the facade never attempts.
     for (step, sql) in [
         (
@@ -1500,3 +1502,6 @@ pub async fn attendance(url: &str) -> Result<()> {
 
 // Leave (slice PL1).
 mod leave;
+
+// Attendance queued-write proof (PA1).
+mod attendance_locks;

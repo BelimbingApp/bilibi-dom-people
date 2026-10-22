@@ -579,8 +579,8 @@ pub(crate) async fn write(
             });
             let events = sql
                 .query(
-                    &format!("SELECT {EVENT_COLUMNS} FROM people_attendance_clock_facts WHERE day_id = $1 AND company_id = $2 ORDER BY occurred_at, id"),
-                    &[&day.id, &company_id],
+                    &format!("SELECT {EVENT_COLUMNS} FROM people_attendance_clock_facts WHERE day_id = $1 AND company_id = $2 AND tenant_id = $3 ORDER BY occurred_at, id"),
+                    &[&day.id, &company_id, &tenant],
                 )
                 .await?
                 .iter()
@@ -589,13 +589,15 @@ pub(crate) async fn write(
             let (status, first_in_at, last_out_at, worked_minutes) = project(&events, max_shift_hours);
             let row = sql
                 .query_one(
-                    &format!("UPDATE people_attendance_daily_summaries SET status = $2, first_in_at = $3::text::timestamptz, last_out_at = $4::text::timestamptz, worked_minutes = $5, updated_at = now() WHERE id = $1 RETURNING {DAY_COLUMNS}"),
+                    &format!("UPDATE people_attendance_daily_summaries SET status = $2, first_in_at = $3::text::timestamptz, last_out_at = $4::text::timestamptz, worked_minutes = $5, updated_at = now() WHERE id = $1 AND tenant_id = $6 AND company_id = $7 RETURNING {DAY_COLUMNS}"),
                     &[
                         &day.id,
                         &status.as_str(),
                         &first_in_at.map(|at| at.to_string()),
                         &last_out_at.map(|at| at.to_string()),
                         &worked_minutes,
+                        &tenant,
+                        &company_id,
                     ],
                 )
                 .await?;

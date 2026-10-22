@@ -50,3 +50,21 @@ pub(crate) async fn lock_company(
             _ => AttendanceError::Unauthorized,
         })
 }
+
+/// Recheck the operator's grant on the transaction after waiting for the
+/// company lock, so a revoked grant cannot authorize a queued write.
+pub(crate) async fn lock_rules_company(
+    tx: &MutationTransaction<'_>,
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
+    lock_company(tx, scope, company_id).await?;
+    bilibi_people_workforce::authorization::authorize(
+        tx.sql(),
+        scope,
+        company_id,
+        crate::RULES_MANAGE,
+    )
+    .await?;
+    Ok(())
+}

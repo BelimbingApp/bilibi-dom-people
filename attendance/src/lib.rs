@@ -184,7 +184,7 @@ impl Attendance {
                     scope.mutation_context("people.attendance.put_rules"),
                 )
                 .await?;
-            access::lock_company(&tx, scope, company_id).await?;
+            access::lock_rules_company(&tx, scope, company_id).await?;
             rules::write(&mut tx, &self.settings, scope, &company, changes).await?;
             tx.commit().await?;
         }
@@ -224,17 +224,6 @@ impl Attendance {
         input: &ClockInput,
     ) -> Result<ClockEvent> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        access::current_employee(&self.workforce, scope, company_id, employee_id).await?;
-        let rules = self.rules(scope, company_id).await?;
-        let event = clock::normalize(input, &rules.timezone)?;
-        let location = locations::place(
-            &**client,
-            scope,
-            company_id,
-            event.point(),
-            rules.location_required,
-        )
-        .await?;
         let mut tx = self
             .mutations
             .begin(
@@ -243,6 +232,20 @@ impl Attendance {
             )
             .await?;
         access::lock_company(&tx, scope, company_id).await?;
+        access::current_employee(&self.workforce, scope, company_id, employee_id).await?;
+        let company = access::current_company(&self.workforce, scope, company_id).await?;
+        // Resolve policy and active locations after taking the company lock:
+        // a queued clock must observe a rule change or retirement ahead of it.
+        let rules = rules::read(tx.sql(), &self.settings, scope, &company).await?;
+        let event = clock::normalize(input, &rules.timezone)?;
+        let location = locations::place(
+            tx.sql(),
+            scope,
+            company_id,
+            event.point(),
+            rules.location_required,
+        )
+        .await?;
         let recorded = clock::write(
             &mut tx,
             scope,
@@ -332,8 +335,8 @@ impl Attendance {
                 scope.mutation_context("people.attendance.create_shift_template"),
             )
             .await?;
-        access::lock_company(&tx, scope, company_id).await?;
-        shifts::check_code(tx.sql(), company_id, &valid.code).await?;
+        access::lock_rules_company(&tx, scope, company_id).await?;
+        shifts::check_code(tx.sql(), scope.tenant(), company_id, &valid.code).await?;
         let template = shifts::insert(&mut tx, scope.tenant(), company_id, valid).await?;
         tx.commit().await?;
         Ok(template)
@@ -367,7 +370,7 @@ impl Attendance {
                 scope.mutation_context("people.attendance.set_shift_template_status"),
             )
             .await?;
-        access::lock_company(&tx, scope, company_id).await?;
+        access::lock_rules_company(&tx, scope, company_id).await?;
         let template = shifts::set_status(&mut tx, scope, company_id, template_id, status).await?;
         tx.commit().await?;
         Ok(template)
@@ -412,8 +415,8 @@ impl Attendance {
                 scope.mutation_context("people.attendance.create_clocking_location"),
             )
             .await?;
-        access::lock_company(&tx, scope, company_id).await?;
-        locations::check_code(tx.sql(), company_id, &valid.code).await?;
+        access::lock_rules_company(&tx, scope, company_id).await?;
+        locations::check_code(tx.sql(), scope.tenant(), company_id, &valid.code).await?;
         let location = locations::insert(&mut tx, scope.tenant(), company_id, valid).await?;
         tx.commit().await?;
         Ok(location)
@@ -448,7 +451,7 @@ impl Attendance {
                 scope.mutation_context("people.attendance.set_clocking_location_status"),
             )
             .await?;
-        access::lock_company(&tx, scope, company_id).await?;
+        access::lock_rules_company(&tx, scope, company_id).await?;
         let location =
             locations::set_status(&mut tx, scope, company_id, location_id, status).await?;
         tx.commit().await?;

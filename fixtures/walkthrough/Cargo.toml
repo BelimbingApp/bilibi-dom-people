@@ -37,3 +37,7 @@ bilibi-people-attendance = { path = "../../attendance" }
 # Leave (slice PL1).
 bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
+
+# Attendance transaction interleavings (PA1).
+bilibi-company.workspace = true
+bilibi-settings.workspace = true

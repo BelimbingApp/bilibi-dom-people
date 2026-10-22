@@ -183,13 +183,14 @@ pub(crate) async fn place(
 /// A taken code, decided on the transaction before the insert.
 pub(crate) async fn check_code(
     client: &impl GenericClient,
+    tenant: i64,
     company_id: i64,
     code: &str,
 ) -> Result<()> {
     let taken = client
         .query_opt(
-            "SELECT 1 FROM people_attendance_clocking_locations WHERE company_id = $1 AND code = $2",
-            &[&company_id, &code],
+            "SELECT 1 FROM people_attendance_clocking_locations WHERE tenant_id = $1 AND company_id = $2 AND code = $3",
+            &[&tenant, &company_id, &code],
         )
         .await
         .map_err(Error::from)?;
@@ -264,8 +265,8 @@ pub(crate) async fn set_status(
         Box::pin(async move {
             let row = sql
                 .query_one(
-                    &format!("UPDATE people_attendance_clocking_locations SET status = $2, updated_at = now() WHERE id = $1 RETURNING {COLUMNS}"),
-                    &[&current.id, &status],
+                    &format!("UPDATE people_attendance_clocking_locations SET status = $2, updated_at = now() WHERE id = $1 AND tenant_id = $3 AND company_id = $4 RETURNING {COLUMNS}"),
+                    &[&current.id, &status, &scope.tenant(), &company_id],
                 )
                 .await?;
             let location = read(&row);
