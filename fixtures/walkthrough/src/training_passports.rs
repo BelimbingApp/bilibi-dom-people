@@ -661,7 +661,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         training
             .generate_passport(&staff, COMPANY, PassportAudience::SelfService, staff_id)
             .await,
-        TrainingError::Unauthorized,
+        TrainingError::DocumentForbidden,
     )?;
     proof(
         "generation revocation preserves authorized download",

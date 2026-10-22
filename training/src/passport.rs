@@ -209,7 +209,11 @@ impl Training {
         }
         let mut client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, PASSPORT_GENERATE)
-            .await?;
+            .await
+            .map_err(|error| match error {
+                TrainingError::Unauthorized => TrainingError::DocumentForbidden,
+                other => other,
+            })?;
         let rows = store::all_passport(&**client, scope.tenant(), company, employee).await?;
         if rows.len() > PASSPORT_LIMIT {
             return Err(TrainingError::PassportTooLarge);
@@ -259,5 +263,17 @@ impl Training {
             return Err(TrainingError::NotFound);
         }
         Ok(document)
+    }
+}
+
+impl Passport {
+    /// Bilimbi's stale/unavailable notice; current native reads need no notice.
+    pub fn workforce_warning(&self) -> Option<String> {
+        (self.freshness != Freshness::Current).then(|| not_current_message(&self.freshness))
+    }
+}
+impl PassportDirectory {
+    pub fn workforce_warning(&self) -> Option<String> {
+        (self.freshness != Freshness::Current).then(|| not_current_message(&self.freshness))
     }
 }

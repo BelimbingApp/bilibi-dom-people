@@ -92,6 +92,8 @@ pub type Result<T> = std::result::Result<T, TrainingError>;
 /// its pages show (`Training.Web.Support.message/1`).
 #[derive(Debug, thiserror::Error)]
 pub enum TrainingError {
+    #[error("You cannot access or generate this document. Ask an operator to check your access and workforce connection.")]
+    DocumentForbidden,
     #[error("This passport exceeds the document safety limit of 1,000 records. Review records on screen.")]
     PassportTooLarge,
     #[error("This document contains characters the available PDF renderer cannot display. The training records remain available on screen.")]
