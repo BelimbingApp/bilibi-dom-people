@@ -363,12 +363,16 @@ pub(super) async fn run(url: &str) -> Result<()> {
         json!({"type":"prepare_lock","id":run.to_string()}),
     )
     .await?;
-    send(
+    let html = send(
         &mut *page,
         &manager,
         json!({"type":"lock_run","id":"999999"}),
     )
     .await?;
+    prove(
+        "locked run displays its UTC instant",
+        html.contains("<time"),
+    )?;
     prove(
         "permanent lock uses selected run",
         payroll

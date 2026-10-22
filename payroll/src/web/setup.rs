@@ -467,16 +467,19 @@ impl State {
                             .join(", ")
                     })
                     .unwrap_or_default();
+                // Bilimbi stores this column as a timestamp in UTC without an offset.
                 let locked = r
                     .locked_at
-                    .as_ref()
-                    .and_then(|s| s.parse::<jiff::Timestamp>().ok())
-                    .map(|t| {
-                        let value = self.display.render(
-                            t,
+                    .as_deref()
+                    .and_then(|stored| stored.parse::<jiff::civil::DateTime>().ok())
+                    .and_then(|stored| {
+                        self.display.render_naive_utc(
+                            stored,
                             bilibi_datetime::Format::DateTime,
                             bilibi_datetime::Precision::Minute,
-                        );
+                        )
+                    })
+                    .map(|value| {
                         bilibi_ui::Cell::instant(bilibi_ui::Instant::new(
                             &value.iso,
                             &value.text,
