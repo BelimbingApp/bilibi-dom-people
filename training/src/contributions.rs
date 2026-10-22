@@ -43,10 +43,10 @@ inventory::submit! {
             "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
-        migrations: &[(
-            "people-training-001-catalog",
-            include_str!("../migrations/001-catalog.sql"),
-        )],
+        migrations: &[
+            ("people-training-001-catalog", include_str!("../migrations/001-catalog.sql")),
+            ("people-training-002-participation", include_str!("../migrations/002-participation.sql")),
+        ],
         services: &[Service {
             id: SERVICE,
             factory: |services| {
