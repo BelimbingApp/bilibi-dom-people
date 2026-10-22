@@ -18,6 +18,11 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
     services.install(&modules)?;
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
     let client = db.get().await?;
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
     let admin = auth
