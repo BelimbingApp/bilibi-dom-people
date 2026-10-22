@@ -1,0 +1,26 @@
+# Reference data (`people/reference_data`), a Domain module of the People
+# container. Discovered by the Platform when the container is mounted at
+# apps/domains/people; never built alone.
+[package]
+name = "bilibi-people-reference-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+askama.workspace = true
+bilibi-authz.workspace = true
+bilibi-company.workspace = true
+bilibi-database.workspace = true
+bilibi-menu.workspace = true
+bilibi-module-registry.workspace = true
+bilibi-people-settings = { path = "../settings" }
+bilibi-people-workforce = { path = "../workforce" }
+bilibi-tenancy.workspace = true
+bilibi-ui.workspace = true
+inventory.workspace = true
+jiff = "0.2.38"
+serde_json.workspace = true
+tokio-postgres.workspace = true
