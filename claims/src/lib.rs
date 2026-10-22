@@ -326,6 +326,8 @@ impl Claims {
                 scope.mutation_context("people.claims.put_currencies"),
             )
             .await?;
+        writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         self.settings
             .put(
                 &mut tx,
@@ -367,6 +369,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         catalog::check_category_code(tx.sql(), company_id, &valid.code).await?;
         let category = catalog::insert_category(&mut tx, scope.tenant(), company_id, valid).await?;
         tx.commit().await?;
@@ -392,6 +395,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let category = catalog::lock_category(tx.sql(), scope.tenant(), company_id, category_id)
             .await?
             .ok_or(ClaimsError::NotFound)?;
@@ -431,6 +435,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let category =
             catalog::find_category(tx.sql(), scope.tenant(), company_id, new.category_id)
                 .await?
@@ -461,6 +466,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let claim_type =
             catalog::lock_claim_type(tx.sql(), scope.tenant(), company_id, claim_type_id)
                 .await?
@@ -502,10 +508,6 @@ impl Claims {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
         company(&**client, scope, company_id).await?;
-        let currencies = self
-            .company_currencies(&**client, scope, company_id)
-            .await?;
-        let mut valid = policies::validate(new, &currencies).map_err(ClaimsError::Invalid)?;
         let mut tx = self
             .mutations
             .begin(
@@ -514,6 +516,9 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
+        let currencies = self.company_currencies(tx.sql(), scope, company_id).await?;
+        let mut valid = policies::validate(new, &currencies).map_err(ClaimsError::Invalid)?;
         let claim_type =
             catalog::lock_claim_type(tx.sql(), scope.tenant(), company_id, new.claim_type_id)
                 .await?
@@ -558,6 +563,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let unlocked = policies::find(tx.sql(), scope.tenant(), company_id, policy_id)
             .await?
             .ok_or(ClaimsError::NotFound)?;
@@ -711,6 +717,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         assignments::check_code(tx.sql(), company_id, &valid.code).await?;
         let assignment = assignments::insert(&mut tx, scope.tenant(), company_id, valid).await?;
         tx.commit().await?;
@@ -737,6 +744,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let mut assignment = assignments::lock(tx.sql(), scope.tenant(), company_id, assignment_id)
             .await?
             .ok_or(ClaimsError::NotFound)?;
@@ -792,6 +800,7 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let assignment = assignments::lock(tx.sql(), scope.tenant(), company_id, assignment_id)
             .await?
             .ok_or(ClaimsError::NotFound)?;
