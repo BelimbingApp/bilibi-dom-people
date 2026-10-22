@@ -75,6 +75,11 @@ pub(super) async fn run(url: &str) -> Result<()> {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
     grants.set_direct(&admin, 2, VIEW, Some(true)).await?;
+    // This fixture viewer is unlinked, so grant company reach separately
+    // from Payroll's read capability. It still has no setup write grant.
+    grants
+        .set_direct(&admin, 2, bilibi_company::TENANT_WIDE, Some(true))
+        .await?;
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
     let pages = services.get::<PageService<Scope, Error>>(PAGES)?;
     let query = HashMap::from([("company_id".into(), "1".into())]);
