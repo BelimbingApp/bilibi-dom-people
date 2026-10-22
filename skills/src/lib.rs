@@ -421,8 +421,8 @@ pub struct Skills {
     workforce: Arc<Workforce>,
 }
 
-/// A write's standing: the company lock is held on the transaction, which
-/// began after the actor was authorized and the company read proved current.
+/// A write's standing: the company lock is held on the transaction, and
+/// authorization is rechecked under it after the company read proved current.
 struct Write<'a> {
     tx: MutationTransaction<'a>,
     tenant: i64,
@@ -1418,6 +1418,9 @@ impl Skills {
             )
             .await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        // A grant may have been revoked while this write waited for the
+        // company lock. Authorize again on the transaction before mutating.
+        authorization::authorize(tx.sql(), scope, company_id, capability).await?;
         Ok(Write {
             tx,
             tenant: scope.tenant(),
