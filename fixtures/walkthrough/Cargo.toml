@@ -8,6 +8,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
+# The Attendance block has its own binary; keep the default Workforce command.
+default-run = "bilibi-people-walkthrough"
 
 [dependencies]
 bilibi-affiliation.workspace = true
@@ -52,8 +54,13 @@ bilibi-audit.workspace = true
 bilibi-people-organisation = { path = "../../organisation" }
 bilibi-ports.workspace = true
 
+# Attendance (PA1).
+bilibi-people-attendance = { path = "../../attendance" }
+
+# Attendance (PA1).
+bilibi-settings.workspace = true
+
 # PT1: the Training catalog block (`src/training.rs`).
 bilibi-datetime.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-people-training = { path = "../../training" }
-bilibi-settings.workspace = true
