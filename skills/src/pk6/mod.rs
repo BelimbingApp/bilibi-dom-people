@@ -248,7 +248,7 @@ fn hidden(name: &str, value: i64) -> Field {
 }
 fn row(id: &str, key: i64) -> FlexRow {
     FlexRow {
-        id: format!("{id}-{key}"),
+        dom_id: Some(format!("{id}-{key}")),
         ..FlexRow::new(key.to_string())
     }
 }
