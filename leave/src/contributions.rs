@@ -46,7 +46,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "base/datetime", "base/queue", "core/company",
+            "base/settings", "base/tenancy", "base/menu", "base/ui", "base/datetime", "base/queue", "core/company",
             "people/settings", "people/workforce", "people/reference_data",
         ],
         migrations: &[
@@ -71,6 +71,11 @@ inventory::submit! {
         }, Service {
             id: crate::worker::SERVICE,
             factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::worker::CarryForwardWorker(services.get(SERVICE)?))))),
+        }, Service {
+            id: crate::web::SERVICE,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(
+                Arc::new(crate::web::PoliciesPage::new(services.get("base/database.pool")?, services.get(SERVICE)?)),
+            ))),
         }],
     }
 }
@@ -122,3 +127,34 @@ inventory::submit! { Contribution::new(DEFINITIONS, REQUEST_BACKDATE_DAYS_KEY, p
 // Bilimbi CarryForwardWorker: no schedule, five attempts as the operator.
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::worker::validate }) }
 inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
+
+// Bilimbi Leave.Web.PoliciesLive and priv/web_routes.exs.
+inventory::submit! { Contribution::new(
+    bilibi_module_registry::contributions::ROUTES, "people/leave.policies", provenance!(),
+    &bilibi_module_registry::contributions::Route {
+        method: bilibi_module_registry::contributions::Method::Get,
+        path: "/people/leave/policies", service: crate::web::SERVICE, operation: "policies",
+        access: bilibi_module_registry::contributions::Access::Capability(POLICIES_MANAGE), framed: true,
+    }
+) }
+inventory::submit! { Contribution::new(
+    bilibi_module_registry::contributions::PAGE_WRITES, crate::web::SERVICE, provenance!(),
+    &bilibi_module_registry::contributions::PageWrites {
+        service: crate::web::SERVICE, contracts: &[],
+        pending: bilibi_module_registry::contributions::Pending::Every {
+            reason: "Leave policy forms write through the Leave facade; policy operation contracts have not been reviewed.",
+        },
+    }
+) }
+bilibi_menu::contribute!(
+    "people/leave",
+    bilibi_menu::MenuItem::page(
+        "people.leave.policies",
+        "Leave policies",
+        "/people/leave/policies"
+    )
+    .icon("clipboard-document-list")
+    .under("people.settings")
+    .requires(bilibi_menu::Requirement::Capability(POLICIES_MANAGE))
+    .order(20)
+);

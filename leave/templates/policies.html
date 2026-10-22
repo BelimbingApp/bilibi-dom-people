@@ -1,0 +1,18 @@
+{# Bilimbi People.Leave.Web.PoliciesLive, composed from shared UI. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="leave-policies-page") %}
+{% call ui::header(subtitle=subtitle) %}Leave policies{% endcall %}
+{{ chooser }}
+{{ state }}
+{% if available %}
+<div class="mt-5 grid gap-5 lg:grid-cols-2">
+{% for section in sections %}{{ section }}{% endfor %}
+</div>
+{{ versions }}
+{% endif %}
+{{ confirmation }}
+{% endcall %}
+</div>
