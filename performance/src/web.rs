@@ -382,7 +382,7 @@ impl State {
             return Ok(());
         }
         let client = self.service.db.get().await?;
-        self.display = self
+        self.display = match self
             .display_policy
             .display(
                 &**client,
@@ -393,7 +393,22 @@ impl State {
                 ),
                 self.display.locale,
             )
-            .await?;
+            .await
+        {
+            Ok(display) => display,
+            Err(Error::Forbidden | Error::Unauthorized) => {
+                self.unavailable = Some(PerformanceError::Unauthorized.to_string());
+                self.pending = None;
+                self.selected = None;
+                self.planning = None;
+                self.choices = None;
+                self.mine = None;
+                self.reviews.clear();
+                self.total = 0;
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
         drop(client);
         self.permissions.clear();
         for capability in CAPABILITIES {
@@ -673,6 +688,25 @@ impl State {
                 }
                 _ => Err(PerformanceError::NotFound),
             };
+        }
+        if event == "review_target"
+            && !self.planning.as_ref().is_some_and(|p| {
+                p.targets
+                    .iter()
+                    .any(|r| Some(r.id) == id && r.status == "proposed")
+            })
+        {
+            return Err(PerformanceError::NotFound);
+        }
+        if event == "save_response"
+            && !self.mine.as_ref().is_some_and(|m| {
+                m.reviews
+                    .rows
+                    .iter()
+                    .any(|r| Some(r.review.id) == id && r.responses.is_empty())
+            })
+        {
+            return Err(PerformanceError::NotFound);
         }
         let form_id = match event {
             "create_description" => "description-form".into(),
@@ -1191,6 +1225,16 @@ impl State {
         fold: bool,
     ) -> UiResult<Html> {
         let mut body = Html::EMPTY;
+        if self.active_form == id && !self.errors.is_empty() {
+            let mut summary = bilibi_ui::ErrorSummary::new("performance-form-errors");
+            for error in &self.errors {
+                summary.push(
+                    format!("{id}-{}", error.field),
+                    bilibi_ui::forms::error_sentence(&label(&error.field), &error.message),
+                );
+            }
+            body.push(&render(&summary)?);
+        }
         if let Some(id) = record {
             body.push(&render(
                 &Field::named("record_id")
@@ -1264,6 +1308,11 @@ impl State {
             body,
             actions: render(&Button {
                 button_type: "submit",
+                working: if event == "save_response" {
+                    "Recording…"
+                } else {
+                    "Saving…"
+                },
                 variant: ButtonVariant::Primary,
                 body: Html::text(if event == "save_response" {
                     "Record response"

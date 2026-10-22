@@ -379,6 +379,209 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         detail.responses.len() == 1 && detail.responses[0].response == "PM2 response from page",
         "response retained on the released version",
     )?;
+    let mut kpis = mount(
+        &page,
+        &manager,
+        "reviews",
+        &HashMap::from([("tab".into(), "kpis".into())]),
+    )
+    .await?;
+    event(&mut kpis, &manager, form("create_definition", &[])).await?;
+    require(
+        confirm(&mut kpis, &manager)
+            .await?
+            .html
+            .contains("performance-form-errors"),
+        "refused form opens its shared error summary",
+    )?;
+
+    let mut descriptions = mount(
+        &page,
+        &manager,
+        "reviews",
+        &HashMap::from([("tab".into(), "descriptions".into())]),
+    )
+    .await?;
+    let position = choices.positions.first().ok_or(Error::Internal)?;
+    let profile = choices.profiles.first().ok_or(Error::Internal)?;
+    event(
+        &mut descriptions,
+        &manager,
+        form(
+            "create_description",
+            &[
+                ("code", "pm2_ui_description".into()),
+                ("version", "1".into()),
+                ("position_id", position.id.to_string()),
+                (
+                    "position_version",
+                    position.version.ok_or(Error::Internal)?.to_string(),
+                ),
+                ("profile_id", profile.id.to_string()),
+                ("effective_from", "2020-01-01".into()),
+                ("purpose", "PM2 purpose".into()),
+                ("responsibilities", "PM2 responsibilities".into()),
+                ("duties", "PM2 duties".into()),
+                ("authority", "PM2 authority".into()),
+                ("qualifications", "PM2 qualifications".into()),
+            ],
+        ),
+    )
+    .await?;
+    require(
+        confirm(&mut descriptions, &manager)
+            .await?
+            .html
+            .contains("Record saved."),
+        "description draft pins the selected profile version",
+    )?;
+    let draft_description = saved(performance.planning_records(&manager, 1).await)?
+        .descriptions
+        .into_iter()
+        .find(|r| r.code == "pm2_ui_description")
+        .ok_or(Error::Internal)?;
+    event(
+        &mut descriptions,
+        &manager,
+        json!({"type":"request_publish_description", "value":draft_description.id.to_string()}),
+    )
+    .await?;
+    require(
+        confirm(&mut descriptions, &manager)
+            .await?
+            .html
+            .contains("A published description already covers these dates."),
+        "overlapping publication refuses with its live-page sentence",
+    )?;
+
+    event(
+        &mut kpis,
+        &manager,
+        form(
+            "create_target",
+            &[
+                ("supersedes_id", target.to_string()),
+                ("target", "PM2 amended target".into()),
+                ("effective_from", "2020-01-02".into()),
+                ("change_reason", "PM2 target correction".into()),
+            ],
+        ),
+    )
+    .await?;
+    require(
+        confirm(&mut kpis, &manager)
+            .await?
+            .html
+            .contains("Record saved."),
+        "target amendment starts a new proposal cycle through the page",
+    )?;
+    let mut evidence = mount(
+        &page,
+        &manager,
+        "reviews",
+        &HashMap::from([("tab".into(), "evidence".into())]),
+    )
+    .await?;
+    event(
+        &mut evidence,
+        &manager,
+        form(
+            "create_observation",
+            &[
+                ("supersedes_id", observation.id.to_string()),
+                ("evidence", "PM2 corrected page evidence".into()),
+                ("source_version", "2".into()),
+                ("change_reason", "PM2 evidence correction".into()),
+            ],
+        ),
+    )
+    .await?;
+    require(
+        confirm(&mut evidence, &manager)
+            .await?
+            .html
+            .contains("Record saved."),
+        "evidence correction preserves its original subject and window",
+    )?;
+    let corrected_observation = saved(performance.planning_records(&manager, 1).await)?
+        .observations
+        .into_iter()
+        .find(|r| r.supersedes_id == Some(observation.id))
+        .ok_or(Error::Internal)?;
+    let mut correction = form(
+        "create_review",
+        &[
+            ("supersedes_id", review.to_string()),
+            ("description_id", description.to_string()),
+            ("cutoff_at", jiff::Timestamp::now().to_string()),
+            ("outcome", "PM2 corrected page outcome".into()),
+            ("rationale", "PM2 corrected page rationale".into()),
+            ("change_reason", "PM2 review correction".into()),
+        ],
+    );
+    correction["record[observation_ids][]"] = json!([corrected_observation.id.to_string()]);
+    correction["record[target_ids][]"] = json!([target.to_string()]);
+    event(&mut state, &manager, correction).await?;
+    require(
+        confirm(&mut state, &manager)
+            .await?
+            .html
+            .contains("Record saved."),
+        "review correction retains the old response and pins new evidence",
+    )?;
+    let corrected_review = saved(
+        performance
+            .reviews(&manager, 1, pm::PageOptions::default())
+            .await,
+    )?
+    .rows
+    .into_iter()
+    .find(|r| r.supersedes_id == Some(review))
+    .ok_or(Error::Internal)?;
+    event(
+        &mut approver,
+        &admin,
+        json!({"type":"request_release", "value":corrected_review.id.to_string()}),
+    )
+    .await?;
+    require(
+        confirm(&mut approver, &admin)
+            .await?
+            .html
+            .contains("Record saved."),
+        "corrected review requires independent release again",
+    )?;
+    let original = saved(performance.review(&manager, 1, review).await)?;
+    require(
+        original.review.rationale == "PM2 pinned evidence"
+            && original.responses.len() == 1
+            && original.observations[0].evidence == long_evidence,
+        "original review evidence and response remain immutable",
+    )?;
+
+    let users = services.get::<bilibi_user::UserService>("core/user.accounts")?;
+    let affiliation = staff.actor().affiliation().ok_or(Error::Internal)?;
+    refresh(&mut own, &staff).await?;
+    users.unlink(&admin, 3).await.map_err(|_| Error::Internal)?;
+    let mut unlinked_response = form(
+        "save_response",
+        &[("response", "Former link must refuse".into())],
+    );
+    unlinked_response["record_id"] = json!(corrected_review.id.to_string());
+    let body = event(&mut own, &staff, unlinked_response).await?;
+    require(
+        body.html
+            .contains("Your performance records are unavailable")
+            && saved(performance.review(&manager, 1, corrected_review.id).await)?
+                .responses
+                .is_empty(),
+        "an unlinked account's mounted response form refuses the old employee",
+    )?;
+    users
+        .link_affiliation(&admin, 3, affiliation)
+        .await
+        .map_err(|_| Error::Internal)?;
+
     // Keep a view-only account available for the browser proof as well.
     grants.set_direct(&admin, 2, pm::VIEW, Some(true)).await?;
     let viewer = auth
