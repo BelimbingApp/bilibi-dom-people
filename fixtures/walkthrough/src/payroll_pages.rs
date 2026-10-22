@@ -311,14 +311,15 @@ pub(super) async fn run(url: &str) -> Result<()> {
     let html = send(&mut *page, &manager, json!({"type":"lock_run"})).await?;
     prove(
         "grant revoked before confirmation",
-        html.contains("You cannot change this company's payroll setup.")
-            && payroll
-                .setup(&manager, 1)
-                .await
-                .map_err(|_| Error::Internal)?
-                .runs[0]
-                .locked_at
-                .is_none(),
+        html.contains(
+            bilibi_ui::Html::text("You cannot change this company's payroll setup.").as_str(),
+        ) && payroll
+            .setup(&manager, 1)
+            .await
+            .map_err(|_| Error::Internal)?
+            .runs[0]
+            .locked_at
+            .is_none(),
     )?;
     grants.set_direct(&admin, 1, MANAGE, Some(true)).await?;
     send(
@@ -403,13 +404,14 @@ pub(super) async fn run(url: &str) -> Result<()> {
     .await?;
     prove(
         "viewer forged write refused",
-        html.contains("You cannot change this company's payroll setup.")
-            && payroll
-                .setup(&manager, 1)
-                .await
-                .map_err(|_| Error::Internal)?
-                .country
-                == "proof",
+        html.contains(
+            bilibi_ui::Html::text("You cannot change this company's payroll setup.").as_str(),
+        ) && payroll
+            .setup(&manager, 1)
+            .await
+            .map_err(|_| Error::Internal)?
+            .country
+            == "proof",
     )?;
     let html = pages.0.render(request("mappings", &manager)).await?.html;
     prove(
