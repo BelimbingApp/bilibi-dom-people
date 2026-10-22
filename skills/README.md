@@ -6,9 +6,7 @@ profiles and the policy values that steer assessments. This README is the
 owner contract; the Bilimbi source it ports is
 [`skills/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/skills/docs/README.md).
 
-The catalog, assessments, reassessments and development actions (PK1–PK3) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores, standing reads and action events. Reminders (PK7) use the ledger created by migration 002. The pages
-(`/people/skills`, `/people/skills/profiles/{id}`, `/assessments`,
-`/actions`, `/my`, `/policy`) and the menu leaves land in PK4–PK6.
+The catalog, assessments, reassessments and development actions (PK1–PK3) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores, standing reads and action events. Reminders (PK7) use the ledger created by migration 002. Development actions (`/people/skills/actions`) and Skills policy (`/people/skills/policy`) are available with their menu entries (PK6). Catalog and profile pages belong to PK4; Assessments and My skills belong to PK5.
 
 ## Public API
 
@@ -166,10 +164,7 @@ or profile.
 
 ## Dependencies
 
-`base/authz`, `base/database`, `base/module_registry`, `base/party_ids`,
-`base/settings`, `base/tenancy`, `core/company`, `people/settings`,
-`people/workforce`; the Cargo manifest lists the same edges. PK7 adds
-`base/queue` for the reminder worker.
+`base/authz`, `base/database`, `base/menu`, `base/module_registry`, `base/notifications`, `base/party_ids`, `base/queue`, `base/settings`, `base/system`, `base/tenancy`, `base/ui`, `core/company`, `core/user`, `people/settings` and `people/workforce`. The Cargo manifest and descriptor declare the same edges. Queue delivers reminders as the operator; System supplies the installation banner in confirmations.
 
 ## Assessments and standing (PK2)
 
@@ -289,6 +284,7 @@ Reminders tell the responsible accounts when a skill or development action needs
 | `retry_reminders(scope, company, as_of)` | Counts `sent` and `failed` retries for this week and month |
 | `enqueue_reminders(scope, company)` | A provisional Queue `JobRef`; committed before returning |
 | `reminder_inbox(scope, company, limit)` | This account's sent ledger rows, newest first, with a limit of 1–300 |
+| `reminder_ledger(scope, company, limit)` | Company delivery rows, including failures, newest first; reminder-send permission and a limit of 1–300 |
 
 The first four need `people.skills.reminders.send`, checked through Workforce Authorization for the caller's company. The inbox needs a current account affiliation with that company. `as_of` is `Option<Date>`; `None` means today in UTC.
 
@@ -320,3 +316,16 @@ The Open and Closed tabs keep their selection in the address. Accounts with acti
 Use **Skills policy** at `/people/skills/policy` to edit the seven assessment and reminder settings. The limits shown on each field match its setting definition. Catalog managers can add, deactivate and reactivate action types. Requesters and reassessment performers see their pending requests; performers with assessment-submit permission can record a reassessment. Sending and retrying reminders require reminder-send permission. The page shows the due work and the latest 300 delivery ledger rows, including failures, through `reminder_ledger`.
 
 All writes recheck the page permission and the action's own permission when the event runs. The Skills facade checks again inside its transaction. Proposal, approval, progress, type activation changes, reassessment decisions and reminder runs wait for a shared ConfirmDialog. Its company, target and entered values stay on the server; confirmation payloads cannot replace them. Switching company dismisses the pending action. A revoked grant, archived company or unlinked owner refuses the next write without ending the live page.
+
+
+### Run the page proof
+
+On a fresh disposable database, run the default People walkthrough first. Then run:
+
+```sh
+BILIBI_ENV=development DATABASE_URL=… cargo run -p bilibi-people-walkthrough --bin skill-pages
+```
+
+The executable mounts the real page services and calls their events against the database. It checks independent approval, server-held confirmation targets, cancellation, history, invalid policy values, revoked policy access and reminder-ledger permissions. It leaves proposed and in-progress work for browser checks.
+
+Open both routes as the fixture manager. Use the administrator to approve the manager's proposal, and the staff account to progress its owned work. The `skill-pages` modes `revoke-policy`, `revoke-actions` and `restore` change the manager's grants for a second-session check. These commands belong only to the disposable fixture. Switching company clears a pending confirmation and replaces that company's form fields, so a typed draft cannot carry into another company's settings or proposal.
