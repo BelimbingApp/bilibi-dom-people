@@ -72,7 +72,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "base/notifications", "base/queue", "core/user", "core/company",
+            "base/settings", "base/tenancy", "base/ui", "base/menu", "base/system", "base/notifications", "base/queue", "core/user", "core/company",
             "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -83,6 +83,9 @@ inventory::submit! {
             include_str!("../migrations/002-assessments.sql"),
         )],
         services: &[Service {
+            id: crate::pk6::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
+        }, Service {
             id: SERVICE,
             factory: |services| {
                 Ok(Arc::new(Skills {
@@ -144,3 +147,54 @@ policy_setting!(policy::MULTIPLIER_DEVELOPMENT);
 // Bilimbi Skills.ReminderWorker: five attempts as the enqueuing operator.
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::reminder_worker::validate }) }
 inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::reminder_worker::SERVICE, capability: REMINDERS_SEND }) }
+
+// PK6 mirrors Skills.Web.ActionsLive and Skills.Web.PolicyLive.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::pk6::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::pk6::PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Skills action, policy, reassessment and reminder writes call the Skills facade; operation contracts await review." },
+}) }
+macro_rules! pk6_page {
+    ($id:literal, $path:literal, $operation:literal, $cap:expr) => {
+        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+            method: bilibi_module_registry::contributions::Method::Get, path: $path,
+            service: crate::pk6::PAGES, operation: $operation,
+            access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,
+        }) }
+    };
+}
+pk6_page!(
+    "people/skills.actions",
+    "/people/skills/actions",
+    "actions",
+    ACTIONS_VIEW
+);
+pk6_page!(
+    "people/skills.policy",
+    "/people/skills/policy",
+    "policy",
+    POLICY_MANAGE
+);
+bilibi_menu::contribute!(
+    "people/skills",
+    bilibi_menu::MenuItem::page(
+        "people.development.actions",
+        "Development actions",
+        "/people/skills/actions"
+    )
+    .icon("flag")
+    .under("people.development")
+    .requires(bilibi_menu::Requirement::Capability(ACTIONS_VIEW))
+    .order(30)
+);
+bilibi_menu::contribute!(
+    "people/skills",
+    bilibi_menu::MenuItem::page(
+        "people.settings.skills_policy",
+        "Skills policy",
+        "/people/skills/policy"
+    )
+    .icon("cog-6-tooth")
+    .under("people.settings")
+    .requires(bilibi_menu::Requirement::Capability(POLICY_MANAGE))
+    .order(40)
+);
