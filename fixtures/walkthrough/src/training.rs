@@ -14,7 +14,7 @@ use bilibi_database::{Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_training::{
     day_start, CourseUpdate, NewCourse, NewEvent, NewSession, Session, Training, TrainingError,
-    CAPABILITIES, SESSIONS_MANAGE,
+    CAPABILITIES, COURSES_MANAGE, SESSIONS_MANAGE,
 };
 use bilibi_settings::{Settings, Target};
 use bilibi_tenancy::Scope;
@@ -387,7 +387,7 @@ pub(crate) async fn run(
         &format!("company {COMPANY}'s zone after the admin sets {ZONE}"),
         training.company_zone(manager, COMPANY).await,
     );
-    show(
+    let morning = show(
         "manager adds session 'Morning run' 2026-11-03 09:00 to 12:00 Asia/Kuala_Lumpur",
         training
             .create_session(
@@ -402,7 +402,8 @@ pub(crate) async fn run(
                 ),
             )
             .await,
-    );
+    )
+    .ok_or(Error::Internal)?;
     show(
         "manager adds session 'Night run' 2026-11-30 22:00 to 2026-12-01 02:00 Asia/Kuala_Lumpur (crosses the month)",
         training
@@ -627,6 +628,72 @@ pub(crate) async fn run(
             print_sessions("December 2026 (the night run crosses into it)", &sessions);
         }
     }
+
+    // Exercise the half-open window with a bound between stored whole seconds.
+    let before_start = morning
+        .starts_at
+        .checked_sub(jiff::Span::new().seconds(1))
+        .map_err(|_| Error::Internal)?;
+    let after_start = morning
+        .starts_at
+        .checked_add(jiff::Span::new().nanoseconds(1))
+        .map_err(|_| Error::Internal)?;
+    let at_start = training
+        .calendar(manager, COMPANY, before_start, morning.starts_at)
+        .await
+        .map_err(|_| Error::Internal)?;
+    let just_after_start = training
+        .calendar(manager, COMPANY, before_start, after_start)
+        .await
+        .map_err(|_| Error::Internal)?;
+    let at_end = training
+        .calendar(
+            manager,
+            COMPANY,
+            morning.ends_at,
+            morning
+                .ends_at
+                .checked_add(jiff::Span::new().seconds(1))
+                .map_err(|_| Error::Internal)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    if !at_start.is_empty()
+        || just_after_start.len() != 1
+        || just_after_start[0].id != morning.id
+        || !at_end.is_empty()
+    {
+        return Err(Error::Internal);
+    }
+    println!("Calendar half-open edges: excludes a session at until=start and from=end; includes it at until=start+1ns.");
+    let over_limit = morning
+        .starts_at
+        .checked_add(jiff::Span::new().hours(366 * 24).nanoseconds(1))
+        .map_err(|_| Error::Internal)?;
+    if !matches!(
+        training
+            .calendar(manager, COMPANY, morning.starts_at, over_limit)
+            .await,
+        Err(TrainingError::InvalidCalendarRange)
+    ) {
+        return Err(Error::Internal);
+    }
+    println!("Calendar window of 366 days + 1ns: refused.");
+
+    // The same sealed scope loses authority as soon as its grant is revoked.
+    grants
+        .set_direct(admin, MANAGER, COURSES_MANAGE, Some(false))
+        .await?;
+    let revoked = training
+        .set_course_active(manager, COMPANY, safety.id, false)
+        .await;
+    grants
+        .set_direct(admin, MANAGER, COURSES_MANAGE, Some(true))
+        .await?;
+    if !matches!(revoked, Err(TrainingError::Unauthorized)) {
+        return Err(Error::Internal);
+    }
+    println!("Course write after revoking the manager's grant: refused; grant restored.");
 
     // Day bounds across a clock change at local midnight.
     describe(

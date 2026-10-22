@@ -65,13 +65,15 @@ fn time_zone(zone: &str) -> Result<TimeZone> {
     TimeZone::get(zone).map_err(|_| TrainingError::InvalidTimeZoneOrTime)
 }
 
-fn whole_second(instant: Timestamp) -> Timestamp {
-    Timestamp::from_second(instant.as_second()).unwrap_or(instant)
+pub(crate) fn whole_second(instant: Timestamp) -> Timestamp {
+    // Floor even before the Unix epoch, where as_second() truncates toward zero.
+    Timestamp::from_nanosecond(instant.as_nanosecond().div_euclid(1_000_000_000) * 1_000_000_000)
+        .unwrap_or(instant)
 }
 
-/// A UTC instant as the catalog binds it (`timestamp(0)`, bound as text).
+/// A whole-second UTC instant bound as text.
 pub(crate) fn sql_text(instant: Timestamp) -> String {
-    instant.strftime("%Y-%m-%d %H:%M:%S").to_string()
+    instant.to_string()
 }
 
 /// A stored instant read back as `to_char(col, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`.

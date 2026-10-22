@@ -188,20 +188,26 @@ pub(crate) async fn calendar(
     until: Timestamp,
 ) -> Result<Vec<Session>> {
     let limit = i64::try_from(CALENDAR_LIMIT).map_err(|_| Error::Internal)?;
+    // Stored sessions have whole seconds. Floor the lower bound and ceil the
+    // upper bound without letting PostgreSQL round nanoseconds to microseconds.
+    // The ceiling happens in SQL so Timestamp::MAX remains a valid window end.
+    let until_fractional = until.as_nanosecond().rem_euclid(1_000_000_000) != 0;
     client
         .query(
             &format!(
                 "SELECT {SESSION_COLUMNS} FROM people_training_session_runs s \
                 WHERE s.tenant_id = $1 AND s.company_id = $2 \
-                  AND s.starts_at < $4::text::timestamp AND s.ends_at > $3::text::timestamp \
+                  AND s.starts_at < ($4::text::timestamp + CASE WHEN $6 THEN interval '1 second' ELSE interval '0 seconds' END) \
+                  AND s.ends_at > $3::text::timestamp \
                 ORDER BY s.starts_at, s.id LIMIT $5"
             ),
             &[
                 &tenant,
                 &company_id,
-                &clock::sql_text(from),
-                &clock::sql_text(until),
+                &clock::sql_text(clock::whole_second(from)),
+                &clock::sql_text(clock::whole_second(until)),
                 &limit,
+                &until_fractional,
             ],
         )
         .await
@@ -377,6 +383,7 @@ pub(crate) fn validate_session(new: &NewSession) -> Result<ValidSession> {
 /// A code already used by another course of the company (`unique_constraint`).
 async fn code_taken(
     client: &impl GenericClient,
+    tenant: i64,
     company_id: i64,
     code: &str,
     except: Option<i64>,
@@ -384,8 +391,8 @@ async fn code_taken(
     let except = except.unwrap_or(0);
     Ok(client
         .query_opt(
-            "SELECT 1 FROM people_training_courses WHERE company_id = $1 AND code = $2 AND id <> $3",
-            &[&company_id, &code, &except],
+            "SELECT 1 FROM people_training_courses WHERE company_id = $1 AND code = $2 AND id <> $3 AND tenant_id = $4",
+            &[&company_id, &code, &except, &tenant],
         )
         .await
         .map_err(Error::from)?
@@ -411,7 +418,7 @@ pub(crate) async fn insert_course(
     actor: Actor,
     valid: ValidCourse,
 ) -> Result<Course> {
-    if code_taken(tx.sql(), company_id, &valid.code, None).await? {
+    if code_taken(tx.sql(), tenant, company_id, &valid.code, None).await? {
         return Err(TrainingError::Invalid(vec![FieldError::new(
             "code",
             "has already been taken",
@@ -470,6 +477,7 @@ pub(crate) async fn lock_course(
 /// actor, as an `updated` change carrying both sides.
 pub(crate) async fn update_course(
     tx: &mut MutationTransaction<'_>,
+    tenant: i64,
     current: Course,
     actor: Actor,
     valid: ValidCourse,
@@ -482,7 +490,7 @@ pub(crate) async fn update_course(
                     &format!("UPDATE people_training_courses AS c \
                         SET name = $2, description = $3, active = $4, actor_user_id = $5, impersonator_id = $6, \
                             updated_at = (now() AT TIME ZONE 'UTC') \
-                        WHERE c.id = $1 RETURNING {COURSE_COLUMNS}"),
+                        WHERE c.id = $1 AND c.tenant_id = $7 AND c.company_id = $8 RETURNING {COURSE_COLUMNS}"),
                     &[
                         &current.id,
                         &valid.name,
@@ -490,6 +498,8 @@ pub(crate) async fn update_course(
                         &active,
                         &actor.user,
                         &actor.impersonator,
+                        &tenant,
+                        &current.platform_company_id,
                     ],
                 )
                 .await?;
@@ -545,8 +555,8 @@ pub(crate) async fn insert_event(
             let id: i64 = row.get(0);
             let row = sql
                 .query_one(
-                    &format!("SELECT {EVENT_COLUMNS} {EVENT_FROM} WHERE e.id = $1"),
-                    &[&id],
+                    &format!("SELECT {EVENT_COLUMNS} {EVENT_FROM} WHERE e.id = $1 AND e.tenant_id = $2 AND e.company_id = $3"),
+                    &[&id, &tenant, &company_id],
                 )
                 .await?;
             let created = event(&row);

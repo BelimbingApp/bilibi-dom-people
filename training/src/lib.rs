@@ -280,8 +280,7 @@ impl Training {
         new: &NewCourse,
     ) -> Result<Course> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        let actor = self
-            .authorize(&**client, scope, company_id, COURSES_MANAGE)
+        self.authorize(&**client, scope, company_id, COURSES_MANAGE)
             .await?;
         let valid = catalog::validate_course(new)?;
         let mut tx = self
@@ -292,6 +291,9 @@ impl Training {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        let actor = self
+            .authorize(tx.sql(), scope, company_id, COURSES_MANAGE)
+            .await?;
         let course =
             catalog::insert_course(&mut tx, scope.tenant(), company_id, actor, valid).await?;
         tx.commit().await?;
@@ -310,8 +312,7 @@ impl Training {
         update: &CourseUpdate,
     ) -> Result<Course> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        let actor = self
-            .authorize(&**client, scope, company_id, COURSES_MANAGE)
+        self.authorize(&**client, scope, company_id, COURSES_MANAGE)
             .await?;
         let mut tx = self
             .mutations
@@ -321,10 +322,14 @@ impl Training {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        let actor = self
+            .authorize(tx.sql(), scope, company_id, COURSES_MANAGE)
+            .await?;
         let current = catalog::lock_course(tx.sql(), scope.tenant(), company_id, course_id).await?;
         let valid = catalog::validate_course_update(&current, update)?;
         let active = update.active.unwrap_or(current.active);
-        let course = catalog::update_course(&mut tx, current, actor, valid, active).await?;
+        let course =
+            catalog::update_course(&mut tx, scope.tenant(), current, actor, valid, active).await?;
         tx.commit().await?;
         Ok(course)
     }
@@ -379,8 +384,7 @@ impl Training {
         new: &NewEvent,
     ) -> Result<Event> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        let actor = self
-            .authorize(&**client, scope, company_id, SESSIONS_MANAGE)
+        self.authorize(&**client, scope, company_id, SESSIONS_MANAGE)
             .await?;
         let valid = catalog::validate_event(new)?;
         let mut tx = self
@@ -391,6 +395,9 @@ impl Training {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        let actor = self
+            .authorize(tx.sql(), scope, company_id, SESSIONS_MANAGE)
+            .await?;
         let event =
             catalog::insert_event(&mut tx, scope.tenant(), company_id, actor, valid).await?;
         tx.commit().await?;
@@ -411,8 +418,7 @@ impl Training {
         new: &NewSession,
     ) -> Result<Session> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        let actor = self
-            .authorize(&**client, scope, company_id, SESSIONS_MANAGE)
+        self.authorize(&**client, scope, company_id, SESSIONS_MANAGE)
             .await?;
         let valid = catalog::validate_session(new)?;
         let mut tx = self
@@ -423,6 +429,9 @@ impl Training {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
+        let actor = self
+            .authorize(tx.sql(), scope, company_id, SESSIONS_MANAGE)
+            .await?;
         let session =
             catalog::insert_session(&mut tx, scope.tenant(), company_id, actor, valid).await?;
         tx.commit().await?;
@@ -445,7 +454,10 @@ impl Training {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company_id, SESSIONS_VIEW)
             .await?;
-        if until <= from || until.as_second() - from.as_second() > CALENDAR_MAX_DAYS * 86_400 {
+        if until <= from
+            || until.as_nanosecond() - from.as_nanosecond()
+                > i128::from(CALENDAR_MAX_DAYS * 86_400) * 1_000_000_000
+        {
             return Err(TrainingError::InvalidCalendarRange);
         }
         catalog::calendar(&**client, scope.tenant(), company_id, from, until).await
