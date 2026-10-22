@@ -2849,6 +2849,40 @@ async fn employee_workspace_proof(
     )?;
     let audit_count:i64=client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=$1 AND auditable_type='people_employee_change_request'", &[&manager.tenant()]).await?.get(0);
     println!("PE1 change-request audit rows: {audit_count}");
-    println!("PE1 browser: manager@example.test can open /people/employees and add PE1 New Employee using its linked affiliation.");
+    // Leave a reader-only account for the running app after proving the
+    // ungranted reader refusal above; personal views still need only VIEW.
+    grants.set_direct(admin, VIEWER, VIEW, Some(true)).await?;
+    prove(
+        !success(workspace.employees(viewer, COMPANY).await)?.is_empty(),
+        "reader can list employees after a view grant",
+    )?;
+    prove(
+        matches!(
+            workspace
+                .put_access(viewer, COMPANY, staff_employee, &Access::default())
+                .await,
+            Err(WorkspaceError::Workforce(WorkforceError::Unauthorized))
+        ),
+        "reader cannot change portal eligibility",
+    )?;
+    let reader_view = success(
+        workspace
+            .save_view(
+                viewer,
+                COMPANY,
+                &NewSavedView {
+                    name: "PE1 reader view".into(),
+                    ..NewSavedView::default()
+                },
+            )
+            .await,
+    )?;
+    prove(
+        !success(workspace.saved_views(manager, COMPANY).await)?
+            .iter()
+            .any(|v| v.id == reader_view.id),
+        "reader personal view is isolated from manager",
+    )?;
+    println!("PE1 browser: manager@example.test can add PE1 New Employee; viewer@example.test can read employees and manage only their own views.");
     Ok(())
 }
