@@ -344,3 +344,5 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 ## Independent decisions
 
 `owns_employee(tx, scope, company_id, employee_id, capability)` lets another People facade refuse decisions on the signed-in account's own employee records. It checks the supplied permission, holds Company → Employment locks, and re-proves the account link on the caller's transaction. It returns true for a matching affiliation at any employment status, false for an unlinked account, and `NotFound` for a missing employee. Claims uses this to keep inactive employees' own claims out of their decision authority. Self-service writes continue to use `lock_self_employee`, which also requires a working status.
+
+`authorization::authorize_company_proof` provides the same company target authorization on an object-safe `ProofClient`, for owner callbacks such as Training's Artifacts adapter. Pass the callback's client so its proof stays on the reservation or publication transaction. The returned company includes its archived flag; owners must refuse an archived company before granting access.
