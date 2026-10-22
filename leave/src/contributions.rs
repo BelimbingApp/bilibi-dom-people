@@ -45,7 +45,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/database", "base/module_registry", "base/party_ids",
+            "base/agent_api", "base/authz", "base/database", "base/module_registry", "base/party_ids",
             "base/settings", "base/tenancy", "core/company",
             "people/settings", "people/workforce",
         ],
@@ -57,12 +57,14 @@ inventory::submit! {
         services: &[Service {
             id: SERVICE,
             factory: |services| {
-                Ok(Arc::new(Leave {
+                let facade = Arc::new(Leave {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
-                }))
+                });
+                crate::agent::bind(facade.clone())?;
+                Ok(facade)
             },
         }],
     }
