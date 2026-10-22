@@ -43,7 +43,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/database", "base/datetime", "base/module_registry",
+            "base/authz", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy", "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
@@ -56,14 +56,19 @@ inventory::submit! {
                 "people-claims-002-assignments-handoff",
                 include_str!("../migrations/002-assignments-handoff.sql"),
             ),
+            (
+                "people-claims-003-workflow-history",
+                include_str!("../migrations/003-workflow-history.sql"),
+            ),
         ],
-        services: &[Service {
+        services: &[crate::downloads::SERVICE_DEFINITION, Service {
             id: SERVICE,
             factory: |services| {
                 Ok(Arc::new(Claims {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
+                    events: services.get(bilibi_events::SERVICE)?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                 }))
             },
@@ -108,3 +113,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
     validator: Some(Validator { accepts: currencies_valid, message: "Give up to twenty ISO 4217 codes of three uppercase letters, each once" }),
     editor: Some(Editor { group: "People", label: "Claim currencies", help: "ISO 4217 currency codes this company accepts on claims.", capability: Some(MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+// Facts for independently composed subscribers, committed with each decision.
+inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }
+inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
