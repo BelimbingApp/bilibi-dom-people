@@ -335,7 +335,7 @@ impl Approvals {
                     })?);
                 }
                 let form = render(&Form {
-                    id: &format!("attendance-decision-{}", request.id),
+                    id: &format!("adjustment-decision-{}", request.id),
                     // The transport does not serialize a submitter's name/value.
                     // Shared change events keep the note on the server before
                     // either action is queued, preserving Bilimbi's two buttons.
@@ -346,7 +346,7 @@ impl Approvals {
                     actions: buttons,
                 })?;
                 rows.push(
-                    row("attendance-approval", request.id)
+                    row("adjustment", request.id)
                         .slot(
                             "employee",
                             Html::text(

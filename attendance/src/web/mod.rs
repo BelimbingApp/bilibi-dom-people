@@ -98,9 +98,9 @@ impl Flash {
     }
 }
 
-/// Bilimbi has bounded lists without sorting, filters or paging on these
-/// pages. Keep that spec alongside column/compact state rather than adding
-/// an independent query parser or changing the facade's order and bounds.
+/// Bilimbi bounds these tables without sorting or paging. The roster keeps
+/// its company, period and search in its outer ListState; this adapter owns
+/// only column arrangement and compact rows.
 struct Table {
     columns: ListColumns,
     list: ListState,
