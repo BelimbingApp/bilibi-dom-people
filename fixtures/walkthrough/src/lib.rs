@@ -922,6 +922,20 @@ pub async fn run(url: &str) -> Result<()> {
     // PO2: paginated explorer records and a read-only browser account.
     organisation_explorer::run(&services, &admin, &manager).await?;
 
+    // PK3: independent reassessment and development-action proof block.
+    skill_actions::run(
+        &services,
+        &client,
+        skill_actions::Context {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            manager_employee: manager_employment.id,
+            staff_employee: staff_employment.id,
+        },
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
         bilibi_walkthrough_fixture::PASSWORD
@@ -3733,6 +3747,13 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
 
+// PC3: browser records and two-session checks, run after the default fixture.
+mod claims_page;
+/// Adds My claims browser records, or changes the fixture staff account's access.
+pub async fn claims_page(url: &str, action: &str) -> Result<()> {
+    claims_page::run(url, action).await
+}
+
 // Payroll foundation (PY1): run after the default fixture prepared the database.
 mod payroll;
 pub async fn payroll(url: &str) -> Result<()> {
@@ -3978,3 +3999,5 @@ pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
     println!("PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request.");
     Ok(())
 }
+// Skills reassessments and development actions (slice PK3).
+mod skill_actions;
