@@ -795,6 +795,39 @@ pub async fn run(url: &str) -> Result<()> {
         .set_direct(&admin, 1, POLICY_MANAGE, Some(true))
         .await?;
 
+    let prior_count = saved(pg.explain(&staff, 1).await)?.explanations.len();
+    let mut last_policy_id = 0;
+    for index in 0..101 {
+        let row = saved(
+            pg.draft(
+                &manager,
+                1,
+                &DraftInput {
+                    code: format!("zz_pg1_batch_{index:03}"),
+                    version: 1,
+                    name: "PG1 governing-policy batch proof".into(),
+                    effective_from: today.to_string(),
+                    profile: Some(ProfilePin {
+                        id: next.profile.profile.id,
+                        version: next.profile.profile.version,
+                    }),
+                    performance: None,
+                },
+            )
+            .await,
+        )?;
+        last_policy_id = saved(pg.publish(&manager, 1, row.id).await)?.id;
+    }
+    let all_codes = saved(pg.explain(&staff, 1).await)?;
+    prove(
+        all_codes.explanations.len() == prior_count + 101
+            && all_codes
+                .explanations
+                .iter()
+                .any(|e| e.policy.id == last_policy_id && e.status == Status::Met),
+        "every governing policy code is explained across bounded batches",
+    )?;
+
     let count:i64=client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=1 AND auditable_type='people_progression_policy_versions'",&[]).await?.get(0);
     prove(count >= 30, "every progression write is audited")?;
     println!("PG1 proof complete: {count} audited policy changes");
