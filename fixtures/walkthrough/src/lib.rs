@@ -3927,9 +3927,10 @@ pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
         .publish_roster(&manager, COMPANY, far, far)
         .await
         .map_err(|_| Error::Internal)?;
+    // Timestamp arithmetic uses duration units; calendar days belong to Date above.
     for days in 1..=32 {
         let at = Timestamp::now()
-            .checked_sub(jiff::Span::new().days(days))
+            .checked_sub(jiff::Span::new().hours(days * 24))
             .map_err(|_| Error::Invalid)?;
         attendance
             .record_clock(
