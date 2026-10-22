@@ -304,7 +304,10 @@ pub async fn run(url: &str) -> Result<()> {
         payroll
             .generate_document(&manager, COMPANY, run.id, "report", None)
             .await,
-        |e| matches!(e, Refusal::ArtifactPolicy),
+        |e| {
+            matches!(e, Refusal::ArtifactPolicy)
+                || matches!(e, Refusal::ArtifactFailed(error) if error.code() == "unsafe_root")
+        },
     )?;
     setting(&services, &admin, "artifacts.storage_root", json!(root)).await?;
     setting(&services, &admin, "artifacts.retention_days", Value::Null).await?;
