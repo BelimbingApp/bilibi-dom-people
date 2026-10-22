@@ -175,7 +175,13 @@ impl Payroll {
             )
             .await?;
         let code = input::text(&new.code, "code", 60)?;
-        if new.ends_on < new.starts_on || new.pay_on < new.ends_on {
+        if new.ends_on < new.starts_on {
+            return Err(PayrollError::Invalid(vec![FieldError::new(
+                "ends_on",
+                "must follow start",
+            )]));
+        }
+        if new.pay_on < new.ends_on {
             return Err(PayrollError::Invalid(vec![FieldError::new(
                 "pay_on",
                 "must be on or after the period end",
@@ -184,12 +190,19 @@ impl Payroll {
         let from = new.starts_on.to_string();
         let to = new.ends_on.to_string();
         let existing: Vec<Period> = store::list(tx.sql(), scope, company, Kind::Period).await?;
-        if existing.iter().any(|v| {
-            v.code == code || input::overlaps(&from, Some(&to), &v.starts_on, Some(&v.ends_on))
-        }) {
+        if existing.iter().any(|v| v.code == code) {
+            return Err(PayrollError::Invalid(vec![FieldError::new(
+                "code",
+                "has already been taken",
+            )]));
+        }
+        if existing
+            .iter()
+            .any(|v| input::overlaps(&from, Some(&to), &v.starts_on, Some(&v.ends_on)))
+        {
             return Err(PayrollError::Invalid(vec![FieldError::new(
                 "starts_on",
-                "must not overlap another period; the code must be unique",
+                "must not overlap another period",
             )]));
         }
         let row = store::insert(
