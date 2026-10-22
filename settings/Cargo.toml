@@ -1,0 +1,15 @@
+# People settings (`people/settings`), a Domain module of the People
+# container. Discovered by the Platform when the container is mounted at
+# apps/domains/people; never built alone.
+[package]
+name = "bilibi-people-settings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bilibi-menu.workspace = true
+bilibi-module-registry.workspace = true
+inventory.workspace = true
