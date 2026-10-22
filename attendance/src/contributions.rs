@@ -96,6 +96,12 @@ inventory::submit! {
                 services.get::<Db>("base/database.pool")?.as_ref().clone(),
                 services.get(SERVICE)?,
             ))))),
+        }, Service {
+            id: crate::web::my::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::my::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
         }],
     }
 }
@@ -188,4 +194,31 @@ bilibi_menu::contribute!(
     .under("people.team")
     .requires(bilibi_menu::Requirement::Capability(ADJUSTMENTS_APPROVE))
     .order(40)
+);
+
+// PA4: Bilimbi Attendance.Web.MyLive and its My work menu leaf.
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.my", provenance!(), &bilibi_module_registry::contributions::Route {
+        method: bilibi_module_registry::contributions::Method::Get,
+        path: "/people/attendance/my", service: crate::web::my::PAGES, operation: "my",
+        access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::my::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+        service: crate::web::my::PAGES, contracts: &[],
+        pending: bilibi_module_registry::contributions::Pending::Every { reason: "Self clocking and adjustment requests use the Attendance facade; no reviewed operation contracts exist for these self-service writes." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/attendance",
+    bilibi_menu::MenuItem::page(
+        "people.attendance.my",
+        "My attendance",
+        "/people/attendance/my"
+    )
+    .icon("clipboard-document-list")
+    .under("people.my_work")
+    .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
+    .order(10)
 );

@@ -1,6 +1,7 @@
 //! Bilimbi Attendance.Web.RostersLive and Attendance.Web.ApprovalsLive. The facade owns
 //! identity and writes; mounted pages keep only drafts and confirmation intent.
 mod approvals;
+pub(crate) mod my;
 mod rosters;
 
 use crate::{Attendance, AttendanceError};

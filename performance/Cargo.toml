@@ -1,0 +1,25 @@
+# Mirrors Bilimbi people/performance; mounted at apps/domains/people.
+[package]
+name = "bilibi-people-performance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bilibi-authz.workspace = true
+bilibi-company.workspace = true
+bilibi-database.workspace = true
+bilibi-module-registry.workspace = true
+bilibi-people-organisation = { path = "../organisation" }
+bilibi-people-settings = { path = "../settings" }
+bilibi-people-skills = { path = "../skills" }
+bilibi-people-workforce = { path = "../workforce" }
+bilibi-tenancy.workspace = true
+inventory.workspace = true
+jiff = "0.2.38"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio-postgres.workspace = true
