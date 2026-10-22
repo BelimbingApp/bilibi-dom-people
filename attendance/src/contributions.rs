@@ -71,7 +71,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/party_ids", "base/settings", "base/tenancy",
+            "base/party_ids", "base/settings", "base/tenancy", "base/menu", "base/ui",
             "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -90,6 +90,12 @@ inventory::submit! {
                 crate::agent_operations::bind(attendance.clone())?;
                 Ok(attendance)
             },
+        }, Service {
+            id: crate::web::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
         }],
     }
 }
@@ -145,3 +151,30 @@ inventory::submit! { Contribution::new(DEFINITIONS, ADJUSTMENT_WINDOW_KEY, prove
     nullable: false, encrypted: false, minimum: Some(1.0), maximum: Some(366.0), validator: None,
     editor: Some(Editor { group: "People", label: "Adjustment request window", help: "Days, counting today, for which an employee may request a missing clock event.", capability: Some(RULES_MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+// PA4: Bilimbi Attendance.Web.MyLive and its My work menu leaf.
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.my", provenance!(), &bilibi_module_registry::contributions::Route {
+        method: bilibi_module_registry::contributions::Method::Get,
+        path: "/people/attendance/my", service: crate::web::PAGES, operation: "my",
+        access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+        service: crate::web::PAGES, contracts: &[],
+        pending: bilibi_module_registry::contributions::Pending::Every { reason: "Self clocking and adjustment requests use the Attendance facade; no reviewed operation contracts exist for these self-service writes." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/attendance",
+    bilibi_menu::MenuItem::page(
+        "people.attendance.my",
+        "My attendance",
+        "/people/attendance/my"
+    )
+    .icon("clipboard-document-list")
+    .under("people.my_work")
+    .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
+    .order(10)
+);
