@@ -214,16 +214,24 @@ impl Training {
                 TrainingError::Unauthorized => TrainingError::DocumentForbidden,
                 other => other,
             })?;
-        let rows = store::all_passport(&**client, scope.tenant(), company, employee).await?;
-        if rows.len() > PASSPORT_LIMIT {
-            return Err(TrainingError::PassportTooLarge);
-        }
+        let guard = self
+            .passport_document_guard(&mut client, scope, company, Some(audience.capability()))
+            .await?;
+        let rows = store::all_passport(guard.sql(), scope.tenant(), company, employee).await?;
+        let mut timeouts = self.db.timeouts();
+        timeouts.wait = Some(std::time::Duration::ZERO);
+        let mut artifact_client = self.db.timeout_get(&timeouts).await.map_err(Error::from)?;
         let owner = self.document_owner();
-        Ok(self.artifacts.for_owner(scope, OrganisationId::new(company)?, &owner).generate_pdf(
-            &mut client,
+        let generated = self.artifacts.for_owner(scope, OrganisationId::new(company)?, &owner).generate_pdf(
+            &mut artifact_client,
             Reference { subject: audience.subject(employee), kind: "passport".into() },
             &json!({"employee": passport.employee.display_name, "employee_id": employee, "generated": clock::whole_second(Timestamp::now()).to_string(), "rows": rows}),
-        ).await?)
+        ).await;
+        guard.rollback().await?;
+        generated.map_err(|error| match TrainingError::from(error) {
+            TrainingError::Unauthorized => TrainingError::DocumentForbidden,
+            other => other,
+        })
     }
     /// Used by both My and Team download routes; the reference retains its audience.
     pub async fn read_passport(
@@ -233,12 +241,23 @@ impl Training {
         artifact: &str,
     ) -> Result<bilibi_artifacts::Document> {
         let mut client = self.db.get().await.map_err(Error::from)?;
+        let capability = self
+            .passport_read_capability(&**client, scope, company)
+            .await;
+        let guard = self
+            .passport_document_guard(&mut client, scope, company, Some(capability))
+            .await?;
+        let mut timeouts = self.db.timeouts();
+        timeouts.wait = Some(std::time::Duration::ZERO);
+        let mut artifact_client = self.db.timeout_get(&timeouts).await.map_err(Error::from)?;
         let owner = self.document_owner();
         let document = self
             .artifacts
             .for_owner(scope, OrganisationId::new(company)?, &owner)
-            .read(&mut client, artifact)
-            .await?;
+            .read(&mut artifact_client, artifact)
+            .await;
+        guard.rollback().await?;
+        let document = document?;
         if document.metadata.reference.kind != "passport" {
             return Err(TrainingError::NotFound);
         }
@@ -253,16 +272,74 @@ impl Training {
         artifact: &str,
     ) -> Result<bilibi_artifacts::Document> {
         let mut client = self.db.get().await.map_err(Error::from)?;
+        let capability = if authorization::allowed(&**client, scope, company, RECORDS_VIEW).await {
+            None
+        } else {
+            Some(
+                self.passport_read_capability(&**client, scope, company)
+                    .await,
+            )
+        };
+        let guard = self
+            .passport_document_guard(&mut client, scope, company, capability)
+            .await?;
+        let mut timeouts = self.db.timeouts();
+        timeouts.wait = Some(std::time::Duration::ZERO);
+        let mut artifact_client = self.db.timeout_get(&timeouts).await.map_err(Error::from)?;
         let owner = self.document_owner();
         let document = self
             .artifacts
             .for_owner(scope, OrganisationId::new(company)?, &owner)
-            .read(&mut client, artifact)
-            .await?;
+            .read(&mut artifact_client, artifact)
+            .await;
+        guard.rollback().await?;
+        let document = document?;
         if document.metadata.reference.kind != "evidence" {
             return Err(TrainingError::NotFound);
         }
         Ok(document)
+    }
+    async fn passport_read_capability(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company: i64,
+    ) -> &'static str {
+        if authorization::allowed(client, scope, company, PASSPORT_MY_VIEW).await {
+            PASSPORT_MY_VIEW
+        } else {
+            PASSPORT_TEAM_VIEW
+        }
+    }
+    /// Artifacts requires a plain Client for durable file reservations. Hold the
+    /// company's lock and the re-proved self employment on a separate, rollback-only
+    /// boundary until Artifacts completes. It writes all actual changes through its
+    /// own boundary. Account relinking, archive and employment writes wait here.
+    async fn passport_document_guard<'a>(
+        &self,
+        client: &'a mut tokio_postgres::Client,
+        scope: &Scope,
+        company: i64,
+        capability: Option<&str>,
+    ) -> Result<bilibi_database::MutationTransaction<'a>> {
+        let guard = self
+            .mutations
+            .begin(
+                client,
+                scope.mutation_context("people.training.document_access"),
+            )
+            .await?;
+        writable(guard.sql(), scope, company).await?;
+        if let Some(capability) = capability {
+            self.workforce
+                .lock_self_employee(&guard, scope, company, capability)
+                .await
+                .map_err(|error| match error {
+                    WorkforceError::NotLinked => TrainingError::Unauthorized,
+                    other => other.into(),
+                })?;
+        }
+        Ok(guard)
     }
 }
 

@@ -806,6 +806,16 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
+    publication_unlink_race(
+        &services,
+        &client,
+        &training,
+        &users,
+        (&admin, &staff),
+        staff_id,
+    )
+    .await?;
+    relink().await?;
     let page = saved(
         training
             .passport(
@@ -934,4 +944,77 @@ async fn session_for(
         "2026-07-03T09:00",
     )
     .await
+}
+
+// Hold a real artifact reservation at a disposable SQL fault gate. Unlink must
+// wait for Training's company lock; after publication it proceeds and the old
+// scope is refused. No timing-dependent sleep inside the business operation.
+async fn publication_unlink_race(
+    services: &Services,
+    observer: &tokio_postgres::Client,
+    training: &Arc<Training>,
+    users: &Arc<UserService>,
+    scopes: (&Scope, &Scope),
+    employee: i64,
+) -> Result<()> {
+    let (admin, staff) = scopes;
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let gate = db.get().await?;
+    gate.query_one("SELECT pg_advisory_lock(679205)", &[])
+        .await?;
+    observer.batch_execute("CREATE FUNCTION pt5_pause_passport() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(679205); RETURN NEW; END $$; CREATE TRIGGER pt5_pause_passport BEFORE INSERT ON base_artifacts FOR EACH ROW WHEN (NEW.owner_id='people/training' AND NEW.kind='passport') EXECUTE FUNCTION pt5_pause_passport();").await?;
+    let training_job = training.clone();
+    let staff_scope = staff.clone();
+    let generation = tokio::spawn(async move {
+        training_job
+            .generate_passport(
+                &staff_scope,
+                COMPANY,
+                PassportAudience::SelfService,
+                employee,
+            )
+            .await
+    });
+    let waiting = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        loop {
+            let blocked: bool = observer.query_one("SELECT EXISTS(SELECT FROM pg_locks WHERE locktype='advisory' AND objid=679205 AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))", &[]).await?.get(0);
+            if blocked { return Ok::<(), Error>(()); }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }).await;
+    let users_job = users.clone();
+    let admin_scope = admin.clone();
+    let mut unlink = tokio::spawn(async move { users_job.unlink(&admin_scope, STAFF).await });
+    let early_unlink =
+        tokio::time::timeout(std::time::Duration::from_millis(100), &mut unlink).await;
+    let unlink_waited = early_unlink.is_err();
+    gate.query_one("SELECT pg_advisory_unlock(679205)", &[])
+        .await?;
+    let generated = tokio::time::timeout(std::time::Duration::from_secs(15), generation)
+        .await
+        .map_err(|_| Error::Internal)?
+        .map_err(|_| Error::Internal)?;
+    let unlinked = match early_unlink {
+        Ok(result) => result,
+        Err(_) => tokio::time::timeout(std::time::Duration::from_secs(15), unlink)
+            .await
+            .map_err(|_| Error::Internal)?,
+    }
+    .map_err(|_| Error::Internal)?;
+    observer.batch_execute("DROP TRIGGER pt5_pause_passport ON base_artifacts; DROP FUNCTION pt5_pause_passport();").await?;
+    proof(
+        "publication reached its reservation while holding company authority",
+        matches!(waiting, Ok(Ok(()))),
+    )?;
+    proof(
+        "account unlink waits for passport publication",
+        unlink_waited && unlinked.is_ok(),
+    )?;
+    let artifact = saved(generated)?;
+    refused(
+        "published document refuses the now-unlinked old scope",
+        training.read_passport(staff, COMPANY, &artifact.id).await,
+        TrainingError::Unauthorized,
+    )?;
+    Ok(())
 }
