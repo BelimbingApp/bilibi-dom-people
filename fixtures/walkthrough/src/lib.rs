@@ -754,9 +754,30 @@ pub async fn run(url: &str) -> Result<()> {
         refused(&client, step, sql, manager_employment.id).await;
     }
 
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    organisation::run(
+        &services,
+        &client,
+        organisation::Cast {
+            admin: &admin,
+            manager: &manager,
+            viewer: &viewer,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_user: MANAGER,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
+            contractor_employment: contractor_employment.id,
+        },
+    )
+    .await?;
+
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): the sidebar shows no People entry, because the People root and its groups have no leaf yet and Base Menu hides an empty container. staff@example.test is now linked to Sam Staff's affiliation with Company 001.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
 }
+
+// ---- Organisation (PO1): its own block, run from the end of `run` ----
+mod organisation;
