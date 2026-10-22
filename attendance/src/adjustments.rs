@@ -1,9 +1,9 @@
 //! Bilimbi Attendance.Adjustments and self_clock: missing punches resolve the signed-in employee again under lock.
 use crate::{
-    access, clock, locations,
-    rosters::{action, decode, lock},
-    rules, Attendance, AttendanceError as Refusal, ClockEvent, ClockInput, EventType, FieldError,
-    Result, ADJUSTMENTS_APPROVE, SELF_VIEW,
+    access, clock, locations, rules,
+    workflow::{action, decode, lock},
+    Attendance, AttendanceError as Refusal, ClockEvent, ClockInput, EventType, FieldError, Result,
+    ADJUSTMENTS_APPROVE, SELF_VIEW,
 };
 use bilibi_database::{Change, Error, MutationTransaction};
 use bilibi_tenancy::Scope;
@@ -12,6 +12,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 #[derive(Clone, Debug)]
+/// A page-minted key, in/out punch, company-local time and required reason.
 pub struct NewAdjustment {
     pub request_key: String,
     pub event_type: EventType,
@@ -19,6 +20,7 @@ pub struct NewAdjustment {
     pub reason: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// A missing-punch request and its decision; dates and instants are text.
 pub struct AdjustmentRequest {
     pub id: i64,
     pub employee_id: i64,
@@ -36,6 +38,7 @@ pub struct AdjustmentRequest {
     pub applied_clock_event_id: Option<i64>,
 }
 #[derive(Clone, Debug, Serialize)]
+/// An approval queue row with its current Workforce name, when available.
 pub struct PendingAdjustment {
     pub request: AdjustmentRequest,
     pub employee_name: Option<String>,
@@ -156,6 +159,7 @@ impl Attendance {
         tx.commit().await?;
         Ok(saved)
     }
+    /// Submit for the linked employee under lock; enforce the window, key replay and duplicate rules.
     pub async fn submit_adjustment(
         &self,
         scope: &Scope,
@@ -306,6 +310,7 @@ impl Attendance {
         tx.commit().await?;
         decode(saved)
     }
+    /// Cancel only the linked employee's pending request, re-proving that link under lock.
     pub async fn cancel_adjustment(
         &self,
         scope: &Scope,
@@ -337,6 +342,7 @@ impl Attendance {
         tx.commit().await?;
         Ok(saved)
     }
+    /// Approve or reject independently; approval ingests the clock in this same transaction.
     pub async fn decide_adjustment(
         &self,
         scope: &Scope,
@@ -451,6 +457,7 @@ impl Attendance {
         tx.commit().await?;
         Ok(saved)
     }
+    /// The signed-in employee's 20 newest requests.
     pub async fn self_adjustments(
         &self,
         scope: &Scope,
@@ -471,6 +478,7 @@ impl Attendance {
         .map(|r| decode(r.get(0)))
         .collect()
     }
+    /// The 200 oldest proposed times, for an authorized approver.
     pub async fn pending_adjustments(
         &self,
         scope: &Scope,

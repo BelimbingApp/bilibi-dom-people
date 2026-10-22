@@ -1,7 +1,8 @@
 //! Bilimbi Attendance.Allowances: effective versions, inclusive ends and retirement.
 use crate::{
-    rosters::{action, decode, lock},
-    shifts, Attendance, AttendanceError as Refusal, FieldError, Result, ALLOWANCES_MANAGE,
+    shifts,
+    workflow::{action, decode, lock},
+    Attendance, AttendanceError as Refusal, FieldError, Result, ALLOWANCES_MANAGE,
 };
 use bilibi_database::{Change, Error, MutationTransaction};
 use bilibi_tenancy::Scope;
@@ -10,6 +11,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// A stored rule version for Payroll; dates are inclusive ISO text.
 pub struct AllowanceRule {
     pub id: i64,
     pub code: String,
@@ -22,6 +24,7 @@ pub struct AllowanceRule {
     pub status: String,
 }
 #[derive(Clone, Debug)]
+/// Company-defined allowance facts and the new version's inclusive dates.
 pub struct NewAllowanceRule {
     pub code: String,
     pub name: String,
@@ -130,6 +133,7 @@ async fn end(
     decode(after)
 }
 impl Attendance {
+    /// All versions, including retired ones, sorted by code and newest start. No attendance grant.
     pub async fn list_allowance_rules(
         &self,
         scope: &Scope,
@@ -144,6 +148,7 @@ impl Attendance {
             .map(|r| decode(r.get(0)))
             .collect()
     }
+    /// Read one stored version of the company, with no attendance grant.
     pub async fn allowance_rule(
         &self,
         scope: &Scope,
@@ -156,6 +161,7 @@ impl Attendance {
             .find(|r| r.id == id)
             .ok_or(Refusal::NotFound)
     }
+    /// Create an active version, ending an earlier open version and refusing any remaining overlap.
     pub async fn create_allowance_rule(
         &self,
         scope: &Scope,
@@ -269,6 +275,7 @@ impl Attendance {
         tx.commit().await?;
         decode(saved)
     }
+    /// End an active version inclusively, only earlier, and record the ending action.
     pub async fn end_allowance_rule(
         &self,
         scope: &Scope,
@@ -301,6 +308,7 @@ impl Attendance {
         tx.commit().await?;
         Ok(saved)
     }
+    /// Retire a version without deleting its history or freeing its code/start key.
     pub async fn retire_allowance_rule(
         &self,
         scope: &Scope,

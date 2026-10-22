@@ -1,9 +1,9 @@
 //! Bilimbi Attendance.Rosters: drafts and the separately published employee view.
+use crate::workflow::{action, decode, lock};
 use crate::{
-    access, shifts, Attendance, AttendanceError as Refusal, Result, ShiftTemplate, ROSTER_MANAGE,
-    SELF_VIEW,
+    shifts, Attendance, AttendanceError as Refusal, Result, ShiftTemplate, ROSTER_MANAGE, SELF_VIEW,
 };
-use bilibi_database::{Change, Error, MutationTransaction};
+use bilibi_database::{Change, Error};
 use bilibi_tenancy::Scope;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
@@ -12,12 +12,14 @@ pub const MAX_ROSTER_DAYS: i32 = 31;
 pub const MAX_ROSTER_EMPLOYEES: usize = 200;
 pub const SELF_ROSTER_DAYS: i32 = 14;
 #[derive(Clone, Copy, Debug)]
+/// A working shift, rest day or planned removal.
 pub enum RosterValue {
     Shift(i64),
     Rest,
     None,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// The planner value and its separate publication; dates are ISO text.
 pub struct RosterEntry {
     pub id: i64,
     pub employee_id: i64,
@@ -35,12 +37,14 @@ impl RosterEntry {
     }
 }
 #[derive(Clone, Debug, Serialize)]
+/// A current employee selected for the planner grid.
 pub struct RosterEmployee {
     pub id: i64,
     pub name: String,
     pub number: String,
 }
 #[derive(Clone, Debug, Serialize)]
+/// A bounded planner grid; pending counts the whole company period.
 pub struct Roster {
     pub dates: Vec<String>,
     pub employees: Vec<RosterEmployee>,
@@ -50,6 +54,7 @@ pub struct Roster {
     pub pending: i64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// One published employee day with the template's local times.
 pub struct PublishedShift {
     pub on_date: String,
     pub kind: String,
@@ -59,9 +64,6 @@ pub struct PublishedShift {
     pub end_minute: Option<i32>,
     pub break_minutes: Option<i32>,
 }
-pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T> {
-    serde_json::from_value(value).map_err(|_| Refusal::Failed(Error::Internal))
-}
 pub(crate) fn period(from: Date, days: i32) -> Result<Date> {
     if !(1..=MAX_ROSTER_DAYS).contains(&days) {
         return Err(Refusal::InvalidPeriod);
@@ -69,34 +71,8 @@ pub(crate) fn period(from: Date, days: i32) -> Result<Date> {
     from.checked_add(jiff::Span::new().days(days - 1))
         .map_err(|_| Refusal::InvalidPeriod)
 }
-pub(crate) async fn lock(
-    tx: &MutationTransaction<'_>,
-    scope: &Scope,
-    company: i64,
-    capability: &str,
-) -> Result<()> {
-    access::lock_company(tx, scope, company).await?;
-    bilibi_people_workforce::authorization::authorize(tx.sql(), scope, company, capability).await?;
-    Ok(())
-}
-pub(crate) async fn action(
-    tx: &MutationTransaction<'_>,
-    scope: &Scope,
-    event: &str,
-    payload: Value,
-) -> Result<()> {
-    bilibi_audit::record_action(
-        tx.sql(),
-        &bilibi_audit::Attribution::from_scope(scope),
-        None,
-        event,
-        payload,
-        true,
-    )
-    .await?;
-    Ok(())
-}
 impl Attendance {
+    /// Up to 31 days and 200 working employees matching the name/number search.
     pub async fn roster(
         &self,
         scope: &Scope,
@@ -191,6 +167,7 @@ impl Attendance {
             pending,
         })
     }
+    /// Plan a working value; clear an unpublished value immediately. Requires roster management.
     pub async fn plan_roster_entry(
         &self,
         scope: &Scope,
@@ -289,6 +266,7 @@ impl Attendance {
         tx.commit().await?;
         value.map(decode).transpose()
     }
+    /// Publish all pending values in an inclusive period of at most 31 days, with an audit action.
     pub async fn publish_roster(
         &self,
         scope: &Scope,
@@ -372,6 +350,7 @@ impl Attendance {
         tx.commit().await?;
         Ok(count)
     }
+    /// The linked employee's published days; the self page requests 14 days.
     pub async fn self_roster(
         &self,
         scope: &Scope,
@@ -444,9 +423,8 @@ const LOCK_PENDING: &str = concat!(
     "published_shift_template_id) ORDER BY id FOR UPDATE",
 );
 
-const DELETE_PUBLISHED: &str = concat!(
-    "DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND id=$3",
-);
+const DELETE_PUBLISHED: &str =
+    "DELETE FROM people_attendance_roster_entries WHERE tenant_id=$1 AND company_id=$2 AND id=$3";
 
 const PUBLISH_ENTRY: &str = concat!(
     "UPDATE people_attendance_roster_entries e SET ",
