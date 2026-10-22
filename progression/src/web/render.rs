@@ -223,7 +223,6 @@ impl State {
             body,
             actions: render(&Button {
                 button_type: "submit",
-                variant: ButtonVariant::Primary,
                 working: "Recording…",
                 body: Html::text("Record draft"),
                 ..Button::default()
