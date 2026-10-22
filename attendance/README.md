@@ -1,6 +1,6 @@
 # Attendance
 
-Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. Pages follow in PA3 to PA5. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
+Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. The roster planner and attendance approvals pages are available; settings and self-service pages follow in PA3 and PA4. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
 
 ## Public API
 
@@ -66,8 +66,8 @@ All six live under the Authz domain `people` and are granted by an administrator
 | --- | --- |
 | `people.attendance.self.view` | My attendance, self-clocking and own requests |
 | `people.attendance.rules.manage` | Rules, shift templates, clocking locations |
-| `people.attendance.roster.manage` | Rosters (PA5) |
-| `people.attendance.adjustments.approve` | Adjustment decisions (PA5) |
+| `people.attendance.roster.manage` | Rosters |
+| `people.attendance.adjustments.approve` | Attendance approvals |
 | `people.attendance.allowances.manage` | Allowance rules (PA3) |
 | `people.attendance.clock.record` | Reviewed agent operation for a device or integration clock event |
 
@@ -96,7 +96,7 @@ The first binary creates the employments. The second proves attendance: the rule
 
 ## Dependencies
 
-`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/datetime`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (Core account identity is proven through Workforce, so attendance needs no direct `core/user` edge).
+`base/agent_api`, `base/audit`, `base/authz`, `base/database`, `base/datetime`, `base/menu`, `base/module_registry`, `base/party_ids`, `base/settings`, `base/tenancy`, `base/ui`, `core/company`, `people/settings`, `people/workforce`; the Cargo manifest lists the same edges, which Bilimbi's descriptor also has (Core account identity is proven through Workforce, so attendance needs no direct `core/user` edge).
 
 ## Roster planning and publication
 
