@@ -17,6 +17,7 @@ bilibi-database.workspace = true
 bilibi-module-registry.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-person.workspace = true
+bilibi-ports.workspace = true
 bilibi-principal-directory.workspace = true
 bilibi-settings.workspace = true
 bilibi-tenancy.workspace = true

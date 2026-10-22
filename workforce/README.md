@@ -3,17 +3,15 @@
 Module ID: `people/workforce`, crate `bilibi-people-workforce`. The native
 workforce boundary every People module builds on (a company's identity and
 its working employees as `ReadResult`s, named through Core), the employment
-record People owns, the company's working statuses, and the `Authorization`
-helpers every People facade authorizes through. Other People modules read
-and write through this module's facade; none of them reads its table. This
-README is the owner contract; the Bilimbi source it ports is
+record People owns, the company's working statuses, the `Authorization`
+helpers every People facade authorizes through, self-service, and the
+position scan Organisation answers. Other People modules read and write
+through this module's facade; none of them reads its table. This README is
+the owner contract; the Bilimbi source it ports is
 [`workforce/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/workforce/docs/README.md).
 
-This is the scaffold slice (PS0 of the port plan). PW1 adds
-`update_employment`, `employment`, `employment_summary`, self-service
-(`self_employee`, `authorize_self`, `with_self_employee_lock`),
-`supervisor_chain`, `in_reach` and the `positions` scan over the
-`people/organisation.positions` port; PW2 adds the settings page and the
+Slices PS0 (the scaffold) and PW1 (employment records and self-service) are
+in. PW2 adds the settings page `/people/workforce/settings` and the
 `people/workforce.directory` port the People connector reads.
 
 ## Public API
@@ -30,9 +28,20 @@ records; the schema is private.
 | `employees_by_ids` | none | The working employees among at most 1,000 positive, deduplicated ids, without reading the whole workforce; more, or a non-positive id, is `InvalidOptions` |
 | `employee` | none | One working employee; another status, another company or missing is `NotFound` |
 | `direct_reports` | none | The working employees reporting to one working employee; a supervisor who is not a working employee is `NotFound` |
+| `supervisor_chain` | none | A working employee's supervisors, nearest first, through working supervisors only, at most 12 levels (`CHAIN_DEPTH`, Bilimbi's reach depth); an employee who is not working is `NotFound` |
+| `in_reach` | none | Whether one working employee is below another in the supervisor chain (Bilimbi `Access.within?/2` for a team reach): never the manager themselves, `false` for an employee the reads do not expose |
 | `working_statuses` | none | The statuses the company counts as working staff |
 | `put_working_statuses` | `people.workforce.settings.manage` | Replaces them: a non-empty subset of the five, stored in canonical order, else `InvalidStatuses` |
+| `employment` | `people.workforce.employment.view` | One employee's private employment facts (`Employment`) at any status; another company or missing is `NotFound` |
+| `employment_summary` | `people.workforce.employment.view` | The company's employment counts (`EmploymentSummary`: total, working, and every status with its count) |
 | `create_employment` | `people.workforce.employment.manage` | Employs a person's affiliation with the company (`NewEmployment`), returning the `Employment` |
+| `update_employment` | `people.workforce.employment.manage` | Changes an employment (`EmploymentChange`, fenced on the version the caller read), returning the `Employment` |
+| `self_employee` | none | The working employee the signed-in account is linked to in the company (`SelfEmployee`), resolved now; else `NotLinked` |
+| `authorize_self` | the self-service capability given | `authorize`, then `self_employee` |
+| `lock_self_employee` | the self-service capability given | The same inside the caller's mutation transaction, with the employment row locked and the link proved again under the lock |
+| `with_self_employee_lock` | the self-service capability given | Opens a mutation transaction for the caller's action, takes `lock_self_employee`, runs the caller's write and commits |
+| `positions` | none | One page of the company's positions through the `people/organisation.positions` port (`PositionScan` → `PositionPage`); `Unavailable` while Organisation is not mounted |
+| `positions_available` | | Whether a mounted module answers that port, for a page that withholds a control |
 | `employee_statuses` | | The five statuses: `pending`, `probation`, `active`, `inactive`, `terminated` |
 
 Every read exposes only a live company of the scope's tenant: a missing,
@@ -102,6 +111,46 @@ Bilimbi; an administrator grants the settings key:
 The Authz domain is `people` ("People domain modules"); every People
 module's keys live under it. `view` and `manage` are verbs Base declares.
 
+### Self-service
+
+Self-service operations act on the employee the login account is linked
+to *now*, never on an employee a page resolved earlier. Bilimbi read the
+link from Core User's `employee_id`; Bilibi's account links a Person and an
+affiliation (`users.affiliation_id`, sealed into `Scope::actor().affiliation()`
+at every authentication), and the employment holding that affiliation is
+the account's employee.
+
+- `self_employee(scope, company_id)` re-proves the account through Base
+  Tenancy's `Authentication::reprove` on this call (the live link, the
+  impersonator kept), reads the affiliation facet from that fresh scope and
+  finds the employment holding it in the company's working statuses. It
+  answers `SelfEmployee` (the employment id, Person and affiliation).
+  `NotLinked` covers a frozen account, an account without an affiliation
+  link, an affiliation of another company and a linked employee who is not
+  a current working employee; a company the scope cannot see is `NotFound`.
+- `authorize_self(scope, company_id, capability)` is `authorize` then
+  `self_employee`, for a self-service read.
+- `lock_self_employee(&tx, scope, company_id, capability)` is the half of
+  Bilimbi's `with_self_employee_lock/4` a sibling facade calls from its own
+  `MutationTransaction`: it authorizes, resolves the employee now, holds the
+  company's writable lock (an archived company is `CompanyArchived`), locks
+  the employment row (`FOR NO KEY UPDATE`, the lock `update_employment` and
+  the other self-service writes wait on), then proves the link and the
+  working status again under the lock; a link that changed in between is
+  `NotLinked`. Take it before the sibling's own row locks: the order is
+  Company → Employment → the sibling's rows.
+- `with_self_employee_lock(scope, company_id, capability, action, write)`
+  opens the transaction itself for the caller's audited action
+  (`people.<module>.<verb>`), takes `lock_self_employee`, calls `write(&mut
+  tx, &SelfEmployee)` and commits what it returns; an error rolls everything
+  back. `write` records its rows through `tx.mutate` as every People write
+  does, and returns a boxed `Send` future (`SelfWrite<'_, T>`), the same
+  shape `MutationTransaction::mutate` takes.
+
+An account unlinked, relinked or frozen while a page stays connected is
+refused on its very next self-service call, and a self-service write that
+lost the link between resolving and locking rolls back.
+
 ## Employment records
 
 People owns employee numbers, employment types, statuses, employment start
@@ -111,41 +160,118 @@ id is the employee id every other People table keys on. It references the
 Core Person (`person_id`) and that person's affiliation with the employer
 (`affiliation_id`); the employer company is the affiliation's company,
 which the scoped foreign key into `person_affiliations` keeps true for
-good. The five statuses are the one fixed classification; employment types
+good. The five statuses are the one fixed classification. Employment types
 are a company's reference data (the `employment_type` kind of
-`people/reference_data`, which PD1 adds), kept here as text.
+`people/reference_data`), kept here as trimmed text of at most 255
+characters: Reference Data depends on Workforce, so Workforce cannot read
+that kind back, and the Employees page (`people/employee_workspace`), which
+depends on both, offers and checks the kind's entries before it calls this
+facade.
 
-`create_employment` takes the sealed scope, the explicit company and a
-`NewEmployment` (person, affiliation, number, type, status, optional dates,
-supervisor, department, metadata). It authorizes
-`people.workforce.employment.manage` for the company, then inside its
-mutation transaction holds the company's writable lock (an archived company
-is `CompanyArchived`), takes the Affiliation owner's proof of the
-affiliation under the owner's locks and checks it names this person and
-this company (`AffiliationMismatch`), refuses an agent Person (`NotHuman`:
-employees are humans) and an affiliation already employed
-(`DuplicateAffiliation`), and reports as `Invalid` field errors, in
-Bilimbi's words, a blank or overlong number or type ("can't be blank",
-"should be at most 255 character(s)"), an unknown status ("is invalid"), an
-end before the start ("must be on or after employment start"), a taken
-number ("has already been taken") and a supervisor who is not an employment
-of the company ("is invalid"). The row is recorded through
-`MutationBoundary` as a created `people_workforce_employment` change. A
-missing grant is `Unauthorized`; a company the scope cannot see is
-`NotFound`.
+### `create_employment`
 
-**Interim proof.** The port plan's employment proof is Core Affiliation's
-`lock_for_employment_at` (Platform row PP2): the named company must be a
-live company of the tenant the actor may target, the affiliation linked and
-of that company, the Person not retired or system. The pinned Platform does
-not carry it yet, so `create_employment` takes
-`AffiliationService::lock_for_account_binding`, which proves the same
-person, company and link under the same owner locks (Company → Person →
-Affiliation) and refuses an unlinked affiliation, a retired or system
-Person and an archived company; the actor's reach over the company is what
-`authorize` already proved. It needs the owner's `admin.affiliation.prove`
-grant, which the Tenant Owner holds. PW1 replaces it with the PP2 proof and
-adds `update_employment` (version-fenced).
+Takes the sealed scope, the explicit company and a `NewEmployment` (person,
+affiliation, number, type, status, optional dates, supervisor, department,
+metadata). It authorizes `people.workforce.employment.manage` for the
+company and validates the shape, then inside its mutation transaction:
+
+1. classifies an archived company as `CompanyArchived` (a read, before any
+   lock, because the proof answers every refusal with one word);
+2. takes the Affiliation owner's employment proof at this company,
+   `AffiliationService::lock_for_employment_at(tx, scope, affiliation,
+   company)` (Platform row PP2), which locks in the global order tenant →
+   Company → Person → Affiliation and refuses a company outside the actor's
+   reach, an archived company, an affiliation of another company, an
+   unlinked affiliation and a retired or system Person (`Unauthorized`; a
+   missing or other-tenant company is `NotFound`); it needs the owner's
+   `admin.affiliation.prove`, which the Tenant Owner holds;
+3. checks the proof names this person (`AffiliationMismatch`) and locks the
+   Person to refuse an agent (`NotHuman`: employees are humans);
+4. holds the company's writable lock explicitly, the lock every People
+   write holds (already taken by the proof, so it never waits);
+5. decides the refusals with plain reads: an affiliation already employed
+   (`DuplicateAffiliation`) and, as `Invalid` field errors in Bilimbi's
+   words, a blank or overlong number or type ("can't be blank", "should be
+   at most 255 character(s)"), an unknown status ("is invalid"), an end
+   before the start ("must be on or after employment start"), a taken number
+   ("has already been taken"), a supervisor who is not an employment of the
+   company ("is invalid") or not a working one ("must be a working employee
+   of the company") and a department that is not one of the company's ("is
+   invalid");
+6. inserts through `MutationBoundary`, recorded as a created
+   `people_workforce_employment` change.
+
+A missing grant is `Unauthorized`; a company the scope cannot see is
+`NotFound`. The proof's sentences are the port's: Bilimbi's Core Employee
+form had no supervisor or department rule beyond the foreign key.
+
+### `update_employment`
+
+Takes the scope, the company, the employee id and an `EmploymentChange`:
+`version`, the row version the caller read, and for the number, type,
+status, dates, supervisor, department and metadata either `None` (keep) or
+`Some(value)`; the nullable facts take `Some(None)` to clear. The person and
+affiliation never change (an employment at another company is a new
+employment). It authorizes `people.workforce.employment.manage`, then
+inside its mutation transaction holds the company's writable lock, locks the
+row (`FOR NO KEY UPDATE`; another company or missing is `NotFound`), refuses
+a version that moved (`Stale`: "The record changed. Reload before saving"),
+validates the row as it will be (the field errors above, plus "cannot be the
+employee themselves" and, for a supervisor who reports to this employee
+directly or through others, "would create a reporting cycle"), and updates
+through `MutationBoundary` with `version + 1`, recorded as an updated change
+with the old and new values. Ending an employment is a change to the status
+`terminated` with the last day as `employment_end`; the row stays, readable
+through `employment` and counted by `employment_summary`, and leaves the
+working-staff reads.
+
+### Positions
+
+`positions(scope, company_id, &PositionScan { as_of, cursor, page_size })`
+is Bilimbi's `positions/4` with `cursor:`, served by Organisation through
+the port `people/organisation.positions` (the provider is
+`people/organisation`; Bilimbi registered a reader at application start).
+Workforce checks the live company, then calls the port on its own client
+with the caller's scope; the provider checks its own rules. `PositionPage`
+carries `positions`, `next_cursor` (`None` after the last page) and
+`high_water_id`. Start with `PositionScan::from_start(as_of)` and continue
+with `continued(next_cursor)` and the same company and day until the cursor
+is `None`; only after reading every page may a consumer treat ids at or
+below `high_water_id` it did not see as gone, and ids above it wait for the
+next scan. Page size defaults to 50 and accepts 1 to 100 (`InvalidOptions`
+otherwise); a malformed cursor or one of another tenant, company or day is
+`InvalidCursor`; no mounted provider is `Unavailable`, and
+`positions_available()` says so beforehand. Mounting People without
+Organisation is a valid composition: the scan is simply unavailable.
+
+The documented shape, which Organisation answers with its own serde types:
+
+```json
+request  {"company_id": 1, "as_of": "2026-10-22", "cursor": null, "page_size": 50}
+answer   {"positions": [{
+             "reference": {"source_id": "people/native", "type": "position", "stable_id": "7"},
+             "company_reference": {"source_id": "people/native", "type": "company", "stable_id": "1"},
+             "platform_company_id": 1, "workforce_company_id": 1,
+             "code": "OPS-LEAD",
+             "parent_reference": {"source_id": "people/native", "type": "position", "stable_id": "3"},
+             "title": "Operations lead", "version": 2,
+             "assignments": [{
+                 "reference": {"source_id": "people/native", "type": "assignment", "stable_id": "11"},
+                 "employee_reference": {"source_id": "people/native", "type": "employee", "stable_id": "2"},
+                 "kind": "substantive"}],
+             "assignments_incomplete": false,
+             "vacant": false}],
+          "next_cursor": "MTox…", "high_water_id": 7}
+```
+
+`parent_reference`, `title` and `version` are null for a root position or
+a day before any version; `assignments` lists the working holders in effect
+on the day (`assignments_incomplete` when the page's holders were cut
+short); `vacant` is true when no substantive holder occupies it. The
+request's `company_id` is a live company Workforce already proved;
+`as_of` is an ISO date; `cursor` is the opaque string of the previous page
+or null; `page_size` is 1 to 100. The provider answers `Invalid` for a
+cursor it does not accept.
 
 ## Working statuses
 
@@ -155,9 +281,10 @@ adds `update_employment` (version-fenced).
 non-empty list of distinct statuses among the five; `put_working_statuses`
 stores it in canonical order. Only employees in the company's working
 statuses are exposed by the working-staff reads, both as employees and as
-supervisor references. Operators holding the settings capability edit it
-per company at `/people/workforce/settings` once PW2 lands the page; until
-then through the Settings editor.
+supervisor references, resolved as self-employees, and accepted as
+supervisors. Operators holding the settings capability edit it per company
+at `/people/workforce/settings` once PW2 lands the page; until then through
+the Settings editor.
 
 ## Database
 
@@ -173,20 +300,24 @@ then through the Settings editor.
 | `status` | one of the five (check) |
 | `employment_start`, `employment_end` | dates, end on or after start (check) |
 | `supervisor_employment_id` | `(supervisor, company_id)` references an employment of the same company; never the row itself (check) |
-| `department_id` | `(tenant_id, department_id)` references `company_departments` |
+| `department_id` | `(tenant_id, department_id)` references `company_departments`; the facade also requires the company's own department |
 | `metadata` | jsonb |
-| `version` | ≥ 1, for the version fence of PW1's `update_employment` |
+| `version` | ≥ 1, moved on by every `update_employment` |
 | `inserted_at`, `updated_at` | UTC |
 
 Indexes: `(tenant_id, company_id)`, `(company_id, status)`,
 `(supervisor_employment_id)`, `(tenant_id, person_id)`. Dates are bound and
 read as ISO text (`$n::text::date`, `to_char`): the workspace's
 `tokio-postgres` has no date feature, and a Domain must not turn one on.
+The supervisor chain and the cycle check are recursive queries bounded in
+depth; the row lock is `FOR NO KEY UPDATE`, so reads and foreign-key checks
+from other rows do not wait on it.
 
 ## Dependencies
 
 `base/authz`, `base/database`, `base/module_registry`, `base/party_ids`,
-`base/principal_directory`, `base/settings`, `base/tenancy`,
+`base/ports`, `base/principal_directory`, `base/settings`, `base/tenancy`,
 `core/affiliation`, `core/company`, `core/person`; the Cargo manifest lists
 the same edges. No People sibling: every other People module depends on
-this one.
+this one, and Organisation answers the position scan through a port, not
+an edge.

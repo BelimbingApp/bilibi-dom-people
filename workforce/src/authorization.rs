@@ -1,13 +1,14 @@
 //! Per-operation authorization for People (Bilimbi
 //! `Bilimbi.People.Workforce.Authorization`): the one boundary every People
 //! facade authorizes through, at the public API so pages, jobs and other
-//! adapters share it.
+//! adapters share it, and the signed-in actor's own employee.
 //!
 //! A page rechecks its route capability before acting, and a `can_*` only
-//! decides which controls it renders: an administrator can revoke a grant
-//! while the page stays connected. Every People write, and every read of
-//! private employee facts, therefore calls this module first with the scope
-//! it was handed, so a revocation takes effect on the very next operation.
+//! decides which controls it renders: an administrator can revoke a grant,
+//! or unlink the login account from its employee, while the page stays
+//! connected. Every People write, and every read of private employee facts,
+//! therefore calls this module first with the scope it was handed, so a
+//! revocation takes effect on the very next operation.
 //!
 //! Pass the sealed [`Scope`], never an actor or an actor ID: the actor is
 //! read from the scope the authentication edge sealed. A system principal
@@ -18,13 +19,20 @@
 //! actor: the actor's own company, or any other company of the tenant with
 //! `admin.company.tenant-wide.manage`.
 //!
-//! Self-service (`self_employee`, `authorize_self`, `with_self_employee_lock`)
-//! lands with the employment proof in PW1.
-use crate::{CompanySummary, Result, WorkforceError};
+//! Self-service operations act on the employee the login account is linked
+//! to *now*. [`Workforce::self_employee`] re-proves the account through
+//! Base Tenancy on every call and reads `Scope::actor().affiliation()` from
+//! that fresh scope (Bilimbi read `User.get_user/3`'s employee link), and
+//! [`Workforce::lock_self_employee`] proves it again inside the transaction
+//! that holds the employment row's lock, so a self-service write cannot
+//! commit for an employee the account no longer belongs to.
+use crate::{CompanySummary, Result, Workforce, WorkforceError};
 use bilibi_company::organisation::{self, Directory};
-use bilibi_database::Error;
+use bilibi_database::{Error, MutationTransaction};
 use bilibi_party_ids::OrganisationId;
 use bilibi_tenancy::{OrganisationDirectory, ProofClient, Scope};
+use serde::Serialize;
+use std::{future::Future, pin::Pin};
 use tokio_postgres::GenericClient;
 
 /// Authorizes the scope's signed-in actor for one capability in one company.
@@ -127,5 +135,162 @@ fn refusal(error: Error) -> WorkforceError {
         Error::Forbidden | Error::Unauthorized => WorkforceError::Unauthorized,
         Error::NotFound => WorkforceError::NotFound,
         other => WorkforceError::Failed(other),
+    }
+}
+
+/// The signed-in actor's own employee in one company (Bilimbi's
+/// `%{actor, employee_id}` self): the employment id every People table keys
+/// on, with the Core Person and affiliation it holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SelfEmployee {
+    pub employee_id: i64,
+    pub person_id: i64,
+    pub affiliation_id: i64,
+}
+
+/// A self-service write: the caller's work inside the transaction that
+/// holds the employment lock (see [`Workforce::with_self_employee_lock`]).
+pub type SelfWrite<'b, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'b>>;
+
+impl Workforce {
+    /// The working employee the signed-in account is linked to in this
+    /// company, resolved now (Bilimbi `self_employee/2`): the account is
+    /// re-proved through Base Tenancy on this call, its affiliation facet
+    /// read from the fresh scope, and the employment holding that
+    /// affiliation in this company found in the company's working statuses.
+    /// `NotLinked` covers a frozen account, an account without an
+    /// affiliation link, an affiliation of another company, and a linked
+    /// employee who is not a current working employee; a company the scope
+    /// cannot see is `NotFound`.
+    pub async fn self_employee(&self, scope: &Scope, company_id: i64) -> Result<SelfEmployee> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        self.self_employee_on(&**client, scope, company_id).await
+    }
+
+    /// Authorizes the self-service capability for the company, then resolves
+    /// the actor's own employee (Bilimbi `authorize_self/3`).
+    pub async fn authorize_self(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        capability: &str,
+    ) -> Result<SelfEmployee> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        authorize(&**client, scope, company_id, capability).await?;
+        self.self_employee_on(&**client, scope, company_id).await
+    }
+
+    /// Proves the actor's own employee inside the caller's mutation
+    /// transaction (the half of Bilimbi `with_self_employee_lock/4` a sibling
+    /// facade calls from its own transaction): authorizes the capability,
+    /// resolves the linked employee now, holds the company's writable lock
+    /// (an archived company is `CompanyArchived`), locks that employment row
+    /// (`FOR NO KEY UPDATE`, the lock account relinking and employment
+    /// changes wait on), then re-proves the account's link and the working
+    /// status under the lock. A link that changed between the resolution and
+    /// the lock is `NotLinked`. Call it before the sibling's own row locks;
+    /// the lock order is Company → Employment → the sibling's rows.
+    pub async fn lock_self_employee(
+        &self,
+        tx: &MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        capability: &str,
+    ) -> Result<SelfEmployee> {
+        authorize(tx.sql(), scope, company_id, capability).await?;
+        let me = self.self_employee_on(tx.sql(), scope, company_id).await?;
+        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, me.employee_id)
+            .await?
+            .ok_or(WorkforceError::NotLinked)?;
+        // The link and the working status, proved again under the lock.
+        let fresh = self.fresh_affiliation(tx.sql(), scope).await?;
+        let statuses = self
+            .working_statuses_of(tx.sql(), scope, company_id)
+            .await?;
+        if fresh != locked.affiliation_id || !statuses.contains(&locked.status) {
+            return Err(WorkforceError::NotLinked);
+        }
+        Ok(me)
+    }
+
+    /// Runs a self-service write under the actor's own employment lock
+    /// (Bilimbi `with_self_employee_lock/4`): opens a mutation transaction
+    /// named `action` (the caller's audited action, `people.<module>.<verb>`),
+    /// takes [`Workforce::lock_self_employee`], calls `write` with the
+    /// transaction and the proven employee, and commits what it returns; an
+    /// error rolls everything back. `write` records its rows through
+    /// `tx.mutate`, as every People write does.
+    pub async fn with_self_employee_lock<T, F>(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        capability: &str,
+        action: &str,
+        write: F,
+    ) -> Result<T>
+    where
+        F: for<'b, 'c> FnOnce(
+            &'b mut MutationTransaction<'c>,
+            &'b SelfEmployee,
+        ) -> SelfWrite<'b, T>,
+    {
+        let mut client = self.db.get().await.map_err(Error::from)?;
+        let mut tx = self
+            .mutations
+            .begin(&mut client, scope.mutation_context(action))
+            .await?;
+        let me = self
+            .lock_self_employee(&tx, scope, company_id, capability)
+            .await?;
+        let value = write(&mut tx, &me).await?;
+        tx.commit().await?;
+        Ok(value)
+    }
+
+    /// The account's affiliation facet, re-proved now on this client.
+    async fn fresh_affiliation(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+    ) -> Result<i64> {
+        let fresh = self
+            .authentication
+            .reprove(client, scope)
+            .await
+            .map_err(|_| WorkforceError::NotLinked)?;
+        fresh
+            .actor()
+            .affiliation()
+            .map(|affiliation| affiliation.get())
+            .ok_or(WorkforceError::NotLinked)
+    }
+
+    pub(crate) async fn self_employee_on(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<SelfEmployee> {
+        let company = match summary(client, scope, company_id).await? {
+            Some(company) if !company.archived => company,
+            _ => return Err(WorkforceError::NotFound),
+        };
+        let affiliation = self.fresh_affiliation(client, scope).await?;
+        let statuses = self.working_statuses_of(client, scope, company.id).await?;
+        let row = crate::employments::by_affiliation(
+            client,
+            scope.tenant(),
+            company.id,
+            affiliation,
+            &statuses,
+        )
+        .await?
+        .ok_or(WorkforceError::NotLinked)?;
+        Ok(SelfEmployee {
+            employee_id: row.employment.id,
+            person_id: row.employment.person_id,
+            affiliation_id: row.employment.affiliation_id,
+        })
     }
 }
