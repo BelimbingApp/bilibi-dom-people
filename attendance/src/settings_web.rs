@@ -162,6 +162,7 @@ struct State {
     rows: Vec<FlexRow>,
     available: bool,
     allowances: bool,
+    instance: Option<bilibi_system::Instance>,
     columns: ListColumns,
     list: ListState,
     form: HashMap<String, String>,
@@ -199,6 +200,7 @@ impl State {
             rows: vec![],
             available: false,
             allowances: false,
+            instance: None,
             columns: ListColumns::mount(&format!("attendance-{}", area.key()), area.columns())
                 .map_err(|_| Error::Internal)?,
             list: ListState::parse(query, spec()?).map_err(|_| Error::Internal)?,
@@ -232,6 +234,8 @@ impl State {
         } else {
             false
         };
+        self.instance =
+            Some(bilibi_system::Instance::resolve(&self.core.attendance.settings, &**c).await?);
         drop(c);
         if let Some(company) = self.company {
             match self.read(scope, company).await {
@@ -946,6 +950,10 @@ impl State {
                 Pending::Retire(_) => "This cannot be undone.".into(),
                 _ => String::new(),
             };
+            // ConfirmDialog has no banner slot; use System's authoritative notice in its detail.
+            let detail = self.instance.as_ref().map_or(detail.clone(), |instance| {
+                format!("{} {detail}", instance.notice())
+            });
             let (consequence, confirm) = match pending {
                 Pending::Status(_, s) if s == "active" => ("Reactivate this record?", "Reactivate"),
                 Pending::End(_, _) => ("End this allowance rule on the selected date?", "End"),

@@ -71,7 +71,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/menu", "base/party_ids", "base/settings", "base/tenancy", "base/ui",
+            "base/menu", "base/party_ids", "base/settings", "base/system", "base/tenancy", "base/ui",
             "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
