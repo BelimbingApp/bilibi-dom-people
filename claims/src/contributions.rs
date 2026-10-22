@@ -74,7 +74,7 @@ inventory::submit! {
             },
         }, crate::downloads::SERVICE_DEFINITION, Service {
             id: "people/claims.operations_pages",
-            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::operations_web::Pages::new(
                 services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?,
             ))))),
         }],
