@@ -101,7 +101,7 @@ impl From<WorkforceError> for ProgressionError {
             WorkforceError::NotLinked => Self::EmployeeUnavailable,
             WorkforceError::CompanyArchived => Self::CompanyArchived,
             WorkforceError::Failed(error) => error.into(),
-            _ => Self::EmployeeUnavailable,
+            _ => Self::NotFound,
         }
     }
 }
