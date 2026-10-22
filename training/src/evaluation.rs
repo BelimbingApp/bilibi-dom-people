@@ -481,13 +481,16 @@ impl Training {
         reason: &str,
     ) -> Result<EvaluationAnswer> {
         let mut client = self.db.get().await.map_err(Error::from)?;
-        if self
+        match self
             .evaluation_task_auth(&**client, scope, company, EvaluationKind::Evaluation)
             .await
-            .is_err()
         {
-            self.evaluation_task_auth(&**client, scope, company, EvaluationKind::Effectiveness)
-                .await?;
+            Ok(()) => {}
+            Err(TrainingError::Unauthorized) => {
+                self.evaluation_task_auth(&**client, scope, company, EvaluationKind::Effectiveness)
+                    .await?
+            }
+            Err(error) => return Err(error),
         }
         let mut tx = self
             .mutations
