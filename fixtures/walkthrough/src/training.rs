@@ -8,8 +8,9 @@
 //! `Asia/Kuala_Lumpur`) with its bounds and its window refusals, shows how
 //! `day_start` resolves a midnight gap and a midnight overlap, and ends with
 //! PostgreSQL refusing what the facade never attempts.
-use crate::{describe, refused, COMPANY, MANAGER, OTHER_COMPANY, OTHER_TENANT_COMPANY};
+use crate::{describe, refused, COMPANY, MANAGER, OTHER_TENANT_COMPANY};
 use bilibi_authz::grants::Grants;
+use bilibi_company::{CompanyService, CreateOutcome, NewCompany};
 use bilibi_database::{Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_training::{
@@ -103,6 +104,27 @@ pub(crate) async fn run(
         training.allowed(viewer, COMPANY, SESSIONS_MANAGE).await
     );
 
+    // Other slices may archive the shared second company. Own this cross-company
+    // fixture so the catalog proof stays independent of their final state.
+    let companies = services.get::<CompanyService>(bilibi_company::SERVICE)?;
+    let other_company = match companies
+        .create_company(
+            admin,
+            &NewCompany {
+                name: "Training scope proof".into(),
+                code: Some("pt1-scope-proof".into()),
+                ..NewCompany::default()
+            },
+        )
+        .await?
+    {
+        CreateOutcome::Created(company) => company.id,
+        CreateOutcome::Refused(errors) => {
+            println!("Training scope company refused: {errors:?}");
+            return Err(Error::Internal);
+        }
+    };
+
     // Courses, and the refusals a form shows.
     let safety = show(
         "manager adds course safety-101",
@@ -191,11 +213,11 @@ pub(crate) async fn run(
             .await,
     );
     let onboarding = show(
-        &format!("manager adds course onboarding in company {OTHER_COMPANY} (tenant-wide reach)"),
+        &format!("manager adds course onboarding in company {other_company} (tenant-wide reach)"),
         training
             .create_course(
                 manager,
-                OTHER_COMPANY,
+                other_company,
                 &NewCourse {
                     code: "onboarding".into(),
                     name: "Onboarding".into(),
@@ -261,7 +283,7 @@ pub(crate) async fn run(
             .await,
     );
     show(
-        &format!("manager updates the company {OTHER_COMPANY} course from company {COMPANY}"),
+        &format!("manager updates the company {other_company} course from company {COMPANY}"),
         training
             .set_course_active(manager, COMPANY, onboarding.id, false)
             .await,
@@ -328,7 +350,7 @@ pub(crate) async fn run(
     );
     show(
         &format!(
-            "manager adds an event in company {COMPANY} for the company {OTHER_COMPANY} course"
+            "manager adds an event in company {COMPANY} for the company {other_company} course"
         ),
         training
             .create_event(
@@ -737,7 +759,7 @@ pub(crate) async fn run(
             "UPDATE people_training_session_runs SET capacity = 0 WHERE event_id = $1",
         ),
         (
-            "SQL inserts a company 001 event for the company 002 course",
+            "SQL inserts an event for another company's course",
             "INSERT INTO people_training_events (tenant_id, company_id, course_id, name, capacity, actor_user_id) \
              SELECT tenant_id, company_id, (SELECT id FROM people_training_courses WHERE code = 'onboarding'), 'Cross-company', 5, actor_user_id FROM people_training_events WHERE id = $1",
         ),
