@@ -905,6 +905,17 @@ pub async fn run(url: &str) -> Result<()> {
     // PT1: the Training catalog, under the manager's and viewer's scopes.
     training::run(&services, &client, &admin, &manager, &viewer).await?;
 
+    // PE2: independent detail-page proof block, defined at the end.
+    employee_detail::run(
+        &services,
+        &client,
+        &admin,
+        &manager,
+        &viewer,
+        staff_employment.id,
+    )
+    .await?;
+
     // PT2: the appended participation/evidence proof block.
     participation::run(
         &services,
@@ -935,6 +946,8 @@ pub async fn run(url: &str) -> Result<()> {
         },
     )
     .await?;
+    // PT8: independent Learning page browser setup after prior unlink proofs.
+    training_learning_pages::run(&services, &admin, &manager, staff_employment.id).await?;
 
     println!(
         "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test was linked to Sam Staff's affiliation with Company 001 and unlinked again at the end of the self-service steps.",
@@ -3747,6 +3760,8 @@ pub async fn attendance_workflows(url: &str) -> Result<()> {
     attendance_workflows::run(url).await
 }
 
+// Employee detail (PE2): versioned inline edits and live review confirmation.
+mod employee_detail;
 // PC3: browser records and two-session checks, run after the default fixture.
 mod claims_page;
 /// Adds My claims browser records, or changes the fixture staff account's access.
@@ -3772,5 +3787,249 @@ pub async fn leave_pages(url: &str) -> Result<()> {
     leave_pages::run(url).await
 }
 
+// PA4: browser proof records for My attendance, after the main walkthrough.
+/// Creates self-service attendance records through the facades on the disposable fixture database.
+/// `mode` also changes the policy while a browser page stays open, to prove current authority.
+pub async fn my_attendance(url: &str, mode: &str) -> Result<()> {
+    use bilibi_people_attendance::{NewAdjustment, RosterValue, ROSTER_MANAGE};
+    let db = pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db.clone()))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
+    let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    let workforce = services.get::<Workforce>(SERVICE)?;
+    let attendance = services.get::<Attendance>(bilibi_people_attendance::SERVICE)?;
+    let c = db.get().await?;
+    let admin = authentication
+        .authenticate(&**c, TENANT, ADMIN, "walkthrough".into())
+        .await?;
+    if mode == "unlink" {
+        services
+            .get::<UserService>("core/user.accounts")?
+            .unlink(&admin, MANAGER)
+            .await
+            .map_err(|_| Error::Internal)?;
+        return Ok(());
+    }
+    if mode == "link" || mode == "link-staff" {
+        let user = if mode == "link" { MANAGER } else { STAFF };
+        let number = if mode == "link" { "E-001" } else { "E-002" };
+        let employees = workforce
+            .employees(&admin, COMPANY)
+            .await
+            .map_err(|_| Error::Internal)?
+            .require_current()
+            .map_err(|_| Error::Internal)?;
+        let id = employees
+            .iter()
+            .find(|e| e.employee_number == number)
+            .ok_or(Error::NotFound)?
+            .reference
+            .stable_id
+            .parse()
+            .map_err(|_| Error::Invalid)?;
+        let employment = workforce
+            .employment(&admin, COMPANY, id)
+            .await
+            .map_err(|_| Error::Internal)?
+            .require_current()
+            .map_err(|_| Error::Internal)?;
+        let users = services.get::<UserService>("core/user.accounts")?;
+        users
+            .link_person(
+                &admin,
+                user,
+                PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        users
+            .link_affiliation(
+                &admin,
+                user,
+                bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
+                    .map_err(|_| Error::Invalid)?,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        return Ok(());
+    }
+    if mode == "revoke" || mode == "restore" {
+        grants
+            .set_direct(&admin, MANAGER, SELF_VIEW, Some(mode == "restore"))
+            .await?;
+        return Ok(());
+    }
+    for (user, key) in [
+        (MANAGER, SELF_VIEW),
+        (STAFF, SELF_VIEW),
+        (VIEWER, SELF_VIEW),
+        (MANAGER, RULES_MANAGE),
+        (MANAGER, ROSTER_MANAGE),
+    ] {
+        grants.set_direct(&admin, user, key, Some(true)).await?;
+    }
+    let manager = authentication
+        .authenticate(&**c, TENANT, MANAGER, "walkthrough".into())
+        .await?;
+    let required = mode == "location";
+    attendance
+        .put_rules(
+            &manager,
+            COMPANY,
+            &RuleChanges {
+                timezone: Some("Etc/UTC".into()),
+                self_clock_enabled: Some(mode != "off"),
+                location_required: Some(required),
+                ..Default::default()
+            },
+        )
+        .await
+        .map_err(|e| {
+            eprintln!("PA4 rules: {e}");
+            Error::Internal
+        })?;
+    if mode != "seed" {
+        return Ok(());
+    }
+    let employee = workforce
+        .authorize_self(&manager, COMPANY, SELF_VIEW)
+        .await
+        .map_err(|_| Error::Internal)?
+        .employee_id;
+    let today = Timestamp::now().to_zoned(jiff::tz::TimeZone::UTC).date();
+    let shift = attendance
+        .create_shift_template(
+            &manager,
+            COMPANY,
+            &NewShiftTemplate {
+                code: "PA4-SHIFT".into(),
+                name: "Walkthrough shift".into(),
+                starts_at: time(8, 0, 0, 0),
+                ends_at: time(17, 0, 0, 0),
+                break_minutes: 60,
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let tomorrow = today
+        .checked_add(jiff::Span::new().days(1))
+        .map_err(|_| Error::Invalid)?;
+    attendance
+        .plan_roster_entry(
+            &manager,
+            COMPANY,
+            employee,
+            today,
+            RosterValue::Shift(shift.id),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    attendance
+        .plan_roster_entry(&manager, COMPANY, employee, tomorrow, RosterValue::Rest)
+        .await
+        .map_err(|_| Error::Internal)?;
+    attendance
+        .publish_roster(&manager, COMPANY, today, tomorrow)
+        .await
+        .map_err(|_| Error::Internal)?;
+    // This replacement remains a draft, so the browser must still show the published rest day.
+    attendance
+        .plan_roster_entry(
+            &manager,
+            COMPANY,
+            employee,
+            tomorrow,
+            RosterValue::Shift(shift.id),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let far = today
+        .checked_add(jiff::Span::new().days(14))
+        .map_err(|_| Error::Invalid)?;
+    attendance
+        .plan_roster_entry(
+            &manager,
+            COMPANY,
+            employee,
+            far,
+            RosterValue::Shift(shift.id),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    attendance
+        .publish_roster(&manager, COMPANY, far, far)
+        .await
+        .map_err(|_| Error::Internal)?;
+    // Timestamp arithmetic uses duration units; calendar days belong to Date above.
+    for days in 1..=32 {
+        let at = Timestamp::now()
+            .checked_sub(jiff::Span::new().hours(days * 24))
+            .map_err(|_| Error::Invalid)?;
+        attendance
+            .record_clock(
+                &manager,
+                COMPANY,
+                employee,
+                &ClockInput::new(format!("pa4-day-{days}"), EventType::In, "walkthrough", at),
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+    }
+    let at = Timestamp::now()
+        .checked_sub(jiff::Span::new().hours(1))
+        .map_err(|_| Error::Invalid)?;
+    attendance
+        .submit_adjustment(
+            &manager,
+            COMPANY,
+            &NewAdjustment {
+                request_key: "pa4-browser-initial".into(),
+                event_type: EventType::Out,
+                local_at: at
+                    .to_zoned(jiff::tz::TimeZone::UTC)
+                    .strftime("%Y-%m-%dT%H:%M")
+                    .to_string(),
+                reason: "Walkthrough missed clock event".into(),
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    attendance
+        .create_clocking_location(
+            &manager,
+            COMPANY,
+            &NewClockingLocation {
+                code: "PA4-LOCATION".into(),
+                name: "Walkthrough location".into(),
+                latitude: decimal("1"),
+                longitude: decimal("1"),
+                radius_meters: 100,
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    println!("PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request.");
+    Ok(())
+}
 // Skills reassessments and development actions (slice PK3).
 mod skill_actions;
+// PT8: Learning browser setup, after PT3 account-unlink proofs.
+mod training_learning_pages;
+
+/// PT8: controls a disposable browser proof while its Learning page stays mounted.
+pub async fn training_learning_control(url: &str, action: &str) -> Result<()> {
+    training_learning_pages::control(url, action).await
+}
+
+// PM1: separate binary so the performance proof starts from its own empty DB.
+mod performance;
+pub use performance::run as performance;
