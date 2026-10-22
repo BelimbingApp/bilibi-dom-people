@@ -6,17 +6,39 @@ use bilibi_company::{organisation, WriteError};
 use bilibi_database::MutationTransaction;
 use bilibi_people_workforce::{Company, Workforce};
 use bilibi_tenancy::Scope;
+use tokio_postgres::GenericClient;
 
 /// A live company of the scope's tenant, as the workforce names it now.
 pub(crate) async fn current_company(
     workforce: &Workforce,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
 ) -> Result<Company> {
     Ok(workforce
-        .company(scope, company_id)
+        .company_on(client, scope, company_id)
         .await?
         .require_current()?)
+}
+
+/// Proves membership on the caller's connection, without resolving names
+/// or contacts or borrowing a second pool connection under a company lock.
+pub(crate) async fn require_employee(
+    workforce: &Workforce,
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+    employee_id: i64,
+) -> Result<()> {
+    let ids = workforce
+        .working_employee_ids_on(client, scope, company_id, &[employee_id])
+        .await?
+        .require_current()?;
+    if ids.contains(&employee_id) {
+        Ok(())
+    } else {
+        Err(AttendanceError::NotFound)
+    }
 }
 
 /// The guard every attendance write begins with: the company's writable

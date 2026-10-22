@@ -329,7 +329,3 @@ an edge.
 ## Assignment directory
 
 `employees_at_any_status(scope, company_id, employee_ids)` returns directory summaries for company assignment pickers. Pass `None` for the company list, or at most 1,000 positive IDs to validate members. It includes pending, probation, active, inactive and terminated employments. Names and work contacts still come through Core; private employment fields stay behind `employment` and its capability. Claims uses this read so assignments can cover employees before or after their working period. `employees`, `employees_by_ids` and `employee` continue to return only working staff.
-
-## Proving an employee inside another module's transaction
-
-A write holding the company lock calls `Workforce::require_working_employee(client, scope, company_id, employee_id)` on that transaction. It uses the same company and working-status rules as `employee`, returns `NotFound` for a nonworking or missing employee, and resolves no names or contacts. It borrows no additional pool connection, so queued company writes cannot exhaust the pool while a writer waits for its employee proof. This is a capability-free membership proof; the caller still authorizes its own workflow.

@@ -150,8 +150,9 @@ impl Attendance {
     /// clock event and a self-service page both read them; the company must
     /// be a live company of the scope's tenant.
     pub async fn rules(&self, scope: &Scope, company_id: i64) -> Result<Rules> {
-        let company = access::current_company(&self.workforce, scope, company_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
+        let company =
+            access::current_company(&self.workforce, &**client, scope, company_id).await?;
         rules::read(&**client, &self.settings, scope, &company).await
     }
 
@@ -166,7 +167,6 @@ impl Attendance {
         company_id: i64,
         changes: &RuleChanges,
     ) -> Result<Rules> {
-        let company = access::current_company(&self.workforce, scope, company_id).await?;
         let mut client = self.db.get().await.map_err(Error::from)?;
         bilibi_people_workforce::authorization::authorize(
             &**client,
@@ -176,6 +176,8 @@ impl Attendance {
         )
         .await?;
         rules::validate(changes)?;
+        let company =
+            access::current_company(&self.workforce, &**client, scope, company_id).await?;
         if !changes.is_empty() {
             let mut tx = self
                 .mutations
@@ -223,7 +225,6 @@ impl Attendance {
         employee_id: i64,
         input: &ClockInput,
     ) -> Result<ClockEvent> {
-        let company = access::current_company(&self.workforce, scope, company_id).await?;
         let mut client = self.db.get().await.map_err(Error::from)?;
         let mut tx = self
             .mutations
@@ -233,9 +234,8 @@ impl Attendance {
             )
             .await?;
         access::lock_company(&tx, scope, company_id).await?;
-        self.workforce
-            .require_working_employee(tx.sql(), scope, company_id, employee_id)
-            .await?;
+        access::require_employee(&self.workforce, tx.sql(), scope, company_id, employee_id).await?;
+        let company = access::current_company(&self.workforce, tx.sql(), scope, company_id).await?;
         // Resolve policy and active locations after taking the company lock:
         // a queued clock must observe a rule change or retirement ahead of it.
         let rules = rules::read(tx.sql(), &self.settings, scope, &company).await?;
@@ -285,11 +285,12 @@ impl Attendance {
         company_id: i64,
         employee_id: i64,
     ) -> Result<Vec<Day>> {
-        let rules = self.rules(scope, company_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
-        self.workforce
-            .require_working_employee(&**client, scope, company_id, employee_id)
+        access::require_employee(&self.workforce, &**client, scope, company_id, employee_id)
             .await?;
+        let company =
+            access::current_company(&self.workforce, &**client, scope, company_id).await?;
+        let rules = rules::read(&**client, &self.settings, scope, &company).await?;
         clock::days(
             &**client,
             scope,
@@ -307,8 +308,8 @@ impl Attendance {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<ShiftTemplate>> {
-        access::current_company(&self.workforce, scope, company_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
+        access::current_company(&self.workforce, &**client, scope, company_id).await?;
         shifts::list(&**client, scope, company_id).await
     }
 
@@ -386,8 +387,8 @@ impl Attendance {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<ClockingLocation>> {
-        access::current_company(&self.workforce, scope, company_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
+        access::current_company(&self.workforce, &**client, scope, company_id).await?;
         locations::list(&**client, scope, company_id).await
     }
 
