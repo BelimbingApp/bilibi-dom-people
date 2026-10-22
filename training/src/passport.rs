@@ -131,7 +131,7 @@ impl Training {
             .self_employee(scope, company)
             .await
             .map_err(|e| match e {
-                WorkforceError::NotLinked => TrainingError::EmployeeUnavailable,
+                WorkforceError::NotLinked => TrainingError::AttendanceEmployeeUnavailable,
                 other => other.into(),
             })?;
         let read = match audience {
@@ -178,7 +178,7 @@ impl Training {
             .employees
             .into_iter()
             .find(|e| e.reference.stable_id == employee.to_string())
-            .ok_or(TrainingError::OutsideTeam)?;
+            .ok_or(TrainingError::OutsideDirectTeam)?;
         let employee_id = employee
             .reference
             .stable_id

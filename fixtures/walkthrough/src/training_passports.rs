@@ -323,7 +323,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
                 &HashMap::new(),
             )
             .await,
-        TrainingError::OutsideTeam,
+        TrainingError::OutsideDirectTeam,
     )?;
     refused(
         "team passport cannot target self",
@@ -336,7 +336,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
                 &HashMap::new(),
             )
             .await,
-        TrainingError::OutsideTeam,
+        TrainingError::OutsideDirectTeam,
     )?;
     refused(
         "cross-tenant passport",
@@ -694,6 +694,49 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             .await,
         TrainingError::Unauthorized,
     )?;
+    users
+        .link_person(
+            &admin,
+            STAFF,
+            PersonId::new(extra_a.person_id).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            &admin,
+            STAFF,
+            AffiliationId::new(extra_a.affiliation_id).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let relinked = auth
+        .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
+        .await?;
+    refused(
+        "relinked account with fresh scope cannot read former passport",
+        training
+            .read_passport(&relinked, COMPANY, &first_document.id)
+            .await,
+        TrainingError::Unauthorized,
+    )?;
+    refused(
+        "relinked account cannot select former employee",
+        training
+            .passport(
+                &relinked,
+                COMPANY,
+                PassportAudience::SelfService,
+                staff_id,
+                &HashMap::new(),
+            )
+            .await,
+        TrainingError::OutsideDirectTeam,
+    )?;
+    users
+        .unlink(&admin, STAFF)
+        .await
+        .map_err(|_| Error::Internal)?;
     relink().await?;
     let current = workforce
         .employment(&manager, COMPANY, staff_id)
@@ -728,6 +771,37 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             &EmploymentChange {
                 supervisor_employment_id: Some(Some(own)),
                 ..EmploymentChange::at(current.version + 1)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    workforce
+        .update_employment(
+            &manager,
+            COMPANY,
+            staff_id,
+            &EmploymentChange {
+                status: Some("terminated".into()),
+                ..EmploymentChange::at(current.version + 2)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    refused(
+        "nonworking subject loses passport download",
+        training
+            .read_passport(&staff, COMPANY, &first_document.id)
+            .await,
+        TrainingError::Unauthorized,
+    )?;
+    workforce
+        .update_employment(
+            &manager,
+            COMPANY,
+            staff_id,
+            &EmploymentChange {
+                status: Some(current.status.clone()),
+                ..EmploymentChange::at(current.version + 3)
             },
         )
         .await
@@ -815,6 +889,31 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         passport.page.total_entries == 1001
             && passport.page.page == 4
             && passport.page.entries.len() == 101,
+    )?;
+    let unsupported = event(
+        &training,
+        &manager,
+        "pt5-unsupported",
+        "Unsupported \u{4e2d} text",
+    )
+    .await?;
+    let unicode_session =
+        session_for(&training, &manager, unsupported.id, "Renderer refusal").await?;
+    record(
+        &training,
+        &manager,
+        unicode_session.id,
+        extra_b.id,
+        "pt5-unsupported",
+        AttendanceStatus::Confirmed,
+    )
+    .await?;
+    refused(
+        "unsupported PDF text keeps records available",
+        training
+            .generate_passport(&manager, COMPANY, PassportAudience::Team, extra_b.id)
+            .await,
+        TrainingError::UnsupportedPassportText,
     )?;
     println!("PT5 browser downloads: my document=/people/training/records/my/document/{COMPANY}/{}; team document=/people/training/records/team/document/{COMPANY}/{}; my evidence=/people/training/records/my/evidence/{COMPANY}/{}; team evidence=/people/training/records/team/evidence/{COMPANY}/{}",first_document.id,team_document.id,evidence.artifact_id,evidence.artifact_id);
     println!("PT5 proof complete.");
