@@ -153,10 +153,8 @@ impl Table {
     }
     fn render(&self, rows: Vec<FlexRow>, empty: &str) -> Result<Html> {
         let none = rows.is_empty();
-        let mut table = FlexTable::new(&self.columns.id, self.columns.flex_columns(), rows).sorted(
-            self.state.sort_by.as_deref(),
-            self.state.sort_dir.map(|dir| dir.key()),
-        );
+        let mut table = FlexTable::new(&self.columns.id, self.columns.flex_columns(), rows)
+            .sorted(self.state.sort_by.as_deref(), self.state.sort_dir);
         table.event = self.event;
         table.caption = self.caption;
         table.zoom = self.columns.zoom;
@@ -164,7 +162,13 @@ impl Table {
         table.add_query = &self.columns.add_query;
         table.framed = false;
         if none {
-            table.empty = Some(TableEmpty::State(EmptyState::missing(empty, "")));
+            table.empty = Some(TableEmpty::State(EmptyState::missing(empty, "").id(
+                match self.columns.id.as_str() {
+                    "leave-types" => "leave-types-empty",
+                    "leave-policy-versions" => "leave-policies-none",
+                    _ => "leave-carry-skipped-empty",
+                },
+            )));
         }
         render(&table)
     }
@@ -442,7 +446,7 @@ impl Policies {
             "policy[entitlement]",
             "policy[carry_forward_cap]",
         ];
-        let values = keys
+        let values: HashMap<String, String> = keys
             .into_iter()
             .filter_map(|key| {
                 payload
@@ -716,15 +720,15 @@ impl Policies {
             )?
         };
         let state = if company.is_none() {
-            render(&EmptyState::missing(
-                "No active company is available for leave policies.",
-                "",
-            ))?
+            render(
+                &EmptyState::missing("No active company is available for leave policies.", "")
+                    .id("leave-policies-empty"),
+            )?
         } else if self.rules.is_none() {
-            render(&EmptyState::missing(
-                "Leave policies are unavailable for this company.",
-                "",
-            ))?
+            render(
+                &EmptyState::missing("Leave policies are unavailable for this company.", "")
+                    .id("leave-policies-unavailable"),
+            )?
         } else {
             Html::EMPTY
         };
@@ -1098,6 +1102,9 @@ impl Policies {
     }
     fn query(&self) -> HashMap<String, String> {
         let mut query = HashMap::new();
+        for table in [&self.types_table, &self.policies_table, &self.skips_table] {
+            query.extend(table.state.to_params());
+        }
         if let Some(id) = self.company_id {
             query.insert("company_id".into(), id.to_string());
         }
