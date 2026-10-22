@@ -257,6 +257,11 @@ pub(super) async fn run(
         "mounted detail renders employment, work profile and portal access",
     )?;
     prove(
+        body.html
+            .contains(&format!("data-record-id=\"{employee}\"")),
+        "workspace follow announces the employee id rather than the page id",
+    )?;
+    prove(
         state.panels().len() == 3,
         "all three fact sections use shared audit history",
     )?;
