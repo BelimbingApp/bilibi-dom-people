@@ -759,18 +759,18 @@ pub async fn run(url: &str) -> Result<()> {
     claims::run(
         &services,
         &client,
-        claims::Accounts {
+        claims::Context {
             admin: &admin,
             manager: &manager,
             viewer: &viewer,
             contractor: &contractor,
             staff_user: STAFF,
+            tenant: TENANT,
+            company: COMPANY,
+            other_company: OTHER_COMPANY,
+            manager_employment: manager_employment.id,
+            staff_employment: staff_employment.id,
         },
-        TENANT,
-        COMPANY,
-        OTHER_COMPANY,
-        manager_employment.id,
-        staff_employment.id,
     )
     .await?;
 

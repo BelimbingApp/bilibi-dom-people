@@ -109,6 +109,37 @@ async fn member_ids(
     Ok(members)
 }
 
+/// One assignment's member ids, sorted (for a row read outside `list`).
+pub(crate) async fn members_of(
+    client: &impl GenericClient,
+    tenant: i64,
+    company_id: i64,
+    assignment: &mut Assignment,
+) -> Result<()> {
+    let ids = [assignment.id];
+    let types = member_ids(
+        client,
+        tenant,
+        company_id,
+        "people_claim_assignment_types",
+        "claim_type_id",
+        &ids,
+    )
+    .await?;
+    let employees = member_ids(
+        client,
+        tenant,
+        company_id,
+        "people_claim_assignment_employees",
+        "employee_id",
+        &ids,
+    )
+    .await?;
+    assignment.claim_type_ids = types.get(&assignment.id).cloned().unwrap_or_default();
+    assignment.employee_ids = employees.get(&assignment.id).cloned().unwrap_or_default();
+    Ok(())
+}
+
 /// One assignment of the company, locked `FOR UPDATE`, without its members.
 pub(crate) async fn lock(
     client: &impl GenericClient,

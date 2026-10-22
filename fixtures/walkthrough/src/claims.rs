@@ -17,13 +17,20 @@ use jiff::civil::date;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-/// The accounts the Workforce block authenticated, and the one it did not.
-pub(crate) struct Accounts<'a> {
+/// What the Workforce block hands over: the accounts it authenticated, the
+/// staff account it linked, and the employments it created at `company`
+/// (the manager's and Sam Staff's) beside the contractor's `other_company`.
+pub(crate) struct Context<'a> {
     pub admin: &'a Scope,
     pub manager: &'a Scope,
     pub viewer: &'a Scope,
     pub contractor: &'a Scope,
     pub staff_user: i64,
+    pub tenant: i64,
+    pub company: i64,
+    pub other_company: i64,
+    pub manager_employment: i64,
+    pub staff_employment: i64,
 }
 
 fn show<T: std::fmt::Debug>(step: &str, result: std::result::Result<T, ClaimsError>) -> Option<T> {
@@ -96,31 +103,30 @@ async fn refused(client: &tokio_postgres::Client, step: &str, sql: &str, id: i64
     }
 }
 
-/// Runs the block against the Workforce block's records: the manager's and
-/// Sam Staff's employments at `company`, and the contractor's `other_company`.
+/// Runs the block against the Workforce block's records.
 pub(crate) async fn run(
     services: &Services,
     client: &tokio_postgres::Client,
-    accounts: Accounts<'_>,
-    tenant: i64,
-    company: i64,
-    other_company: i64,
-    manager_employment: i64,
-    staff_employment: i64,
+    context: Context<'_>,
 ) -> Result<()> {
     println!("\n== Claims (people/claims): currencies, catalog, policies, assignments");
-    let claims = services.get::<Claims>(CLAIMS)?;
-    let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
-    let staff = authentication
-        .authenticate(client, tenant, accounts.staff_user, "walkthrough".into())
-        .await?;
-    let Accounts {
+    let Context {
         admin,
         manager,
         viewer,
         contractor,
-        ..
-    } = accounts;
+        staff_user,
+        tenant,
+        company,
+        other_company,
+        manager_employment,
+        staff_employment,
+    } = context;
+    let claims = services.get::<Claims>(CLAIMS)?;
+    let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
+    let staff = authentication
+        .authenticate(client, tenant, staff_user, "walkthrough".into())
+        .await?;
 
     // Currencies: empty until an operator chooses them.
     show(

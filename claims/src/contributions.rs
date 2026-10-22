@@ -71,13 +71,15 @@ inventory::submit! {
     }
 }
 
-// The Authz domain is `people`, shared by every People module. `reimburse`
-// is a verb Base does not declare; the vocabulary refuses a key whose last
-// segment no module declared.
+// The Authz domain is `people`, shared by every People module. The
+// vocabulary refuses a key whose last segment no module declared, and Base
+// declares neither `submit`, `approve` nor `reimburse` (`approve` comes from
+// Base Workflow, which this module does not depend on), so all three are
+// declared here; verbs are a set, so a repeat is harmless.
 inventory::submit! {
     Contribution::new(VOCABULARY, "people/claims.vocabulary", provenance!(), &VocabularyContribution {
         domains: &["people"],
-        verbs: &["reimburse"],
+        verbs: &["submit", "approve", "reimburse"],
         capabilities: &[C::tenant(SUBMIT), C::tenant(MANAGE), C::tenant(APPROVE), C::tenant(REIMBURSE)],
         roles: &[RoleDefinition {
             code: "tenant_owner",

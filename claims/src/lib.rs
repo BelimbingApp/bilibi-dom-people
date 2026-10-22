@@ -737,12 +737,13 @@ impl Claims {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
-        let assignment = assignments::lock(tx.sql(), scope.tenant(), company_id, assignment_id)
+        let mut assignment = assignments::lock(tx.sql(), scope.tenant(), company_id, assignment_id)
             .await?
             .ok_or(ClaimsError::NotFound)?;
         if assignment.effective_to.is_some() {
             return Err(ClaimsError::AlreadyEnded);
         }
+        assignments::members_of(tx.sql(), scope.tenant(), company_id, &mut assignment).await?;
         if effective_to < assignment.effective_from {
             return Err(ClaimsError::Invalid(vec![FieldError::new(
                 "effective_to",
