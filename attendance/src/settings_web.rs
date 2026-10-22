@@ -13,9 +13,9 @@ use bilibi_ui::{
         LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
         PageFuture, PageRequest,
     },
-    params, BuiltinColumn, Button, ButtonVariant, Choice, ConfirmDialog, EmptyState, Field,
-    FlashMap, FlexRow, FlexTable, Form, Html, InputKind, ListColumns, ListSpec, ListState,
-    StatusKind, Tab, TableEmpty, Tabs, NO_FLASH,
+    params, Badge, BadgeKind, BuiltinColumn, Button, ButtonVariant, Choice, ConfirmDialog,
+    EmptyState, Field, FlashMap, FlexRow, FlexTable, Form, Html, InputKind, ListColumns, ListSpec,
+    ListState, StatusKind, Tab, TableEmpty, Tabs, NO_FLASH,
 };
 use jiff::civil::{Date, Time};
 use serde_json::Value;
@@ -271,7 +271,17 @@ impl State {
                                     s.break_minutes
                                 )),
                             )
-                            .slot("status", Html::text(&s.status))
+                            .slot(
+                                "status",
+                                html(&Badge::status(
+                                    if s.status == "active" {
+                                        BadgeKind::Success
+                                    } else {
+                                        BadgeKind::Neutral
+                                    },
+                                    &s.status,
+                                ))?,
+                            )
                             .slot(
                                 "actions",
                                 button(
@@ -299,7 +309,17 @@ impl State {
                                 Html::text(&format!("{}, {}", l.latitude, l.longitude)),
                             )
                             .slot("radius", Html::text(&l.radius_meters.to_string()))
-                            .slot("status", Html::text(&l.status))
+                            .slot(
+                                "status",
+                                html(&Badge::status(
+                                    if l.status == "active" {
+                                        BadgeKind::Success
+                                    } else {
+                                        BadgeKind::Neutral
+                                    },
+                                    &l.status,
+                                ))?,
+                            )
                             .slot(
                                 "actions",
                                 button(
@@ -923,6 +943,7 @@ impl State {
                 Pending::End(_, date) => {
                     format!("The effective end date will be {date}. This cannot be undone.")
                 }
+                Pending::Retire(_) => "This cannot be undone.".into(),
                 _ => String::new(),
             };
             let (consequence, confirm) = match pending {
