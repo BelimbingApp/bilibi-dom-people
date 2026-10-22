@@ -285,7 +285,7 @@ impl Policies {
             match authorization::selectable_companies(&**client, scope, POLICIES_MANAGE).await {
                 Ok(rows) => rows
                     .into_iter()
-                    .filter(|company| company.status == "active")
+                    .filter(|company| !company.archived)
                     .collect(),
                 Err(WorkforceError::Failed(error)) => return Err(error),
                 Err(_) => vec![],
