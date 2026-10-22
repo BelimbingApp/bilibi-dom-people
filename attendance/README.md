@@ -1,6 +1,6 @@
 # Attendance
 
-Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. The roster planner, attendance approvals and self-service pages are available; settings pages follow in PA3. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
+Module ID: `people/attendance`, crate `bilibi-people-attendance`. Time and attendance: a company's clock facts and the days projected from them, its shift templates, its clocking locations and its attendance rules. It also plans and publishes rosters, handles missing-punch requests, and stores allowance rule versions. Settings, roster planner, attendance approvals and self-service pages are available. The device operation is available through Agent API. This README is the owner contract; the Bilimbi source it ports is [`attendance/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/attendance/docs/README.md).
 
 ## Public API
 
@@ -46,7 +46,7 @@ A shift template is a code (1 to 40 characters, `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, 
 
 ## Company rules
 
-Five company-scoped Base Settings, each with the editor capability `people.attendance.rules.manage` (group "People"), edited together on `/people/attendance/rules` once PA3 lands the page and until then through the Settings editor:
+Five company-scoped Base Settings, each with the editor capability `people.attendance.rules.manage` (group "People"), edited together on `/people/attendance/rules` or individually through the Settings editor:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -169,3 +169,11 @@ BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin my-attendanc
 ```
 
 Sign in as `manager@example.test` with the Platform fixture password. The page shows 31 of 32 recorded days, a shift and a rest day, and a pending request. A draft replacement and the published shift on day 15 stay outside this view. Run the same binary with `off`, `location` or `on` to change clocking policy; `revoke` and `restore` change the manager’s self-service grant. `unlink` and `link` change the manager’s account link; `link-staff` links the staff account for the empty-state proof. Account link changes end the affected account’s sessions, so sign in again afterwards.
+
+## Attendance settings pages
+
+Open **People → Settings → Attendance rules** to select a company and save its five clocking rules. The Shift templates and Clocking locations tabs let you add, retire and reactivate records. The Allowance rules tab appears when you may manage allowances for the selected company; its history includes retired versions and offers End and Retire for active versions.
+
+The four routes are `/people/attendance/rules`, `/people/attendance/rules/shifts`, `/people/attendance/rules/locations` and `/people/attendance/rules/allowances`. Tabs use shared patch navigation and keep the company selection. Lists use `FlexTable` with `ListState` and `ListColumns`, including column arrangement and compact rows. Retire, reactivate and end actions hold the selected record and date on the server until confirmation. Every write checks the current company permission before calling the facade, which checks again under its mutation lock. Invalid forms keep entered values and show Bilimbi's refusal messages.
+
+For a disposable browser proof, run `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin attendance-settings -- seed`. The manager can use all four pages; the linked contractor can use rules, shifts and locations only. The binary also accepts `revoke` and `restore` for a connected manager session, and `archive-company-two` to archive the second company through Core while its form is open. Use it only against a disposable database.
