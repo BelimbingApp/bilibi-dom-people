@@ -250,7 +250,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 },
             )
             .await,
-        |e| matches!(e, SkillsError::LevelNotOnScale),
+        |e| matches!(e, SkillsError::AssessmentLevelNotOnScale),
     )?;
     refuses(
         "no requirement before the profile starts",
@@ -278,7 +278,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 },
             )
             .await,
-        |e| matches!(e, SkillsError::SkillUnavailable),
+        |e| matches!(e, SkillsError::AssessmentSkillUnavailable),
     )?;
     refuses(
         "foreign company subject",
@@ -629,6 +629,51 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         "skill interval takes precedence over policy",
         month_end.next_due_on == Some(date(2027, 1, 31)),
     )?;
+    saved(
+        skills
+            .put_policy(
+                c.admin,
+                company,
+                &PolicyChanges {
+                    default_reassessment_months: Some(1),
+                    ..PolicyChanges::default()
+                },
+            )
+            .await,
+    )?;
+    let clamped = saved(
+        skills
+            .submit_assessment(
+                c.manager,
+                company,
+                &AssessmentInput {
+                    skill_id: other_skill.id,
+                    assessed_on: Some(date(2026, 1, 31)),
+                    valid_until: None,
+                    request_key: "pk2-clamped-month".into(),
+                    ..base.clone()
+                },
+            )
+            .await,
+    )?;
+    check(
+        "default interval clamps January 31 to February 28",
+        clamped.next_due_on == Some(date(2026, 2, 28)),
+    )?;
+    refuses(
+        "manage does not allow self assessment",
+        skills
+            .submit_assessment(
+                &staff,
+                company,
+                &AssessmentInput {
+                    request_key: "pk2-manage-self".into(),
+                    ..base.clone()
+                },
+            )
+            .await,
+        |e| matches!(e, SkillsError::SelfAssessment),
+    )?;
     // A second employee two levels down proves transitive reporting reach.
     let persons = services.get::<PersonService>(bilibi_person::SERVICE)?;
     let affiliations = services.get::<AffiliationService>(bilibi_affiliation::SERVICE)?;
@@ -686,6 +731,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                     employee_id: report.id,
                     assessed_level: 2,
                     request_key: "pk2-indirect".into(),
+                    valid_until: Some(date(2026, 10, 22)),
                     ..base.clone()
                 },
             )
@@ -707,6 +753,92 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         coverage
             .iter()
             .any(|c| c.skill_id == skill.id && c.holders == 2 && c.covered),
+    )?;
+    check(
+        "coverage validity is inclusive on its last day",
+        saved(skills.coverage(c.admin, company, date(2026, 10, 23)).await)?
+            .iter()
+            .any(|c| c.skill_id == skill.id && c.holders == 1 && !c.covered),
+    )?;
+    let concurrent_input = AssessmentInput {
+        employee_id: report.id,
+        assessed_on: Some(date(2026, 10, 2)),
+        request_key: "pk2-concurrent-retry".into(),
+        assessed_level: 2,
+        valid_until: Some(date(2026, 10, 22)),
+        ..base.clone()
+    };
+    let (one, two) = tokio::join!(
+        skills.submit_assessment(c.manager, company, &concurrent_input),
+        skills.submit_assessment(c.manager, company, &concurrent_input)
+    );
+    let concurrent = saved(one)?;
+    check(
+        "concurrent retries return one assessment and one submitted decision",
+        saved(two)?.id == concurrent.id
+            && saved(
+                skills
+                    .assessment_decisions(c.admin, company, concurrent.id)
+                    .await,
+            )?
+            .len()
+                == 1,
+    )?;
+    // Relinking changes subject independence even for an old authenticated scope.
+    users
+        .unlink(c.admin, super::STAFF)
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(c.admin, super::STAFF, affiliation.id)
+        .await
+        .map_err(|_| Error::Internal)?;
+    refuses(
+        "old scope after relink to the assessed employee",
+        skills
+            .review_assessment(&staff, company, concurrent.id, ReviewDecision::Verify, None)
+            .await,
+        |e| matches!(e, SkillsError::SelfApproval),
+    )?;
+    users
+        .unlink(c.admin, super::STAFF)
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            c.admin,
+            super::STAFF,
+            AffiliationId::new(staff_employment.affiliation_id).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    saved(
+        skills
+            .review_assessment(
+                c.admin,
+                company,
+                concurrent.id,
+                ReviewDecision::Verify,
+                None,
+            )
+            .await,
+    )?;
+    let (one, two) = tokio::join!(
+        skills.finalize_assessment(c.admin, company, concurrent.id),
+        skills.finalize_assessment(c.admin, company, concurrent.id)
+    );
+    check(
+        "concurrent finalization commits exactly one decision",
+        matches!(
+            (&one, &two),
+            (Ok(_), Err(SkillsError::NotVerified)) | (Err(SkillsError::NotVerified), Ok(_))
+        ) && saved(
+            skills
+                .assessment_decisions(c.admin, company, concurrent.id)
+                .await,
+        )?
+        .len()
+            == 3,
     )?;
     let new_status = workforce
         .update_employment(
@@ -735,6 +867,38 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             &EmploymentChange {
                 status: Some("active".into()),
                 ..EmploymentChange::at(new_status.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let changed = workforce
+        .update_employment(
+            c.admin,
+            company,
+            c.staff_employee,
+            &EmploymentChange {
+                status: Some("inactive".into()),
+                ..EmploymentChange::at(staff_employment.version)
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    refuses(
+        "nonworking subject still cannot review own work",
+        skills
+            .review_assessment(&staff, company, month_end.id, ReviewDecision::Verify, None)
+            .await,
+        |e| matches!(e, SkillsError::SelfApproval),
+    )?;
+    finalized(&skills, c.admin, month_end).await?;
+    workforce
+        .update_employment(
+            c.admin,
+            company,
+            c.staff_employee,
+            &EmploymentChange {
+                status: Some("active".into()),
+                ..EmploymentChange::at(changed.version)
             },
         )
         .await

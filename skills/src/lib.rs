@@ -154,6 +154,10 @@ pub enum SkillsError {
     SelfApproval,
     #[error("No published requirement covers that skill for this employee.")]
     NoRequirement,
+    #[error("That skill is not available.")]
+    AssessmentSkillUnavailable,
+    #[error("That level is not on the requirement's proficiency scale.")]
+    AssessmentLevelNotOnScale,
     #[error("That submission was already used for a different record.")]
     KeyConflict,
     #[error("An assessment cannot be dated in the future.")]
@@ -172,9 +176,9 @@ pub enum SkillsError {
     NotVerified,
     #[error("A note is required to return an assessment.")]
     NoteRequired,
-    #[error("Check the assessment details.")]
+    #[error("That could not be done.")]
     InvalidAssessment,
-    #[error("Check the decision note.")]
+    #[error("That could not be done.")]
     InvalidNote,
     #[error("A working employee must be linked to your account.")]
     Unavailable,

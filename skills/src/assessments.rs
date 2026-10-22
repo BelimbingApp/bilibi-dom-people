@@ -170,7 +170,7 @@ pub(crate) async fn insert(
     let skill = catalog::get_skill(w, input.skill_id)
         .await?
         .filter(|s| s.active)
-        .ok_or(SkillsError::SkillUnavailable)?;
+        .ok_or(SkillsError::AssessmentSkillUnavailable)?;
     let assessed_on = input.assessed_on.ok_or(SkillsError::InvalidAssessment)?;
     let position = crate::positions::position_of(
         &skills.workforce,
@@ -196,7 +196,7 @@ pub(crate) async fn insert(
         .iter()
         .any(|l| l.level == input.assessed_level)
     {
-        return Err(SkillsError::LevelNotOnScale);
+        return Err(SkillsError::AssessmentLevelNotOnScale);
     }
     let policy = policy::get(&skills.settings, w.sql(), scope, w.company_id).await?;
     supersession(w, input).await?;
