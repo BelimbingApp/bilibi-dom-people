@@ -6,7 +6,7 @@ profiles and the policy values that steer assessments. This README is the
 owner contract; the Bilimbi source it ports is
 [`skills/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/skills/docs/README.md).
 
-The catalog, assessments, reassessments and development actions (PK1–PK3) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores, standing reads and action events. Migration 002 also creates the reminder tables; their writes follow in PK7. The pages
+The catalog, assessments, reassessments and development actions (PK1–PK3) include both migrations, the seven policy settings, evidence-backed assessments, independent decisions, current scores, standing reads and action events. Reminders (PK7) use the ledger created by migration 002. The pages
 (`/people/skills`, `/people/skills/profiles/{id}`, `/assessments`,
 `/actions`, `/my`, `/policy`) and the menu leaves land in PK4–PK6.
 
@@ -80,7 +80,7 @@ verbs this module declares because Base does not.
 | `people.skills.reassessments.submit`, `.execute` | PK3 |
 | `people.skills.actions.view`, `.update`, `.manage`, `.approve` | PK3 |
 | `people.skills.self.view` | My skills (PK5) |
-| `people.skills.reminders.send` | PK7 |
+| `people.skills.reminders.send` | Due reminders, send, retry and enqueue |
 | `people.skills.policy.manage` | `put_policy`, the Skills policy page (PK6), the Settings editor |
 
 ## Positions
@@ -277,3 +277,36 @@ Every proposal, revision, approval, transition, comment and reassessment link ap
 ### Proof
 
 `fixtures/walkthrough/src/skill_actions.rs` creates the PK3 records through the public facades on the disposable walkthrough database. It exercises concurrent request uniqueness and proposal retries, provider and working-employee checks, manual and gap sources, independent approval, progress, both closure outcomes, negative improvement, backdated assessments, performer reach, supervisor visibility, grant revocation and account unlinking. It also attempts forbidden SQL updates and deletes against the event ledger and terminal records, and checks captured audit changes. Run it as part of `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough`. PK3 adds no page or menu item; PK5 and PK6 use these methods.
+
+## Reminders (PK7)
+
+Reminders tell the responsible accounts when a skill or development action needs attention. For example, `due_reminders(scope, company, None)` previews today's items; `enqueue_reminders(scope, company)` queues their delivery as the signed-in operator.
+
+| Function | Result |
+| --- | --- |
+| `due_reminders(scope, company, as_of)` | Due items with rule, employee, skill, action, due date and recipient account ids; writes nothing |
+| `issue_reminders(scope, company, as_of)` | Counts `sent`, `failed`, `skipped` recipient rows and `unaddressed` items |
+| `retry_reminders(scope, company, as_of)` | Counts `sent` and `failed` retries for this week and month |
+| `enqueue_reminders(scope, company)` | A provisional Queue `JobRef`; committed before returning |
+| `reminder_inbox(scope, company, limit)` | This account's sent ledger rows, newest first, with a limit of 1–300 |
+
+The first four need `people.skills.reminders.send`, checked through Workforce Authorization for the caller's company. The inbox needs a current account affiliation with that company. `as_of` is `Option<Date>`; `None` means today in UTC.
+
+| Rule | Due condition | Recipients | Period |
+| --- | --- | --- | --- |
+| `overdue_reassessment` | A working employee's score is due on or before the date | Immediate working supervisor's company accounts | ISO week, such as `2026-W43` |
+| `expiring_certificate` | A working employee's validity ends on or before the date plus `reminder_window_days`, including expired validity | Supervisor and employee accounts, deduplicated | ISO week |
+| `overdue_action` | A `not_started`, `scheduled`, `in_progress` or `pending_reassessment` action is past its due date | Owner's company accounts | ISO week |
+| `coverage_gap` | An active critical skill has fewer qualified working holders than `backup_minimum` | Company accounts holding `people.skills.assessments.manage` | Calendar month, such as `2026-M10` |
+
+Accounts come from Core User's proven company-account read. Workforce matches their affiliations to employment ids through `employment_links_on`; no employment-page grant is needed. Audience capability discovery uses Authz's read of effective grants, including direct denies. It never supplies authority for the operator's write. If several accounts share an affiliation, each receives its own reminder. A due item with no recipient creates no ledger row and increments `unaddressed` once.
+
+**Repeating a run never sends a sent reminder again in the same period.** The unique ledger key includes company, rule, employee, skill, action, period and recipient, including null employee/action values. Claims and deliveries take the company lock and recheck authorization. A claim commits as `pending`; delivery locks it, creates the recipient's `people.skills.reminder` notification through `NotificationBoundary::notify`, and marks it sent in the same transaction. The bell wakes only after commit. Titles, bodies and links match Bilimbi.
+
+A refused recipient becomes `failed` with `recipient not found`. Other notification failures roll back the notification transaction before recording `notification could not be created` in a separate authorized transaction. A crash leaves the committed claim pending. Retry considers failed rows immediately and pending rows older than 15 minutes, only in the requested week's or month's period. It rechecks eligibility under lock, so competing senders and retries cannot duplicate delivery. Sent rows remain immutable under the existing database guard.
+
+`ReminderWorker` contributes `people-skills/reminders`, five attempts, and accepts only `{ "company_id": <positive integer> }`. Queue captures the operator and re-proves their identity, send grant and target-company reach on execution. Each business transaction uses `Execution::begin`, so an expired lease or cancelled job cannot commit a late reminder. Stale Workforce reads retry; denied access cancels. There is no system-principal grant or contributed schedule.
+
+### Run the reminder proof
+
+On a fresh disposable database, run the default People walkthrough, then `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skill-reminders`. The PK7 block creates records through the public owners. It checks all four due rules, exact recipients, denied senders, deduplication, concurrent issuers, failure recovery, interrupted pending claims, the 15-minute grace period, ISO week-year boundaries, account unlinking, direct-deny audiences and revoked-grant Queue execution. Fault injection uses temporary notification triggers and ages only an interrupted fixture claim. It also checks immutable sent rows and shared notification/ledger audit traces. The existing Notifications page and bell show the recipient messages; Skills policy controls belong to PK6.

@@ -697,3 +697,16 @@ impl Reference {
         }
     }
 }
+
+/// Minimal (affiliation, employment) identity links, without private HR facts.
+pub(crate) async fn affiliation_links(
+    client: &impl GenericClient,
+    tenant: i64,
+    company: i64,
+    affiliations: &[i64],
+) -> Result<Vec<(i64, i64)>> {
+    Ok(client.query(
+        "SELECT affiliation_id,id FROM people_workforce_employments WHERE tenant_id=$1 AND company_id=$2 AND affiliation_id=ANY($3::bigint[]) ORDER BY id",
+        &[&tenant,&company,&affiliations],
+    ).await.map_err(Error::from)?.iter().map(|r| (r.get(0),r.get(1))).collect())
+}
