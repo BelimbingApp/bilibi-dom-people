@@ -518,11 +518,12 @@ impl PolicyPage {
         section(
             "skills-policy",
             "Policy",
-            form(
+            form_with_class(
                 "skills-policy-form",
                 "save_policy",
                 company_fields(self.company.id, fields),
                 "Save policy",
+                "grid gap-2",
             )?,
         )
     }

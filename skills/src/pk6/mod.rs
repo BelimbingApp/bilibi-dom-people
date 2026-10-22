@@ -216,7 +216,16 @@ fn button(event: &str, label: &str, id: i64) -> Result<Html> {
         ..Button::default()
     })
 }
-fn form(id: &str, event: &str, mut fields: Vec<Field>, label: &str) -> Result<Html> {
+fn form(id: &str, event: &str, fields: Vec<Field>, label: &str) -> Result<Html> {
+    form_with_class(id, event, fields, label, "grid gap-2 sm:grid-cols-2")
+}
+fn form_with_class(
+    id: &str,
+    event: &str,
+    mut fields: Vec<Field>,
+    label: &str,
+    class: &str,
+) -> Result<Html> {
     let mut summary = bilibi_ui::ErrorSummary::new(format!("{id}-errors"));
     for f in &mut fields {
         if f.kind.is_hidden() {
@@ -239,7 +248,7 @@ fn form(id: &str, event: &str, mut fields: Vec<Field>, label: &str) -> Result<Ht
         id,
         event,
         change: false,
-        class: "grid gap-2 sm:grid-cols-2",
+        class,
         body,
         actions: render(&Button {
             button_type: "submit",
