@@ -741,6 +741,7 @@ pub async fn run(url: &str) -> Result<()> {
             return Err(Error::Internal);
         }
     };
+    saved(pg.draft(&admin, company.id, &performance_only).await)?;
     saved(
         companies
             .archive_company(&admin, company.id, Some("PG1 immutable company proof"))
@@ -748,7 +749,9 @@ pub async fn run(url: &str) -> Result<()> {
     )?;
     refused(
         pg.draft(&admin, company.id, &performance_only).await,
-        |e| matches!(e, ProgressionError::CompanyArchived),
+        // Workforce::live_company deliberately makes already archived
+        // companies indistinguishable from missing companies.
+        |e| matches!(e, ProgressionError::NotFound),
         "archived company refuses policy write",
     )?;
 
@@ -829,7 +832,8 @@ pub async fn run(url: &str) -> Result<()> {
     )?;
 
     let count:i64=client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=1 AND auditable_type='people_progression_policy_versions'",&[]).await?.get(0);
-    prove(count >= 30, "every progression write is audited")?;
+    let expected:i64=client.query_one("SELECT count(*)+count(published_at) FROM people_progression_policy_versions WHERE tenant_id=1",&[]).await?.get(0);
+    prove(count == expected, "every progression write is audited")?;
     println!("PG1 proof complete: {count} audited policy changes");
     Ok(())
 }
