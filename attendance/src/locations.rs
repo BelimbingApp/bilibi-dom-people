@@ -261,12 +261,13 @@ pub(crate) async fn set_status(
         .as_ref()
         .map(read)
         .ok_or(AttendanceError::NotFound)?;
+    let tenant = scope.tenant();
     tx.mutate(move |sql| {
         Box::pin(async move {
             let row = sql
                 .query_one(
                     &format!("UPDATE people_attendance_clocking_locations SET status = $2, updated_at = now() WHERE id = $1 AND tenant_id = $3 AND company_id = $4 RETURNING {COLUMNS}"),
-                    &[&current.id, &status, &scope.tenant(), &company_id],
+                    &[&current.id, &status, &tenant, &company_id],
                 )
                 .await?;
             let location = read(&row);
