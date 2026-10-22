@@ -72,7 +72,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "core/company",
+            "base/settings", "base/tenancy", "base/notifications", "base/queue", "core/user", "core/company",
             "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -90,8 +90,13 @@ inventory::submit! {
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
+                    notifications: services.get("base/notifications.sink")?,
+                    queue: services.get("base/queue.store")?,
                 }))
             },
+        }, Service {
+            id: crate::reminder_worker::SERVICE,
+            factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::reminder_worker::ReminderWorker(services.get(SERVICE)?))))),
         }],
     }
 }
@@ -135,3 +140,7 @@ policy_setting!(policy::BACKUP_MINIMUM);
 policy_setting!(policy::MULTIPLIER_CRITICAL);
 policy_setting!(policy::MULTIPLIER_ESSENTIAL);
 policy_setting!(policy::MULTIPLIER_DEVELOPMENT);
+
+// Bilimbi Skills.ReminderWorker: five attempts as the enqueuing operator.
+inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::reminder_worker::validate }) }
+inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::reminder_worker::SERVICE, capability: REMINDERS_SEND }) }

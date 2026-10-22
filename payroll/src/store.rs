@@ -13,6 +13,11 @@ pub(crate) enum Kind {
     Mapping,
     AttendanceMapping,
     Run,
+    Contribution,
+    Calculation,
+    Decision,
+    Entry,
+    Document,
 }
 impl Kind {
     pub(crate) fn table(self) -> &'static str {
@@ -23,6 +28,11 @@ impl Kind {
             Self::Mapping => "people_payroll_mappings",
             Self::AttendanceMapping => "people_payroll_allowance_item_mappings",
             Self::Run => "people_payroll_setup_snapshots",
+            Self::Contribution => "people_payroll_contributions",
+            Self::Calculation => "people_payroll_calculations",
+            Self::Decision => "people_payroll_decisions",
+            Self::Entry => "people_payroll_calculation_entries",
+            Self::Document => "people_payroll_documents",
         }
     }
     fn fields(self) -> &'static [&'static str] {
@@ -52,11 +62,34 @@ impl Kind {
                 "effective_to",
             ],
             Self::Run => &["period_id", "country", "currency", "snapshot"],
+            Self::Contribution => &[
+                "run_id",
+                "employee_id",
+                "item_id",
+                "source_key",
+                "evidence",
+                "on_date",
+                "units",
+                "direction",
+            ],
+            Self::Calculation => &["run_id", "snapshot", "digest"],
+            Self::Decision => &["run_id", "outcome", "reason"],
+            Self::Entry => &[
+                "run_id",
+                "contribution_id",
+                "employee_id",
+                "direction",
+                "amount",
+            ],
+            Self::Document => &["run_id", "employee_id", "artifact_id", "kind"],
         }
     }
     fn projection(self) -> String {
         let base = "to_jsonb(t) - 'tenant_id' - 'company_id'";
         match self {
+            Self::Contribution => format!("{base} || jsonb_build_object('on_date',to_char(t.on_date,'YYYY-MM-DD'),'units',t.units::text)"),
+            Self::Entry => format!("{base} || jsonb_build_object('amount',t.amount::text)"),
+            Self::Calculation | Self::Decision | Self::Document => base.to_owned(),
             Self::Period => format!("{base} || jsonb_build_object('starts_on',to_char(t.starts_on,'YYYY-MM-DD'),'ends_on',to_char(t.ends_on,'YYYY-MM-DD'),'pay_on',to_char(t.pay_on,'YYYY-MM-DD'))"),
             Self::Run => format!("{base} || jsonb_build_object('locked_at',to_char(t.locked_at,'YYYY-MM-DD\"T\"HH24:MI:SS'))"),
             _ => format!("{base} || jsonb_build_object('effective_from',to_char(t.effective_from,'YYYY-MM-DD'),'effective_to',to_char(t.effective_to,'YYYY-MM-DD')){}", if matches!(self, Self::Item) { " || jsonb_build_object('amount',t.amount::text)" } else { "" }),
@@ -118,11 +151,12 @@ pub(crate) async fn insert<T: DeserializeOwned>(
         .iter()
         .map(|field| {
             let cast = match *field {
-                "effective_from" | "effective_to" | "starts_on" | "ends_on" | "pay_on" => {
-                    "::text::date"
-                }
-                "classification_id" | "item_id" | "period_id" => "::bigint",
-                "amount" => "::numeric",
+                "effective_from" | "effective_to" | "starts_on" | "ends_on" | "pay_on"
+                | "on_date" => "::text::date",
+                "classification_id" | "item_id" | "period_id" | "run_id" | "employee_id"
+                | "contribution_id" => "::bigint",
+                "amount" | "units" => "::numeric",
+                "artifact_id" => "::uuid",
                 _ => "",
             };
             if *field == "snapshot" {
@@ -175,4 +209,38 @@ pub(crate) async fn lock_run(
         Ok((after.clone(),vec![Change{kind:Kind::Run.table().into(),id,old:before,new:after}]))
     })).await?;
     decode(after)
+}
+
+/// Output queries stay run-scoped and bind every caller-supplied value.
+pub(crate) async fn for_run<T: DeserializeOwned>(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company: i64,
+    kind: Kind,
+    run: i64,
+) -> Result<Vec<T>> {
+    client.query(&format!("SELECT {} FROM {} t WHERE tenant_id=$1 AND company_id=$2 AND run_id=$3 ORDER BY {}",kind.projection(),kind.table(),if matches!(kind,Kind::Contribution) { "source_key COLLATE \"C\"" } else { "id" }), &[&scope.tenant(),&company,&run]).await?
+        .into_iter().map(|r| decode(r.get(0))).collect()
+}
+pub(crate) async fn one_for_run<T: DeserializeOwned>(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company: i64,
+    kind: Kind,
+    run: i64,
+) -> Result<Option<T>> {
+    Ok(for_run(client, scope, company, kind, run)
+        .await?
+        .into_iter()
+        .next())
+}
+/// Hold the same row lock used by the database output-stage trigger.
+pub(crate) async fn run_for_update(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company: i64,
+    run: i64,
+) -> Result<crate::Run> {
+    let row=client.query_opt(&format!("SELECT {} FROM people_payroll_setup_snapshots t WHERE tenant_id=$1 AND company_id=$2 AND id=$3 FOR UPDATE",Kind::Run.projection()), &[&scope.tenant(),&company,&run]).await?.ok_or(PayrollError::NotFound)?;
+    decode(row.get(0))
 }

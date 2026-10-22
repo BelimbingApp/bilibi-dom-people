@@ -24,7 +24,7 @@
 //! refused and a company's writes are serialized.
 //!
 //! Catalog, assessments, reassessments and development actions (PK1–PK3)
-//! share this facade. Reminders (PK7) follow; pages land
+//! and reminders (PK7) share this facade; pages land
 //! in PK4–PK6.
 //! See `README.md`.
 mod access;
@@ -41,6 +41,10 @@ mod policy;
 mod positions;
 mod profiles;
 mod reassessments;
+mod reminder_api;
+mod reminder_types;
+mod reminder_worker;
+mod reminders;
 mod rows;
 mod scales;
 mod standing;
@@ -52,9 +56,10 @@ pub use contributions::{
     ACTIONS_APPROVE, ACTIONS_MANAGE, ACTIONS_UPDATE, ACTIONS_VIEW, ASSESSMENTS_APPROVE,
     ASSESSMENTS_MANAGE, ASSESSMENTS_REVIEW, ASSESSMENTS_SUBMIT, ASSESSMENTS_VIEW, CAPABILITIES,
     CATALOG_MANAGE, CATALOG_VIEW, POLICY_MANAGE, PROFILES_PUBLISH, REASSESSMENTS_EXECUTE,
-    REASSESSMENTS_SUBMIT, SELF_VIEW,
+    REASSESSMENTS_SUBMIT, REMINDERS_SEND, SELF_VIEW,
 };
 pub use policy::{Policy, PolicyChanges, POLICY_KEYS};
+pub use reminder_types::*;
 
 use bilibi_company::{organisation, WriteError};
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
@@ -223,6 +228,8 @@ pub enum SkillsError {
     CommentRequired,
     #[error("That could not be done.")]
     InvalidAction,
+    #[error("That could not be done.")]
+    InvalidReminders,
     /// Refused values, in the words a form shows beside each field.
     #[error("Check the entered values.")]
     Invalid(Vec<FieldError>),
@@ -505,6 +512,8 @@ pub struct Skills {
     mutations: Arc<MutationBoundary>,
     settings: Arc<Settings>,
     workforce: Arc<Workforce>,
+    notifications: Arc<bilibi_notifications::NotificationBoundary>,
+    queue: Arc<bilibi_queue::Queue>,
 }
 
 /// A write's standing: the company lock is held on the transaction, and

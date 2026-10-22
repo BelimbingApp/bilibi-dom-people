@@ -71,7 +71,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/audit", "base/authz", "base/database", "base/datetime", "base/module_registry",
-            "base/menu", "base/party_ids", "base/settings", "base/tenancy", "base/ui",
+            "base/menu", "base/party_ids", "base/settings", "base/system", "base/tenancy", "base/ui",
             "core/company", "people/settings", "people/workforce",
         ],
         migrations: &[(
@@ -93,6 +93,12 @@ inventory::submit! {
         }, Service {
             id: crate::web::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
+        }, Service {
+            id: crate::settings_web::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::settings_web::Pages::new(
                 services.get::<Db>("base/database.pool")?.as_ref().clone(),
                 services.get(SERVICE)?,
             ))))),
@@ -220,5 +226,60 @@ bilibi_menu::contribute!(
     .icon("clipboard-document-list")
     .under("people.my_work")
     .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
+    .order(10)
+);
+
+// PA3: Bilimbi Attendance.Web settings routes and Settings menu leaf.
+macro_rules! settings_route {
+    ($id:literal, $path:literal, $op:literal, $cap:expr) => {
+        inventory::submit! {
+            Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+                method: bilibi_module_registry::contributions::Method::Get,
+                path: $path, service: crate::settings_web::PAGES, operation: $op,
+                access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,
+            })
+        }
+    };
+}
+settings_route!(
+    "people/attendance.rules",
+    "/people/attendance/rules",
+    "rules",
+    RULES_MANAGE
+);
+settings_route!(
+    "people/attendance.shifts",
+    "/people/attendance/rules/shifts",
+    "shifts",
+    RULES_MANAGE
+);
+settings_route!(
+    "people/attendance.locations",
+    "/people/attendance/rules/locations",
+    "locations",
+    RULES_MANAGE
+);
+settings_route!(
+    "people/attendance.allowances",
+    "/people/attendance/rules/allowances",
+    "allowances",
+    ALLOWANCES_MANAGE
+);
+inventory::submit! {
+    Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::settings_web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+        service: crate::settings_web::PAGES, contracts: &[],
+        pending: bilibi_module_registry::contributions::Pending::Every { reason: "Rules, shifts, locations and allowances use Attendance's authorized mutation facade; reviewed contracts for these settings writes are not yet defined." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/attendance",
+    bilibi_menu::MenuItem::page(
+        "people.attendance.rules",
+        "Attendance rules",
+        "/people/attendance/rules"
+    )
+    .icon("clipboard-document-list")
+    .under("people.settings")
+    .requires(bilibi_menu::Requirement::Capability(RULES_MANAGE))
     .order(10)
 );

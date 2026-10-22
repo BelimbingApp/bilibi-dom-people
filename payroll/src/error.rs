@@ -27,6 +27,32 @@ pub enum PayrollError {
     RunUnavailable,
     #[error("Check required fields, date ranges and unique codes.")]
     Invalid(Vec<FieldError>),
+    #[error("Payroll action refused: :intake_unavailable")]
+    IntakeUnavailable,
+    #[error("Payroll action refused: :replay_conflict")]
+    ReplayConflict,
+    #[error("Payroll action refused: :source_not_mapped")]
+    SourceNotMapped,
+    #[error("Payroll action refused: :allowance_not_mapped")]
+    AllowanceNotMapped,
+    #[error("Payroll action refused: :direction_conflict")]
+    DirectionConflict,
+    #[error("Payroll action refused: :run_not_locked")]
+    RunNotLocked,
+    #[error("Payroll action refused: :no_contributions")]
+    NoContributions,
+    #[error("Payroll action refused: :employee_not_found")]
+    EmployeeNotFound,
+    #[error("Payroll action refused: :invalid_decision")]
+    InvalidDecision,
+    #[error("Payroll action refused: :not_decidable")]
+    NotDecidable,
+    #[error("The amount exceeds the exact decimal range. Reduce the units or rate.")]
+    DecimalRange,
+    #[error(
+        "The approved components exceed the event limit of 100 components or 64 KiB. Use fewer pay items or directions in one run."
+    )]
+    ApprovalTooLarge,
     #[error(transparent)]
     Failed(Error),
 }
