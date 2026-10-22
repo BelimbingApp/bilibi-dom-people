@@ -2,7 +2,7 @@
 
 Leave manages a company's leave balances, requests, approvals and year-end carry-forward.
 
-Module ID: `people/leave`, crate `bilibi-people-leave`. This README is the owner contract. The parity reference is [Bilimbi Leave](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md). PL1 provides the schema, policies and ledger; PL2 provides requests and carry-forward; PL3 provides My leave and Leave approvals; PL5 provides the reviewed entry operation. The policies page follows in PL4.
+Module ID: `people/leave`, crate `bilibi-people-leave`. This README is the owner contract. The parity reference is [Bilimbi Leave](https://github.com/BelimbingApp/b-dom-people/blob/main/leave/docs/README.md). PL1 provides the schema, policies and ledger; PL2 provides requests and carry-forward; PL3 provides My leave and Leave approvals; PL5 provides the reviewed entry operation. PL4 provides the Leave policies page.
 
 ## Pages
 
