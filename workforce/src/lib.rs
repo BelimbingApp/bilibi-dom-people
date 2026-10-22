@@ -479,29 +479,60 @@ impl Workforce {
         company_id: i64,
         employee_id: i64,
     ) -> Result<ReadResult<Employee>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        let (statuses, row) = self
+            .working_employee_row(&**client, scope, company_id, employee_id)
+            .await?;
+        let mut employees = self
+            .project(&**client, scope, company_id, &statuses, vec![row])
+            .await?;
+        employees
+            .pop()
+            .map(ReadResult::current)
+            .ok_or(WorkforceError::NotFound)
+    }
+
+    /// Proves a working employee using the caller's existing connection or
+    /// transaction, without resolving names or contacts or borrowing another
+    /// pool connection. A sibling holding the company lock uses this before
+    /// writing facts for the employee. Refusals match `employee`.
+    pub async fn require_working_employee(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<()> {
+        self.working_employee_row(client, scope, company_id, employee_id)
+            .await?;
+        Ok(())
+    }
+
+    async fn working_employee_row(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<(Vec<String>, employments::Row_)> {
         if employee_id <= 0 {
             return Err(WorkforceError::NotFound);
         }
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
-        let rows = employments::by_ids(
-            &**client,
+        let row = employments::by_ids(
+            client,
             scope.tenant(),
             company.id,
             &[employee_id],
             &statuses,
         )
-        .await?;
-        let mut employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
-            .await?;
-        match employees.pop() {
-            Some(employee) => Ok(ReadResult::current(employee)),
-            None => Err(WorkforceError::NotFound),
-        }
+        .await?
+        .pop()
+        .ok_or(WorkforceError::NotFound)?;
+        Ok((statuses, row))
     }
 
     /// The working employees who report to one working employee of the

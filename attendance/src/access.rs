@@ -4,7 +4,7 @@
 use crate::{AttendanceError, Result};
 use bilibi_company::{organisation, WriteError};
 use bilibi_database::MutationTransaction;
-use bilibi_people_workforce::{Company, Employee, Workforce};
+use bilibi_people_workforce::{Company, Workforce};
 use bilibi_tenancy::Scope;
 
 /// A live company of the scope's tenant, as the workforce names it now.
@@ -15,19 +15,6 @@ pub(crate) async fn current_company(
 ) -> Result<Company> {
     Ok(workforce
         .company(scope, company_id)
-        .await?
-        .require_current()?)
-}
-
-/// A working employee of the company, as the workforce names them now.
-pub(crate) async fn current_employee(
-    workforce: &Workforce,
-    scope: &Scope,
-    company_id: i64,
-    employee_id: i64,
-) -> Result<Employee> {
-    Ok(workforce
-        .employee(scope, company_id, employee_id)
         .await?
         .require_current()?)
 }

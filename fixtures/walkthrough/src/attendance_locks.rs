@@ -196,5 +196,38 @@ pub(super) async fn run(
         .await
         .map_err(|_| Error::Internal)?;
     println!("restored account link: own days available again");
+
+    // The caller and this function each hold one connection. Reserve the
+    // rest except one: a nested pool acquisition would now time out.
+    let mut held = Vec::new();
+    for _ in 0..db.status().max_size.saturating_sub(3) {
+        held.push(db.get().await?);
+    }
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        attendance.record_clock(
+            manager,
+            COMPANY,
+            employee,
+            &ClockInput::new(
+                "pool-last-slot",
+                EventType::In,
+                "device",
+                "2026-11-05T01:00:00Z".parse().map_err(|_| Error::Invalid)?,
+            ),
+        ),
+    )
+    .await
+    .map_err(|_| Error::Internal)?
+    .map_err(|_| Error::Internal)?;
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        attendance.self_days(staff, COMPANY),
+    )
+    .await
+    .map_err(|_| Error::Internal)?
+    .map_err(|_| Error::Internal)?;
+    println!("clock write and self read complete with only one free database connection");
+    drop(held);
     Ok(())
 }

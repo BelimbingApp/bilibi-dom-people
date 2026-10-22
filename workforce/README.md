@@ -321,3 +321,7 @@ from other rows do not wait on it.
 the same edges. No People sibling: every other People module depends on
 this one, and Organisation answers the position scan through a port, not
 an edge.
+
+## Proving an employee inside another module's transaction
+
+A write holding the company lock calls `Workforce::require_working_employee(client, scope, company_id, employee_id)` on that transaction. It uses the same company and working-status rules as `employee`, returns `NotFound` for a nonworking or missing employee, and resolves no names or contacts. It borrows no additional pool connection, so queued company writes cannot exhaust the pool while a writer waits for its employee proof. This is a capability-free membership proof; the caller still authorizes its own workflow.
