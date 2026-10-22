@@ -3,9 +3,9 @@
 //! catalog and governance migrations and facade service, and catalog capabilities under
 //! the `people` Authz domain. Bilimbi grants no Training key to a system
 //! role: an administrator grants them. Governance contributes its keys and setting
-//! in `governance.rs`. The evaluation and passport keys,
-//! the verbs `answer` and `generate`, the eight menu leaves and the company settings land
-//! with their slices beside this block.
+//! in `governance.rs`; evaluation keys, the `answer` verb and six settings
+//! live in `evaluation.rs`. Passport keys, the `generate` verb and menu
+//! leaves land with their slices beside this block.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
@@ -26,7 +26,7 @@ pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 18] = [
+pub const CAPABILITIES: [&str; 24] = [
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
@@ -45,6 +45,12 @@ pub const CAPABILITIES: [&str; 18] = [
     crate::PLANS_VIEW,
     crate::BUDGETS_VIEW,
     crate::BUDGETS_MANAGE,
+    crate::EFFECTIVENESS_VIEW,
+    crate::EVALUATION_SUBMIT,
+    crate::EFFECTIVENESS_ANSWER,
+    crate::EFFECTIVENESS_SUMMARY_VIEW,
+    crate::EVALUATION_POLICY_MANAGE,
+    crate::EVALUATION_REMINDERS_MANAGE,
 ];
 
 macro_rules! provenance {

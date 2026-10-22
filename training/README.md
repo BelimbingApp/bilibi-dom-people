@@ -218,3 +218,52 @@ A correction retains the prior currency and cannot overlap another active policy
 Migration `people-training-003-learning-governance` creates the six Bilimbi governance tables. Scoped foreign keys keep links in the same company; employee links reference Workforce employment IDs. PostgreSQL guards immutable policies, items and decisions, permanent content, terminal states, valid transitions, effective budgets and commitments. Writes take the company lock, recheck authorization, then use `MutationBoundary`; every inserted or updated record, including histories and superseded plans, produces its own audit change. Self-service writes re-prove the account under Workforce's employment lock. The governance advisory lock also serializes budget trigger checks for the same company.
 
 The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It creates records through these methods on a disposable database and fails if an expected transition or refusal differs.
+
+## Evaluation and effectiveness
+
+Employees evaluate completed sessions, and their current direct managers record what changed at work. The service follows Bilimbi `Training.Evaluation`; its pages follow in PT8 and PT9.
+
+For example, publish a policy with a one-day evaluation deadline and checkpoints at 30 and 90 days. After a session ends, prepare its reviews. Each current learner with confirmed attendance receives an evaluation and two manager reviews. Every review keeps the published criteria and timing, even after settings change.
+
+### Settings and publication
+
+`evaluation_settings` reads the six company settings below. `put_evaluation_settings` validates all six before saving them together. Both require `people.training.evaluation.policy.manage`. Base Settings exposes the same keys with that editor permission. The key prefix is `people.training.evaluation.`.
+
+| Suffix | Accepted value | Default |
+| --- | --- | --- |
+| `evaluation_days` | Whole days, 0–3,650 | Unset |
+| `checkpoints` | 1–24 distinct whole-day offsets, each 1–3,650 | Unset |
+| `reminder_days` | Whole days before due, 0–3,650 | Unset |
+| `minimum_cohort` | Distinct employees, 2–1,000 | Unset |
+| `report_months` | 1, 2, 3, 4, 6 or 12 months | 3 |
+| `report_grace_days` | Whole days after the reporting period, 0–3,650 | Unset |
+
+`publish_evaluation_policy` takes `NewEvaluationPolicy`: inclusive ISO dates, separate evaluation and effectiveness criteria, and a reason. Publication captures the current evaluation days, checkpoints and reminder lead. Policies append numbered versions; their effective periods cannot overlap. `evaluation_policies` reads newest versions first. Both require the policy permission above.
+
+A criterion has exactly `code`, `label`, `minimum` and `maximum`. Each list contains 1–50 unique codes matching `^[a-z][a-z0-9_]{0,79}$`. Labels and reasons must be nonblank and at most 4,000 bytes. Bounds are ordered integers between −10,000 and 10,000.
+
+### Preparing and answering reviews
+
+| Method | Required permission under `people.training.` | Behavior |
+| --- | --- | --- |
+| `prepare_evaluation_reviews(scope, company, session, now)` | `evaluation.reminders.manage` | Uses the session's local completion date and the policy covering it; returns obligations and the number of unavailable learners as `unknown` |
+| `evaluation_reviews(..., EvaluationKind::Evaluation)` | Both `requests.submit` and `evaluation.submit` | Own current employee's evaluations |
+| `evaluation_reviews(..., EvaluationKind::Effectiveness)` | Both `effectiveness.view` and `effectiveness.answer` | Current direct reports' effectiveness reviews |
+| `answer_evaluation(scope, company, review, values, reason)` | Both permissions for that review's kind | Stores one permanent answer after checking the employee and reporting line again |
+| `evaluation_reminders(scope, company, today)` | `evaluation.reminders.manage` | Creates a worklist entry once per unanswered review at its reminder date; counts missing recipients as `unknown` |
+
+Only latest confirmed attendance qualifies. A confirmed correction preserves existing obligations and answers; an absent correction hides them until reconfirmed. Leavers retain attendance history but receive no new obligations. Preparation refuses an unfinished session or a missing effective policy. Repeated preparation and reminder runs create no duplicate rows or audit changes.
+
+Answer values are a JSON object containing **every criterion code and no other key**. Each value is a bounded integer or explicit JSON `null` for unknown. Missing keys, fractions, booleans and out-of-range scores are refused. Answers need a reason, have no deadline cutoff, and cannot be edited or replaced. Self-service writes re-prove the signed-in employee under Workforce's employment lock, so unlinked accounts cannot use old access.
+
+Reminders are on-screen worklist records. They do not send mail or notifications, and Training contributes no unattended schedule.
+
+### Frozen summaries
+
+`freeze_effectiveness_summaries(scope, company, today)` requires `evaluation.reminders.manage`. It freezes each completed fixed period only when today is **strictly after** the period end plus its grace days. The first period contains the earliest effectiveness due date. Later periods begin the day after the last frozen period, including empty periods. Changing `report_months` changes only future period lengths. `effectiveness_period_start` shows that next date with `evaluation.policy.manage`, or returns none before any effectiveness obligation exists.
+
+At freeze time, only current employees whose latest attendance is confirmed count. The whole period, each policy/checkpoint group, and each criterion's distinct answered employees must meet `minimum_cohort`. A suppressed period has no groups; a suppressed group has no criteria; a suppressed criterion exposes neither answered count nor mean. Unknown answers do not count towards the answered minimum. Disclosed means round half up and retain exactly two decimal places, including `1.50`.
+
+`effectiveness_summary` requires only `effectiveness.summary.view` and returns frozen snapshots newest first. It never exposes employee IDs, arbitrary cohort filters, population totals or complementary counts. **Later answers, employment changes and setting changes do not recompute frozen results.**
+
+Migration `people-training-004-evaluation` creates five tables and guards policy publication, review identity, exact answer bounds and immutable history in PostgreSQL. All writes use the company writable lock and `MutationBoundary`; every row produces an audit change. No-op maintenance returns without committing an empty mutation. The executable PT4 proof block is [training_evaluation.rs](../fixtures/walkthrough/src/training_evaluation.rs), run through the existing disposable walkthrough.

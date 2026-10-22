@@ -71,8 +71,7 @@ CREATE TABLE people_training_review_reminders (
   review_id bigint NOT NULL UNIQUE,
   recipient_employee_id bigint NOT NULL,
   available_on date NOT NULL,
-  FOREIGN KEY (review_id, tenant_id, company_id) REFERENCES people_training_evaluation_reviews (id, tenant_id, company_id),
-  FOREIGN KEY (recipient_employee_id, tenant_id, company_id) REFERENCES people_workforce_employments (id, tenant_id, company_id)
+  FOREIGN KEY (review_id, tenant_id, company_id) REFERENCES people_training_evaluation_reviews (id, tenant_id, company_id)
 );
 CREATE INDEX people_training_review_reminders_scope ON people_training_review_reminders (tenant_id, company_id);
 

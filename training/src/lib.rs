@@ -22,6 +22,15 @@
 //! The catalog, participation, evidence and learning governance share this facade. The Courses and
 //! Sessions & calendar pages (PT6) and the menu leaves land with them.
 //! See `README.md`.
+mod evaluation;
+mod evaluation_store;
+mod evaluation_types;
+pub use evaluation::{
+    EFFECTIVENESS_ANSWER, EFFECTIVENESS_SUMMARY_VIEW, EFFECTIVENESS_VIEW, EVALUATION_POLICY_MANAGE,
+    EVALUATION_REMINDERS_MANAGE, EVALUATION_SUBMIT,
+};
+pub use evaluation_types::*;
+
 mod catalog;
 mod clock;
 mod contributions;
@@ -75,6 +84,37 @@ pub type Result<T> = std::result::Result<T, TrainingError>;
 /// its pages show (`Training.Web.Support.message/1`).
 #[derive(Debug, thiserror::Error)]
 pub enum TrainingError {
+    #[error("Save this company's evaluation settings on Effectiveness before publication.")]
+    EvaluationPolicyNotConfigured,
+    #[error("Save this company's evaluation settings on Effectiveness first.")]
+    EffectivenessReportNotConfigured,
+    #[error("Set distinct positive checkpoint day offsets in the evaluation settings.")]
+    InvalidCheckpoints,
+    #[error("Enter whole-number days, a disclosure minimum of at least 2, a reporting period that divides 12 months, and 1 to 24 distinct checkpoint days.")]
+    InvalidEvaluationSettings,
+    #[error("Supply unique criterion codes, labels and ordered whole-number score bounds.")]
+    InvalidCriteria,
+    #[error(
+        "Answer every criterion within its score bounds, or leave its outcome explicitly unknown."
+    )]
+    InvalidAnswers,
+    #[error("Choose an effective period that does not overlap a published policy.")]
+    EvaluationPolicyOverlap,
+    #[error("The effective end date must be on or after the start.")]
+    InvalidEvaluationPeriod,
+    #[error("Supply an explanation for this permanent record.")]
+    EvaluationReasonRequired,
+    #[error("Reviews can be prepared after this session ends.")]
+    SessionNotFinished,
+    #[error("Publish a policy covering the session's local completion date first.")]
+    EvaluationPolicyUnavailable,
+    #[error("This employee's latest attendance is not confirmed. Check the session record.")]
+    AttendanceUnavailable,
+    #[error("This review already has a permanent answer.")]
+    AlreadyAnswered,
+    #[error("This employee is outside your current direct-report team.")]
+    OutsideDirectTeam,
+
     #[error("Enter currency codes as three uppercase letters, separated by commas.")]
     InvalidCurrencies,
     #[error("This currency is not enabled for the company.")]
