@@ -978,7 +978,13 @@ impl Detail {
                 let reasons = match &e {
                     WorkspaceError::Workforce(WorkforceError::Invalid(errors)) => errors
                         .iter()
-                        .map(|e| format!("{} {}", e.field.replace('_', " "), e.message))
+                        .map(|e| {
+                            if e.field == key {
+                                e.message.clone()
+                            } else {
+                                format!("{} {}", e.field.replace('_', " "), e.message)
+                            }
+                        })
                         .collect::<Vec<_>>()
                         .join(", "),
                     _ => e.to_string(),
