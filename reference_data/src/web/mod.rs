@@ -57,10 +57,9 @@ impl Page<Scope, Error> for Pages {
     fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
         Box::pin(async move {
             let state: Box<dyn LiveState<Scope, Error>> = match request.operation {
-                "references" => Box::new(references::References::new(
-                    self.0.clone(),
-                    request.path,
-                )?),
+                "references" => {
+                    Box::new(references::References::new(self.0.clone(), request.path)?)
+                }
                 _ => return Ok(None),
             };
             Ok(Some(state))

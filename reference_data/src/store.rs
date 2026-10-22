@@ -28,12 +28,7 @@ pub(crate) struct ValidException {
 
 /// A trimmed, required, bounded text field, in the words an Ecto changeset
 /// gives (`can't be blank`, `should be at most N character(s)`).
-fn text(
-    errors: &mut Vec<FieldError>,
-    field: &'static str,
-    value: &str,
-    max: usize,
-) -> String {
+fn text(errors: &mut Vec<FieldError>, field: &'static str, value: &str, max: usize) -> String {
     let value = value.trim().to_owned();
     if value.is_empty() {
         errors.push(FieldError::new(field, "can't be blank"));

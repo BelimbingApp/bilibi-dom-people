@@ -12,6 +12,7 @@ use super::{render, Core, Flash};
 use crate::{Alias, CalendarException, Entry, NewCalendarException, NewEntry, MANAGE};
 use askama::Template;
 use bilibi_database::{Error, Result};
+use bilibi_people_workforce::CompanySummary;
 use bilibi_people_workforce::{authorization, WorkforceError};
 use bilibi_tenancy::Scope;
 use bilibi_ui::{
@@ -20,7 +21,6 @@ use bilibi_ui::{
     params, BuiltinColumn, Button, ButtonVariant, ColumnsOutcome, EmptyState, Field, FlashMap,
     FlexRow, FlexTable, Html, InputKind, ListColumns, TableEmpty,
 };
-use bilibi_people_workforce::CompanySummary;
 use jiff::civil::Date;
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
@@ -130,7 +130,11 @@ impl References {
             )?,
             alias_columns: mount(
                 "reference-aliases-table",
-                &[("alias", "Alias"), ("reference", "Reference"), ("kind", "Kind")],
+                &[
+                    ("alias", "Alias"),
+                    ("reference", "Reference"),
+                    ("kind", "Kind"),
+                ],
             )?,
             exception_columns: mount(
                 "reference-exceptions-table",
@@ -385,7 +389,10 @@ impl References {
         View {
             flash: self.flash.map(),
             subtitle: company.map_or_else(String::new, |company| {
-                format!("{} · Reference values and calendar exceptions", company.name)
+                format!(
+                    "{} · Reference values and calendar exceptions",
+                    company.name
+                )
             }),
             has_companies,
             company_field: company_field(&self.companies, self.company_id),
@@ -425,7 +432,10 @@ impl References {
                     .slot("kind", Html::text(&entry.kind))
                     .slot("code", Html::text(&entry.code))
                     .slot("aliases", Html::text(&aliases))
-                    .slot("state", Html::text(if entry.active { "Active" } else { "Inactive" })),
+                    .slot(
+                        "state",
+                        Html::text(if entry.active { "Active" } else { "Inactive" }),
+                    ),
             );
         }
         table(
@@ -445,7 +455,10 @@ impl References {
             rows.push(
                 FlexRow::new(alias.id.to_string())
                     .slot("alias", Html::text(&alias.label))
-                    .slot("reference", Html::text(entry.map_or("", |entry| &entry.label)))
+                    .slot(
+                        "reference",
+                        Html::text(entry.map_or("", |entry| &entry.label)),
+                    )
                     .slot("kind", Html::text(entry.map_or("", |entry| &entry.kind))),
             );
         }
@@ -474,7 +487,10 @@ impl References {
             "exceptions_grid",
             &self.exception_columns,
             rows,
-            EmptyState::missing("No calendar exceptions have been added for this company.", ""),
+            EmptyState::missing(
+                "No calendar exceptions have been added for this company.",
+                "",
+            ),
         )
     }
 }
@@ -485,7 +501,9 @@ impl LiveState<Scope, Error> for References {
             self.rows_changed = true;
             let mut redirect = None;
             match request.input {
-                LiveInput::Refresh | LiveInput::Params(_) => self.refresh_access(request.scope).await?,
+                LiveInput::Refresh | LiveInput::Params(_) => {
+                    self.refresh_access(request.scope).await?
+                }
                 LiveInput::Event(payload) => redirect = self.event(request.scope, payload).await?,
             }
             self.read(request.scope).await?;
@@ -558,16 +576,20 @@ fn company_field(companies: &[CompanySummary], selected: Option<i64>) -> Field {
 }
 
 fn entry_fields(form: &HashMap<String, String>) -> Vec<Field> {
-    [("kind", "Kind", "80"), ("code", "Code", "100"), ("label", "Label", "200")]
-        .iter()
-        .map(|(key, label, max)| {
-            Field::in_form("entry", key)
-                .label(*label)
-                .value(form.get(*key).cloned().unwrap_or_default())
-                .required()
-                .attr("maxlength", max)
-        })
-        .collect()
+    [
+        ("kind", "Kind", "80"),
+        ("code", "Code", "100"),
+        ("label", "Label", "200"),
+    ]
+    .iter()
+    .map(|(key, label, max)| {
+        Field::in_form("entry", key)
+            .label(*label)
+            .value(form.get(*key).cloned().unwrap_or_default())
+            .required()
+            .attr("maxlength", max)
+    })
+    .collect()
 }
 
 /// The alias form, offered once the company has an entry to name.

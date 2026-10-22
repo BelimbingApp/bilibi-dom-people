@@ -33,7 +33,6 @@ use bilibi_tenancy::Scope;
 use jiff::civil::Date;
 use std::sync::Arc;
 
-
 /// The module ID, Bilimbi's, kept because IDs are persisted data.
 pub const MODULE: &str = "people/reference_data";
 /// The registry service ID of the [`ReferenceData`] facade.
@@ -77,11 +76,7 @@ pub struct NewEntry {
     pub active: bool,
 }
 impl NewEntry {
-    pub fn new(
-        kind: impl Into<String>,
-        code: impl Into<String>,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn new(kind: impl Into<String>, code: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             kind: kind.into(),
             code: code.into(),
@@ -226,8 +221,7 @@ impl ReferenceData {
             )
             .await?;
         writable(tx.sql(), scope, company_id).await?;
-        let exception =
-            store::insert_exception(&mut tx, scope.tenant(), company_id, valid).await?;
+        let exception = store::insert_exception(&mut tx, scope.tenant(), company_id, valid).await?;
         tx.commit().await?;
         Ok(exception)
     }

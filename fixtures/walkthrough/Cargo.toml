@@ -37,3 +37,6 @@ serde_json.workspace = true
 # Leave (slice PL1).
 bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
+
+# Reference data (slice PD1).
+bilibi-people-reference-data = { path = "../../reference_data" }
