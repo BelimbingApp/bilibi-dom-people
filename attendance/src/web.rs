@@ -13,9 +13,9 @@ use bilibi_ui::{
         LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
         PageFuture, PageRequest,
     },
-    params, BuiltinColumn, Button, ButtonVariant, Choice, ColumnsOutcome, ConfirmDialog,
-    EmptyState, Field, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec,
-    ListState, LocationAction, LocationReport, StatusKind, TableEmpty, NO_FLASH,
+    params, Badge, BadgeKind, BuiltinColumn, Button, ButtonVariant, Choice, ColumnsOutcome,
+    ConfirmDialog, EmptyState, Field, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns,
+    ListSpec, ListState, LocationAction, LocationReport, StatusKind, TableEmpty, NO_FLASH,
 };
 use jiff::{tz::TimeZone, Timestamp};
 use rust_decimal::Decimal;
@@ -230,9 +230,7 @@ impl MyAttendance {
             .position(|event| *event == kind)
         {
             let values = params::string_values(payload);
-            if let ColumnsOutcome::Rejected(message) = self.columns[index].handle(&values) {
-                self.error(message);
-            }
+            let _: ColumnsOutcome = self.columns[index].handle(&values);
             return Ok(false);
         }
         if !self.permitted(scope).await? {
@@ -572,7 +570,18 @@ impl MyAttendance {
                             }),
                         )
                         .slot("time", Html::text(&time))
-                        .slot("status", Html::text(&a.status))
+                        .slot(
+                            "status",
+                            render(&Badge::status(
+                                match a.status.as_str() {
+                                    "approved" => BadgeKind::Success,
+                                    "rejected" => BadgeKind::Danger,
+                                    "pending" => BadgeKind::Warning,
+                                    _ => BadgeKind::Neutral,
+                                },
+                                &a.status,
+                            ))?,
+                        )
                         .slot("note", Html::text(a.decision_note.as_deref().unwrap_or("")))
                         .slot("actions", action),
                 );
