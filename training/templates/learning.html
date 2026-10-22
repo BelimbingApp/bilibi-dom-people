@@ -3,10 +3,10 @@
 {% import "feedback.html" as feedback %}
 <div data-shared-ui>
 {% call feedback::flash_group(messages=flash) %}{% endcall %}
-{% call ui::page(id="people-learning") %}
+{% call ui::page(id="people-learning", class="space-y-4") %}
 {% call ui::header(actions=header_actions) %}{{ title }}{% endcall %}
 {{ tabs }}
-{% if choose_task %}{% call ui::card() %}{% call ui::empty_state(title="Choose a learning task", reason="Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access.") %}{% endcall %}{% endcall %}{% endif %}
+{{ choose_task }}
 {{ toolbar }}
 {% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
 {% if read_only %}<p class="text-sm text-ink-muted">Read-only. Ask an operator to assign access for your learning task.</p>{% endif %}

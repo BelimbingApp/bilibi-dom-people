@@ -630,6 +630,7 @@ impl Learning {
                     },
                     "add_item"=>{ if self.modal && self.task==Task::Plans { self.item_count=(self.item_count+1).min(300); } },
                     "save_currencies"=> {
+                        if self.task != Task::Budgets || !self.training.allowed(scope, company, BUDGETS_MANAGE).await { self.fail(NO_WRITE); return Ok(()); }
                         let raw=posted(payload,"currencies[values]");
                         let codes:Vec<String>=raw.split(|c:char|c.is_whitespace()||c==',').filter(|s|!s.is_empty()).map(str::to_owned).collect();
                         let result=self.training.put_learning_currencies(scope,company,&codes).await;
@@ -923,7 +924,7 @@ impl Learning {
                             &r.text,
                             &r.company,
                             &r.utc,
-                            r.mode.key(),
+                            r.mode.as_str(),
                         )),
                     );
                 }
@@ -1172,7 +1173,11 @@ impl Learning {
             toolbar,
             read_only: !writable && self.error.is_none(),
             error: self.error.as_deref().unwrap_or(""),
-            choose_task: !show,
+            choose_task: if !show {
+                render(&EmptyState::missing("Choose a learning task", "Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access."))?
+            } else {
+                Html::EMPTY
+            },
             currencies,
             table: table_html,
             pagination,
@@ -1247,7 +1252,7 @@ struct LearningView<'a> {
     toolbar: Html,
     read_only: bool,
     error: &'a str,
-    choose_task: bool,
+    choose_task: Html,
     currencies: Html,
     table: Html,
     pagination: Html,
