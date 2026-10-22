@@ -181,6 +181,8 @@ struct State {
     tables: HashMap<&'static str, Table>,
     today: Date,
     focus_pending: bool,
+    focus_sender: tokio::sync::broadcast::Sender<Change>,
+    focus_receiver: Option<tokio::sync::broadcast::Receiver<Change>>,
     display: bilibi_datetime::DisplayContext,
 }
 impl State {
@@ -192,6 +194,7 @@ impl State {
         if !["setup", "mappings", "attendance_mappings"].contains(&operation) {
             return Err(Error::NotFound);
         }
+        let (focus_sender, focus_receiver) = tokio::sync::broadcast::channel(1);
         let mut tables = HashMap::new();
         for (key, cols) in [
             (
@@ -276,6 +279,8 @@ impl State {
             drafts: HashMap::new(),
             tables,
             focus_pending: operation == "mappings",
+            focus_sender,
+            focus_receiver: (operation == "mappings").then_some(focus_receiver),
             display: bilibi_datetime::DisplayContext::anonymous(),
             today: jiff::Timestamp::now()
                 .to_zoned(jiff::tz::TimeZone::UTC)
@@ -582,6 +587,12 @@ impl State {
     }
 }
 impl LiveState<Scope, Error> for State {
+    fn subscriptions(&mut self) -> Vec<Subscription> {
+        self.focus_receiver
+            .take()
+            .map(|receiver| vec![Subscription { receiver }])
+            .unwrap_or_default()
+    }
     fn update<'a>(&'a mut self, request: LiveRequest<'a, Scope>) -> LiveFuture<'a, Error> {
         Box::pin(async move {
             match request.input {
@@ -600,6 +611,13 @@ impl LiveState<Scope, Error> for State {
             // preserves company queries and framed-page state without JS here.
             let redirect = if self.focus_pending && self.setup.is_some() {
                 self.focus_pending = false;
+                // A fragment redirect does not replace the document. Follow
+                // it with a normal read so the live host settles its initial
+                // progress indicator in frames as well as in the full shell.
+                let _ = self.focus_sender.send(Change {
+                    tenant: request.scope.tenant(),
+                    user: None,
+                });
                 Some("#payroll-mappings-section".into())
             } else {
                 None
