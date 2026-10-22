@@ -360,18 +360,18 @@ fn confirm(
     if !pending {
         return Ok(Html::EMPTY);
     }
-    // Keep the resolved installation identity alongside the shared review.
-    let mut html = company.banner.clone();
-    html.push(&render(&ConfirmDialog {
-        id: "skills-confirm",
-        consequence,
-        detail,
-        confirm: verb,
-        working: "Saving…",
-        confirm_event: "confirm",
-        cancel_event: "dismiss_confirm",
-    })?);
-    Ok(html)
+    render(&Confirmation {
+        dialog: ConfirmDialog {
+            id: "skills-confirm",
+            consequence,
+            detail,
+            confirm: verb,
+            working: "Saving…",
+            confirm_event: "confirm",
+            cancel_event: "dismiss_confirm",
+        },
+        banner: &company.banner,
+    })
 }
 
 #[derive(askama::Template)]
@@ -386,4 +386,13 @@ struct View<'a> {
     company: Field,
     body: Html,
     confirm: Html,
+}
+
+// ConfirmDialog has no banner slot at the pinned Platform revision. Compose
+// its typed contract with the shared modal and buttons so identity stays inside.
+#[derive(askama::Template)]
+#[template(path = "pk6_confirm.html")]
+struct Confirmation<'a> {
+    dialog: ConfirmDialog<'a>,
+    banner: &'a Html,
 }
