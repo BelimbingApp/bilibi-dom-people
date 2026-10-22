@@ -605,7 +605,9 @@ impl Detail {
             Some("status") => r.status.clone(),
             _ => r.field.clone(),
         };
-        if self.list.sort_by.is_some() {
+        if self.list.sort_by.as_deref() == Some("id") {
+            requests.sort_by_key(|request| request.id);
+        } else {
             requests.sort_by(|a, b| key(a).cmp(&key(b)).then(a.id.cmp(&b.id)));
         }
         if self.list.sort_dir == Some(SortDir::Desc) {
@@ -1190,7 +1192,9 @@ fn detail_spec() -> Result<Arc<ListSpec>> {
         sortable: ["field", "value", "status"]
             .into_iter()
             .map(|s| (s.into(), SortDir::Asc))
+            .chain(std::iter::once(("id".into(), SortDir::Desc)))
             .collect(),
+        default_sort: Some("id".into()),
         filters: BTreeMap::from([("company_id".into(), Filter::string(""))]),
         omit_defaults: true,
         ..ListSpec::default()

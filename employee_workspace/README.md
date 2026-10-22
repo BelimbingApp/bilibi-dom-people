@@ -60,7 +60,7 @@ The private store owns validation and SQL. The migration `people-employee-worksp
 
 ## Running the proof
 
-Mount this repository at `apps/domains/people` in Bilibi, discover modules, and run `cargo run -p bilibi-people-walkthrough` against a disposable database. Its PE1 block exercises profile and eligibility writes, single review, saved-view ownership, revoked grants and company refusals. The PE2 block proves version checks, field merging, validation, read-only access, request review and audit capture. Then run the application and use `/people/employees` and an employee record.
+Mount this repository at `apps/domains/people` in Bilibi, discover modules, and run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough` against a disposable database. Its PE1 block exercises profile and eligibility writes, single review, saved-view ownership, revoked grants and company refusals. The PE2 block proves version checks, field merging, validation, read-only access, request review and audit capture. Then run the application and use `/people/employees` and an employee record.
 
 ## Where to go next
 
