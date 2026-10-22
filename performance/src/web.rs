@@ -892,7 +892,7 @@ impl State {
         body.push(&render(&pagination)?);
         Ok(body)
     }
-    fn review_slots(&self, row: FlexRow, record: &Review) -> UiResult<FlexRow> {
+    fn review_slots(&self, row: FlexRow, record: &Review, list: &str) -> UiResult<FlexRow> {
         Ok(row
             .slot(
                 "period",
@@ -903,14 +903,14 @@ impl State {
                 "cutoff",
                 instant(
                     &self.display,
-                    &format!("list-cutoff-{}", record.id),
+                    &format!("{list}-cutoff-{}", record.id),
                     &record.cutoff_at,
                 )?,
             )
             .slot(
                 "released",
                 if let Some(at) = &record.released_at {
-                    instant(&self.display, &format!("list-released-{}", record.id), at)?
+                    instant(&self.display, &format!("{list}-released-{}", record.id), at)?
                 } else {
                     Html::text("Pending independent release")
                 },
@@ -930,7 +930,7 @@ impl State {
                     .slot("version", Html::text(&r.version.to_string()))
                     .slot("state", Html::text(&r.status))
                     .slot("outcome", Html::text(&r.outcome));
-                row = self.review_slots(row, r)?;
+                row = self.review_slots(row, r, "authored")?;
                 row.actions = action("select", "Read", r.id)?;
                 Ok(row)
             })
@@ -955,7 +955,7 @@ impl State {
                         let mut row = FlexRow::new(format!("release-{}", r.id))
                             .slot("employee", Html::text(&self.employee(r.employee_id)))
                             .slot("rationale", Html::text(&r.rationale));
-                        row = self.review_slots(row, r)?;
+                        row = self.review_slots(row, r, "release")?;
                         row.actions = action("select", "Read", r.id)?;
                         row.actions
                             .push(&action("request_release", "Release", r.id)?);
