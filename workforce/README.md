@@ -60,6 +60,10 @@ Core Company today); the employee number; `display_name`, the Person's name
 as Core names it; and `email`, the affiliation's work email. Employee
 identity never implies a login actor.
 
+### Reading on a caller's connection
+
+Use `company_on(client, scope, company)` and `working_employee_ids_on(client, scope, company, ids)` inside a port or transaction. They apply the same live-company and working-status rules on that client's view. The ids read is bounded to 1,000 positive ids and returns a current `ReadResult<Vec<i64>>`; it skips names and contacts when you need only membership. Organisation uses these reads so a position scan does not rent nested pool connections or miss a caller's pending employment changes.
+
 ### Names and contacts through Core
 
 Names, contacts and titles stay in Core Person and Affiliation and are not

@@ -43,3 +43,8 @@ bilibi-people-skills = { path = "../../skills" }
 
 # Reviewed Leave entry operation (slice PL5).
 bilibi-agent-api.workspace = true
+
+# Organisation (PO1): the block `src/organisation.rs` runs from the end of `run`.
+bilibi-audit.workspace = true
+bilibi-people-organisation = { path = "../../organisation" }
+bilibi-ports.workspace = true
