@@ -84,10 +84,45 @@ macro_rules! page {
         }) }
     };
 }
-page!("people/payroll.setup", "/people/payroll/setup", "setup", VIEW);
-page!("people/payroll.mappings", "/people/payroll/setup/mappings", "mappings", VIEW);
-page!("people/payroll.attendance_mappings", "/people/payroll/attendance-mappings", "attendance_mappings", ATTENDANCE_MAPPINGS_MANAGE);
-bilibi_menu::contribute!("people/payroll", bilibi_menu::MenuItem::page("people.payroll.mappings", "Pay-item mappings", "/people/payroll/setup/mappings")
-    .icon("squares-2x2").under("people.payroll").requires(bilibi_menu::Requirement::Capability(VIEW)).order(20));
-bilibi_menu::contribute!("people/payroll", bilibi_menu::MenuItem::page("people.settings.payroll_setup", "Payroll setup", "/people/payroll/setup")
-    .icon("cog-6-tooth").under("people.settings").requires(bilibi_menu::Requirement::Capability(VIEW)).order(70));
+page!(
+    "people/payroll.setup",
+    "/people/payroll/setup",
+    "setup",
+    VIEW
+);
+page!(
+    "people/payroll.mappings",
+    "/people/payroll/setup/mappings",
+    "mappings",
+    VIEW
+);
+page!(
+    "people/payroll.attendance_mappings",
+    "/people/payroll/attendance-mappings",
+    "attendance_mappings",
+    ATTENDANCE_MAPPINGS_MANAGE
+);
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page(
+        "people.payroll.mappings",
+        "Pay-item mappings",
+        "/people/payroll/setup/mappings"
+    )
+    .icon("squares-2x2")
+    .under("people.payroll")
+    .requires(bilibi_menu::Requirement::Capability(VIEW))
+    .order(20)
+);
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page(
+        "people.settings.payroll_setup",
+        "Payroll setup",
+        "/people/payroll/setup"
+    )
+    .icon("cog-6-tooth")
+    .under("people.settings")
+    .requires(bilibi_menu::Requirement::Capability(VIEW))
+    .order(70)
+);

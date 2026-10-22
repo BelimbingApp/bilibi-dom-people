@@ -18,13 +18,13 @@
 {{ items }}
 {{ periods }}
 {# Native autofocus works on a focusable section without Domain JavaScript. #}
-<section id="payroll-mappings-section" tabindex="-1"{% if mappings_focus %} autofocus class="rounded-xl ring-2 ring-brand-strong/30"{% endif %}>
+<section id="payroll-mappings-section" tabindex="-1"{% if mappings_focus %} autofocus class="rounded-xl border border-brand-strong"{% endif %}>
 {{ mappings }}
 </section>
 {{ runs }}
 </div>
 {% else %}
-{% call lists::empty_state(id="payroll-unavailable", title="No company is available for payroll setup.") %}{% endcall %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("No company is available for payroll setup.", "").id("payroll-unavailable")) %}{% endcall %}
 {% endif %}
 {{ confirm }}
 {% endcall %}

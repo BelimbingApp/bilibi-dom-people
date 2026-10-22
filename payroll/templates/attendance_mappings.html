@@ -13,9 +13,9 @@
 {% endcall %}
 {% endif %}
 {% if !has_company %}
-{% call lists::empty_state(id="payroll-mappings-no-company", title="No active company is available for pay-item mappings.") %}{% endcall %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("No active company is available for pay-item mappings.", "").id("payroll-mappings-no-company")) %}{% endcall %}
 {% elif !available %}
-{% call lists::empty_state(id="payroll-mappings-unavailable", title="Attendance allowance sources are unavailable for this company.", reason="The company's workforce is not current.") %}{% endcall %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("Attendance allowance sources are unavailable for this company.", "The company's workforce is not current.").id("payroll-mappings-unavailable")) %}{% endcall %}
 {% else %}
 <div class="mt-5 space-y-5">
 {{ table }}
