@@ -171,6 +171,10 @@ impl Table {
 }
 
 enum Pending {
+    Grant {
+        company: i64,
+        year: i32,
+    },
     Carry {
         company: i64,
         year: i32,
@@ -414,12 +418,63 @@ impl Policies {
             return Ok(());
         }
         drop(client);
-        let values = params::string_values(payload);
+        // Forms have a small fixed vocabulary. Keep overlong strings intact so
+        // the facade refuses them rather than treating a dropped cap as empty.
+        let keys = [
+            "year_start_month",
+            "backdate_days",
+            "from_year",
+            "leave_year",
+            "weekday_1",
+            "weekday_2",
+            "weekday_3",
+            "weekday_4",
+            "weekday_5",
+            "weekday_6",
+            "weekday_7",
+            "type[code]",
+            "type[name]",
+            "type[unit]",
+            "type[paid]",
+            "type[balance_required]",
+            "policy[leave_type_id]",
+            "policy[effective_from]",
+            "policy[entitlement]",
+            "policy[carry_forward_cap]",
+        ];
+        let values = keys
+            .into_iter()
+            .filter_map(|key| {
+                payload
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .map(|v| (key.to_owned(), v.to_owned()))
+            })
+            .collect();
         match kind {
-            "carry_forward" => {
+            "carry_forward" | "grant" => {
                 self.forms.insert(kind.into(), values.clone());
-                let year = integer(&values, "from_year");
-                if (1900..=9997).contains(&year) {
+                let year = integer(
+                    &values,
+                    if kind == "grant" {
+                        "leave_year"
+                    } else {
+                        "from_year"
+                    },
+                );
+                if kind == "grant" {
+                    if (1900..=9998).contains(&year) {
+                        self.pending = Some(Pending::Grant {
+                            company: company_id,
+                            year,
+                        });
+                    } else {
+                        self.error(
+                            LeaveError::InvalidYear,
+                            "Entitlements could not be granted for that year.",
+                        );
+                    }
+                } else if (1900..=9997).contains(&year) {
                     self.pending = Some(Pending::Carry {
                         company: company_id,
                         year,
@@ -451,6 +506,10 @@ impl Policies {
             }
             "confirm_action" => {
                 match self.pending.take() {
+                    Some(Pending::Grant { company, year }) if company == company_id => {
+                        let values = HashMap::from([("leave_year".into(), year.to_string())]);
+                        self.write(scope, company, "grant", &values).await;
+                    }
                     Some(Pending::Carry { company, year }) if company == company_id => {
                         match self.core.leave.enqueue_carry_forward(scope, company, year).await {
                             Ok(_) => self.flash = Some((StatusKind::Success, "Carry-forward queued. Balances update once it runs; running it again changes nothing.".into())),
@@ -483,7 +542,7 @@ impl Policies {
                 }
                 self.load(scope).await?;
             }
-            "save_year" | "save_request_rules" | "create_type" | "add_policy" | "grant" => {
+            "save_year" | "save_request_rules" | "create_type" | "add_policy" => {
                 self.forms.insert(kind.into(), values.clone());
                 self.write(scope, company_id, kind, &values).await;
                 self.load(scope).await?;
@@ -905,6 +964,11 @@ impl Policies {
             versions = card("leave-policies", "Entitlement policy versions", policies)?;
         }
         let confirmation = match &self.pending {
+            Some(Pending::Grant {year,..}) => render(&ConfirmDialog {
+                id: "leave-policy-confirmation", consequence: &format!("Grant entitlements for leave year {year}?"),
+                detail: "Each current employee receives each active type's entitlement from the version in force on the first day of that leave year. Repeating a grant changes nothing.",
+                confirm: "Grant", working: "Granting…", confirm_event: "confirm_action", cancel_event: "cancel_confirmation",
+            })?,
             Some(Pending::Carry {year,..}) => render(&ConfirmDialog {
                 id: "leave-policy-confirmation", consequence: &format!("Queue carry-forward from leave year {year}?"),
                 detail: "Closing balances up to each policy's cap move to the next year and the rest expires. A carried year, and every year before it, is closed to new requests and entries.",
@@ -1077,10 +1141,10 @@ fn value<'a>(v: &'a HashMap<String, String>, key: &str) -> &'a str {
     v.get(key).map_or("", String::as_str)
 }
 fn integer(v: &HashMap<String, String>, key: &str) -> i32 {
-    value(v, key).trim().parse().unwrap_or(0)
+    value(v, key).trim().parse().unwrap_or(-1)
 }
 fn integer64(v: &HashMap<String, String>, key: &str) -> i64 {
-    value(v, key).trim().parse().unwrap_or(0)
+    value(v, key).trim().parse().unwrap_or(-1)
 }
 fn note(id: &str, text: &str) -> Result<Html> {
     render(&Note { id, text })
