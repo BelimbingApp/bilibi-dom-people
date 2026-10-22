@@ -447,6 +447,44 @@ impl Workforce {
         Ok(ReadResult::current(employees))
     }
 
+    /// Employee directory summaries at every employment status, for a
+    /// company's assignment pickers (Bilimbi `Core.Employee.list_employees`
+    /// and `employees_belong_to_company?` as used by Claims). These contain
+    /// names and employee numbers, not private employment facts. With ids,
+    /// accepts at most [`LOOKUP_LIMIT`] positive employee ids; otherwise
+    /// lists the company by id. Working-staff reads keep using [`Self::employees`].
+    pub async fn employees_at_any_status(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_ids: Option<&[i64]>,
+    ) -> Result<ReadResult<Vec<Employee>>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        let company = live_company(&**client, scope, company_id).await?;
+        let statuses = self
+            .company_working_statuses(&**client, scope, &company)
+            .await?;
+        let all_statuses: Vec<String> = EMPLOYEE_STATUSES
+            .iter()
+            .map(|status| (*status).to_owned())
+            .collect();
+        let rows = match employee_ids {
+            Some(ids) => {
+                let ids = lookup_ids(ids)?;
+                employments::by_ids(&**client, scope.tenant(), company.id, &ids, &all_statuses)
+                    .await?
+            }
+            None => {
+                employments::in_statuses(&**client, scope.tenant(), company.id, &all_statuses)
+                    .await?
+            }
+        };
+        let employees = self
+            .project(&**client, scope, company.id, &statuses, rows)
+            .await?;
+        Ok(ReadResult::current(employees))
+    }
+
     /// The working employees among at most [`LOOKUP_LIMIT`] ids (Bilimbi
     /// `employees_by_ids/3`), without reading the whole workforce; ids that
     /// are not positive, or too many, are `InvalidOptions`.

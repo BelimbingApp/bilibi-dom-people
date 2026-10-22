@@ -30,6 +30,8 @@ jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
 
+# Claims (slice PC1).
+bilibi-people-claims = { path = "../../claims" }
 # PW1: the department Core Company adds for the employment change.
 bilibi-company.workspace = true
 serde_json.workspace = true
@@ -38,6 +40,11 @@ serde_json.workspace = true
 bilibi-people-leave = { path = "../../leave" }
 rust_decimal.workspace = true
 
+# Skills (PK1): the catalog proof block at the end of lib.rs.
+bilibi-people-skills = { path = "../../skills" }
+
 # Attendance (PA1).
 bilibi-people-attendance = { path = "../../attendance" }
+
+# Attendance (PA1).
 bilibi-settings.workspace = true
