@@ -21,7 +21,18 @@ impl Progression {
             .date()
             .to_string();
         // DISTINCT ON selects each code independently; version resolves same-day corrections.
-        let policies = store::governing(&**client, scope, company, &today).await?;
+        let mut policies = Vec::new();
+        let mut cursor = None;
+        loop {
+            let batch =
+                store::governing(&**client, scope, company, &today, cursor.as_deref()).await?;
+            let finished = batch.len() < 100;
+            cursor = batch.last().map(|p| p.code.clone());
+            policies.extend(batch);
+            if finished {
+                break;
+            }
+        }
         if policies.is_empty() {
             return Err(ProgressionError::NoPublishedPolicy);
         }

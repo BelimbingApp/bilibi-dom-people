@@ -68,6 +68,7 @@ pub(crate) async fn governing(
     scope: &Scope,
     company: i64,
     today: &str,
+    after_code: Option<&str>,
 ) -> Result<Vec<Policy>> {
-    client.query(&format!("SELECT DISTINCT ON (t.code) {VIEW} FROM {TABLE} t WHERE t.tenant_id=$1 AND t.company_id=$2 AND t.status='published' AND t.effective_from <= $3::text::date ORDER BY t.code,t.effective_from DESC,t.version DESC"), &[&scope.tenant(),&company,&today]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect()
+    client.query(&format!("SELECT DISTINCT ON (t.code) {VIEW} FROM {TABLE} t WHERE t.tenant_id=$1 AND t.company_id=$2 AND t.status='published' AND t.effective_from <= $3::text::date AND ($4::text IS NULL OR t.code > $4) ORDER BY t.code,t.effective_from DESC,t.version DESC LIMIT 100"), &[&scope.tenant(),&company,&today,&after_code]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get(0))).collect()
 }
