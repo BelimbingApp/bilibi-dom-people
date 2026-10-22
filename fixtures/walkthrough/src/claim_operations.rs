@@ -26,6 +26,46 @@ pub(super) async fn run(services: &Services) -> Result<()> {
     let manager = auth
         .authenticate(&**client, TENANT, MANAGER, "claim-operations-proof".into())
         .await?;
+    drop(client);
+    // The default walkthrough intentionally unlinks staff at its end.
+    // Read employment facts from Workforce and restore the account through Core.
+    let workforce =
+        services.get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
+    let staff_employee = workforce
+        .employees_at_any_status(&manager, COMPANY, None)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?
+        .into_iter()
+        .find(|employee| employee.employee_number == "E-002")
+        .and_then(|employee| employee.reference.stable_id.parse::<i64>().ok())
+        .ok_or(Error::NotFound)?;
+    let employment = workforce
+        .employment(&manager, COMPANY, staff_employee)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?;
+    let users = services.get::<bilibi_user::UserService>("core/user.accounts")?;
+    users
+        .link_person(
+            &admin,
+            STAFF,
+            bilibi_person::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(
+            &admin,
+            STAFF,
+            bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let client = db.get().await?;
     let staff = auth
         .authenticate(&**client, TENANT, STAFF, "claim-operations-proof".into())
         .await?;
