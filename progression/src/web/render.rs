@@ -379,7 +379,10 @@ impl State {
             body
         };
         if self.my && !self.can_progression && !self.can_performance {
-            body.push(&render(&EmptyState::missing("Your standing is unavailable", "You cannot do that for this company. Check your progression and evidence permissions."))?);
+            body.push(&render(&EmptyState::missing(
+                "Your standing is unavailable",
+                self.unavailable.as_deref().unwrap_or("You cannot do that for this company. Check your progression and evidence permissions."),
+            ))?);
         }
         let confirmation = if let Some(policy) = &self.pending {
             render(&ConfirmDialog {
