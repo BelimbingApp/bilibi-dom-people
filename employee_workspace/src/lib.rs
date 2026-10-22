@@ -190,6 +190,7 @@ impl EmployeeWorkspace {
     }
     /// Changes one inline fact under the employment lock. Checking the stored
     /// version and merging here prevents a stale page overwriting another edit.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_work_profile(
         &self,
         scope: &Scope,
@@ -232,6 +233,7 @@ impl EmployeeWorkspace {
         tx.commit().await?;
         Ok(result)
     }
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_access(
         &self,
         scope: &Scope,

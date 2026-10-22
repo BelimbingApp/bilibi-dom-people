@@ -67,3 +67,10 @@ bilibi_menu::contribute!(
         .requires(Requirement::Capability(VIEW))
         .order(10)
 );
+
+// Bilimbi EmployeeWorkspace.Web.ShowLive.
+inventory::submit! {
+    Contribution::new(ROUTES, "people/employee_workspace.employee", Provenance { module: MODULE, source: file!(), line: line!() }, &Route {
+        method: Method::Get, path: "/people/employees/{id}", service: PAGES, operation: "employee", access: Access::Capability(VIEW), framed: true,
+    })
+}
