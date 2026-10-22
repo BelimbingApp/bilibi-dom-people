@@ -510,7 +510,7 @@ pub async fn run(url: &str) -> Result<()> {
     let events=c.query("SELECT version,payload FROM base_events WHERE tenant_id=$1 AND name='people/payroll.run_approved'",&[&TENANT]).await?;
     check(
         "approval records exactly one v1 event",
-        events.len() == 1 && events[0].get::<_, i16>(0) == 1,
+        events.len() == 1 && events[0].get::<_, i32>(0) == 1,
     )?;
     let payload: Value = events[0].get(1);
     check(
@@ -666,6 +666,24 @@ async fn bounds_and_pages(
             )
             .await,
     )?;
+    let later = from.tomorrow().map_err(|_| Error::Invalid)?;
+    let later_item = must(
+        payroll
+            .create_item(
+                manager,
+                COMPANY,
+                &NewItem {
+                    code: "py2-later-version".into(),
+                    name: "Effective date proof".into(),
+                    classification_id: class.id,
+                    currency: "XAA".into(),
+                    amount: Decimal::ONE,
+                    effective_from: later,
+                    effective_to: None,
+                },
+            )
+            .await,
+    )?;
     let period = must(
         payroll
             .create_period(
@@ -674,8 +692,8 @@ async fn bounds_and_pages(
                 &NewPeriod {
                     code: "py2-membership".into(),
                     starts_on: from,
-                    ends_on: from,
-                    pay_on: from,
+                    ends_on: later,
+                    pay_on: later,
                 },
             )
             .await,
@@ -698,6 +716,23 @@ async fn bounds_and_pages(
         "unrepresentable twelve-place product",
         payroll.intake(manager, COMPANY, run.id, &input).await,
         |e| matches!(e, Refusal::DecimalRange),
+    )?;
+    denied(
+        "frozen item must be effective on the contribution date",
+        payroll
+            .intake(
+                manager,
+                COMPANY,
+                run.id,
+                &NewContribution {
+                    item_id: later_item.id,
+                    source_key: "py2-item-date".into(),
+                    units: Decimal::ONE,
+                    ..input.clone()
+                },
+            )
+            .await,
+        |e| matches!(e, Refusal::IntakeUnavailable),
     )?;
     let precision = must(
         payroll
@@ -834,7 +869,7 @@ async fn bounds_and_pages(
     )?;
     // Distinct components must respect Base Events' array bound before a
     // decision is written. Keep this a separate run with its own period.
-    let next = from.tomorrow().map_err(|_| Error::Invalid)?;
+    let next = later.tomorrow().map_err(|_| Error::Invalid)?;
     let mut items = Vec::new();
     for i in 0..101 {
         items.push(must(
