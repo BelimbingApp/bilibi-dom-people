@@ -1002,6 +1002,17 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     ] {
         sql_refuses(client, label, sql, id).await?;
     }
+    // The same Skills write must succeed before archiving, so this cannot
+    // pass merely because an invalid subject would have been refused anyway.
+    let policy_write = PolicyChanges {
+        backup_minimum: Some(2),
+        ..PolicyChanges::default()
+    };
+    saved(
+        skills
+            .put_policy(c.admin, super::OTHER_COMPANY, &policy_write)
+            .await,
+    )?;
     let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
     companies
         .archive_company(
@@ -1017,14 +1028,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     refuses(
         "archived company refuses the next write",
         skills
-            .submit_assessment(
-                c.manager,
-                super::OTHER_COMPANY,
-                &AssessmentInput {
-                    request_key: "pk2-archived".into(),
-                    ..base.clone()
-                },
-            )
+            .put_policy(c.admin, super::OTHER_COMPANY, &policy_write)
             .await,
         |e| {
             matches!(
