@@ -731,7 +731,11 @@ async fn bounds_and_pages(
                     phone: None,
                 },
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                eprintln!("page person: {e}");
+                Error::Internal
+            })?;
         let affiliation = affiliations
             .create(
                 manager,
