@@ -1,0 +1,231 @@
+//! Bilimbi Leave.Web.MyLive and Leave.Web.ApprovalsLive. The facade owns
+//! identity and writes; mounted pages keep only drafts and confirmation intent.
+mod approvals;
+mod my;
+
+use crate::{Leave, LeaveError};
+use bilibi_database::{Db, Error, Result};
+use bilibi_tenancy::Scope;
+use bilibi_ui::{
+    page::{LiveState, MountFuture, Page, PageBody, PageFuture, PageRequest},
+    params, BuiltinColumn, Button, ButtonVariant, EmptyState, FlashMap, FlexRow, FlexTable, Html,
+    ListColumns, ListSpec, ListState, StatusKind, TableEmpty, NO_FLASH,
+};
+use serde_json::Value;
+use std::{collections::HashMap, sync::Arc};
+
+pub(crate) const PAGES: &str = "people/leave.pages";
+struct Core {
+    db: Db,
+    leave: Arc<Leave>,
+}
+pub(crate) struct Pages(Arc<Core>);
+impl Pages {
+    pub(crate) fn new(db: Db, leave: Arc<Leave>) -> Self {
+        Self(Arc::new(Core { db, leave }))
+    }
+}
+impl Page<Scope, Error> for Pages {
+    fn title(&self, operation: &str) -> Option<&'static str> {
+        match operation {
+            "my" => Some("My leave"),
+            "requests" => Some("Leave approvals"),
+            _ => None,
+        }
+    }
+    fn render<'a>(&'a self, request: PageRequest<'a, Scope>) -> PageFuture<'a, Error> {
+        Box::pin(async move {
+            let scope = request.scope.ok_or(Error::Unauthorized)?;
+            let html = match request.operation {
+                "my" => {
+                    let mut page = my::My::new(self.0.clone())?;
+                    page.load(scope, true).await?;
+                    page.render()?
+                }
+                "requests" => {
+                    let mut page = approvals::Approvals::new(self.0.clone(), request.query)?;
+                    page.load(scope, true).await?;
+                    page.render()?
+                }
+                _ => return Err(Error::NotFound),
+            };
+            Ok(PageBody {
+                html,
+                live: true,
+                title: None,
+            })
+        })
+    }
+    fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
+        Box::pin(async move {
+            let page: Box<dyn LiveState<Scope, Error>> = match request.operation {
+                "my" => Box::new(my::My::new(self.0.clone())?),
+                "requests" => Box::new(approvals::Approvals::new(self.0.clone(), request.query)?),
+                _ => return Ok(None),
+            };
+            Ok(Some(page))
+        })
+    }
+}
+
+#[derive(Default)]
+struct Flash(Option<(StatusKind, String)>);
+impl Flash {
+    fn success(&mut self, text: &str) {
+        self.0 = Some((StatusKind::Success, text.into()));
+    }
+    fn error(&mut self, text: &str) {
+        self.0 = Some((StatusKind::Error, text.into()));
+    }
+    fn clear(&mut self, payload: &Value) {
+        if self.0.as_ref().is_some_and(|(kind, _)| {
+            Some(kind.name()) == payload.get("key").and_then(Value::as_str)
+        }) {
+            self.0 = None;
+        }
+    }
+    fn map(&self) -> FlashMap<'_> {
+        let mut map = NO_FLASH;
+        if let Some((kind, text)) = &self.0 {
+            match kind {
+                StatusKind::Success => map.success = text,
+                StatusKind::Error => map.error = text,
+                StatusKind::Warning => map.warning = text,
+                StatusKind::Info => map.info = text,
+            }
+        }
+        map
+    }
+}
+
+/// Bilimbi has bounded lists without sorting, filters or paging on these
+/// pages. Keep that spec alongside column/compact state rather than adding
+/// an independent query parser or changing the facade's order and bounds.
+struct Table {
+    columns: ListColumns,
+    list: ListState,
+    event: &'static str,
+}
+impl Table {
+    fn new(id: &str, event: &'static str, labels: &[(&str, &str)]) -> Result<Self> {
+        Ok(Self {
+            columns: ListColumns::mount(
+                id,
+                labels
+                    .iter()
+                    .map(|(key, label)| {
+                        let col = BuiltinColumn::new(key, label);
+                        if [
+                            "entitlement",
+                            "carried",
+                            "opening",
+                            "adjustment",
+                            "taken",
+                            "balance",
+                            "pending",
+                            "available",
+                            "quantity",
+                        ]
+                        .contains(key)
+                        {
+                            col.right()
+                        } else {
+                            col
+                        }
+                    })
+                    .collect(),
+            )
+            .map_err(|_| Error::Internal)?,
+            list: ListState::parse(
+                &HashMap::new(),
+                ListSpec {
+                    omit_defaults: true,
+                    ..ListSpec::default()
+                }
+                .shared()
+                .map_err(|_| Error::Internal)?,
+            )
+            .map_err(|_| Error::Internal)?,
+            event,
+        })
+    }
+    fn load<T>(&mut self, rows: &[T], key: impl Fn(&T) -> String) {
+        self.columns.load(rows, key);
+    }
+    fn event(&mut self, payload: &Value) {
+        self.columns.handle(&params::string_values(payload));
+    }
+    fn render(&self, caption: &str, rows: Vec<FlexRow>, empty: EmptyState) -> Result<Html> {
+        let none = rows.is_empty();
+        let mut table = FlexTable::new(&self.columns.id, self.columns.flex_columns(), rows)
+            .sorted(self.list.sort_by.as_deref(), self.list.sort_dir);
+        table.event = self.event;
+        table.caption = caption;
+        table.zoom = self.columns.zoom;
+        table.suggestions = self.columns.flex_suggestions();
+        table.add_query = &self.columns.add_query;
+        if none {
+            table.empty = Some(TableEmpty::State(empty));
+        }
+        render(&table)
+    }
+}
+fn render(template: &impl askama::Template) -> Result<Html> {
+    Html::render(template).map_err(|_| Error::Internal)
+}
+fn action(event: &str, name: &str, value: &str, label: &str) -> Result<Html> {
+    render(&Button {
+        event,
+        name,
+        value,
+        body: Html::text(label),
+        ..Button::default()
+    })
+}
+fn submit(label: &str) -> Result<Html> {
+    render(&Button {
+        button_type: "submit",
+        variant: ButtonVariant::Primary,
+        body: Html::text(label),
+        ..Button::default()
+    })
+}
+fn text(payload: &Value, key: &str) -> String {
+    payload
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+fn unit(unit: &str) -> &'static str {
+    if unit == "hour" {
+        "hours"
+    } else {
+        "days"
+    }
+}
+fn type_name(types: &[crate::LeaveType], id: i64) -> &str {
+    types
+        .iter()
+        .find(|t| t.id == id)
+        .map_or("Leave", |t| &t.name)
+}
+fn dates(request: &crate::Request) -> String {
+    let dates = if request.starts_on == request.ends_on {
+        request.starts_on.to_string()
+    } else {
+        format!("{} to {}", request.starts_on, request.ends_on)
+    };
+    match request.day_part.as_str() {
+        "am" => format!("{dates} (morning)"),
+        "pm" => format!("{dates} (afternoon)"),
+        _ => dates,
+    }
+}
+/// Expected refusals stay within the page; faults still reach the host log.
+fn refusal(error: LeaveError) -> Result<LeaveError> {
+    match error {
+        LeaveError::Failed(error) => Err(error),
+        other => Ok(other),
+    }
+}
