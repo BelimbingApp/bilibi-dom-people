@@ -468,7 +468,7 @@ impl Training {
                 .map(|(id, _)| *id)
                 .collect(),
         };
-        store::tasks(&**client, scope, company, Some(kind), Some(&ids)).await
+        store::tasks(&**client, scope, company, Some(kind), Some(&ids), None).await
     }
     /// Exact policy codes, bounded integers or explicit null. Answers are permanent.
     /// The signed-in employment is re-proved under lock on every write.
@@ -510,11 +510,18 @@ impl Training {
                 other => other.into(),
             })?
             .employee_id;
-        let task = store::tasks(tx.sql(), scope, company, Some(review.kind), None)
-            .await?
-            .into_iter()
-            .find(|t| t.review.id == review_id)
-            .ok_or(TrainingError::AttendanceUnavailable)?;
+        let task = store::tasks(
+            tx.sql(),
+            scope,
+            company,
+            Some(review.kind),
+            None,
+            Some(review_id),
+        )
+        .await?
+        .into_iter()
+        .find(|t| t.review.id == review_id)
+        .ok_or(TrainingError::AttendanceUnavailable)?;
         let employees = self.evaluation_employees(scope, company).await?;
         let subject = employees
             .get(&task.employee_id)
@@ -570,7 +577,7 @@ impl Training {
             .await?;
         let employees = self.evaluation_employees(scope, company).await?;
         let mut result = EvaluationReminders::default();
-        for task in store::tasks(tx.sql(), scope, company, None, None)
+        for task in store::tasks(tx.sql(), scope, company, None, None, None)
             .await?
             .into_iter()
             .filter(|t| t.answer.is_none() && t.reminder.is_none())
@@ -678,6 +685,7 @@ impl Training {
             scope,
             company,
             Some(EvaluationKind::Effectiveness),
+            None,
             None,
         )
         .await?;

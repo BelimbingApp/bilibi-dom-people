@@ -186,6 +186,7 @@ pub(super) async fn tasks(
     company: i64,
     kind: Option<EvaluationKind>,
     ids: Option<&[i64]>,
+    review_id: Option<i64>,
 ) -> Result<Vec<EvaluationTask>> {
     let kind = kind.map(EvaluationKind::as_str);
     let ids = ids.map(<[i64]>::to_vec);
@@ -195,7 +196,7 @@ pub(super) async fn tasks(
         JOIN people_training_evaluation_policies p ON p.id=r.policy_id AND p.tenant_id=r.tenant_id AND p.company_id=r.company_id
         LEFT JOIN people_training_evaluation_answers a ON a.review_id=r.id AND a.tenant_id=r.tenant_id AND a.company_id=r.company_id
         LEFT JOIN people_training_review_reminders m ON m.review_id=r.id AND m.tenant_id=r.tenant_id AND m.company_id=r.company_id
-        WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3::text IS NULL OR r.kind=$3) AND ($4::bigint[] IS NULL OR f.employee_id=ANY($4))
+        WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3::text IS NULL OR r.kind=$3) AND ($4::bigint[] IS NULL OR f.employee_id=ANY($4)) AND ($5::bigint IS NULL OR r.id=$5)
         AND (SELECT latest.status FROM people_training_attendance_facts latest WHERE latest.tenant_id=r.tenant_id AND latest.company_id=r.company_id AND latest.session_id=f.session_id AND latest.employee_id=f.employee_id ORDER BY latest.revision DESC LIMIT 1)='confirmed'
-        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
+        ORDER BY r.due_on,r.id",&[&scope.tenant(),&company,&kind,&ids,&review_id]).await.map_err(Error::from)?.into_iter().map(|r|decode(r.get("value"))).collect()
 }
