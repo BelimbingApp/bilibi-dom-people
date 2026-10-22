@@ -3738,3 +3738,9 @@ mod payroll;
 pub async fn payroll(url: &str) -> Result<()> {
     payroll::run(url).await
 }
+
+// PL3: standalone fixture for My leave and Leave approvals browser proofs.
+mod leave_pages;
+pub async fn leave_pages(url: &str) -> Result<()> {
+    leave_pages::run(url).await
+}
