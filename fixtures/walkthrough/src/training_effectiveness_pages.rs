@@ -62,6 +62,14 @@ async fn refresh(state: &mut Mounted, scope: &Scope) -> Result<LiveBody> {
 }
 
 pub async fn run(url: &str, action: &str) -> Result<()> {
+    // The delegated control installs the composition itself; installing twice
+    // would register process-wide authorization bindings twice.
+    if matches!(
+        action,
+        "unlink-staff" | "relink-staff" | "archive-company-three"
+    ) {
+        return crate::training_learning_control(url, action).await;
+    }
     bilibi_base::link();
     bilibi_core::link();
     bilibi_domains::link();
@@ -121,12 +129,6 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             )
             .await?;
         return Ok(());
-    }
-    if matches!(
-        action,
-        "unlink-staff" | "relink-staff" | "archive-company-three"
-    ) {
-        return crate::training_learning_control(url, action).await;
     }
     for cap in [
         INSIGHTS_VIEW,
