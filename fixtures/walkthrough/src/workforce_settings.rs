@@ -177,16 +177,16 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             &c,
             &manager,
             DIRECTORY_PORT,
-            json!({"kind":"company","company_id":1}),
+            json!({"read":"company","company_id":1}),
         )
         .await
         .map_err(|_| Error::Internal)?;
     prove(
-        company["company"]["platform_company_id"] == 1
-            && company["company"]["workforce_company_id"] == 1,
+        company["value"]["platform_company_id"] == 1
+            && company["value"]["workforce_company_id"] == 1,
         "company identity keeps both axes",
     )?;
-    let start = json!({"kind":"employees","company_id":1,"page_size":1,"cursor":null});
+    let start = json!({"read":"employees","company_id":1,"page_size":1,"cursor":null});
     let page = ports
         .call_json(&c, &manager, DIRECTORY_PORT, start.clone())
         .await
@@ -231,7 +231,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             &c,
             &manager,
             DIRECTORY_PORT,
-            json!({"kind":"employees","company_id":1,"page_size":1,"cursor":cursor}),
+            json!({"read":"employees","company_id":1,"page_size":1,"cursor":cursor}),
         )
         .await
         .map_err(|_| Error::Internal)?;
@@ -273,7 +273,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             &contact_tx,
             &admin,
             DIRECTORY_PORT,
-            json!({"kind":"employees","company_id":1}),
+            json!({"read":"employees","company_id":1}),
         )
         .await
         .map_err(|_| Error::Internal)?;
@@ -298,7 +298,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             &c,
             &viewer,
             DIRECTORY_PORT,
-            json!({"kind":"employees","company_id":1}),
+            json!({"read":"employees","company_id":1}),
         )
         .await
         .map_err(|_| Error::Internal)?;
@@ -309,12 +309,12 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         "Core contact permissions are preserved",
     )?;
     for bad in [
-        json!({"kind":"employees","company_id":1,"page_size":0}),
-        json!({"kind":"employees","company_id":1,"page_size":1001}),
-        json!({"kind":"employees","company_id":1,"page_size":2,"cursor":cursor}),
-        json!({"kind":"employees","company_id":2,"page_size":1,"cursor":cursor}),
-        json!({"kind":"employees","company_id":1,"cursor":"broken"}),
-        json!({"kind":"company","company_id":1,"actor_id":4}),
+        json!({"read":"employees","company_id":1,"page_size":0}),
+        json!({"read":"employees","company_id":1,"page_size":1001}),
+        json!({"read":"employees","company_id":1,"page_size":2,"cursor":cursor}),
+        json!({"read":"employees","company_id":2,"page_size":1,"cursor":cursor}),
+        json!({"read":"employees","company_id":1,"cursor":"broken"}),
+        json!({"read":"company","company_id":1,"actor_id":4}),
     ] {
         prove(
             matches!(
@@ -330,7 +330,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
                 &c,
                 &manager,
                 DIRECTORY_PORT,
-                json!({"kind":"company","company_id":100}),
+                json!({"read":"company","company_id":100}),
             )
             .await
             .is_err(),
@@ -347,7 +347,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
                 &c,
                 &manager,
                 DIRECTORY_PORT,
-                json!({"kind":"employees","company_id":1,"page_size":1,"cursor":cursor}),
+                json!({"read":"employees","company_id":1,"page_size":1,"cursor":cursor}),
             )
             .await
             .is_err(),
@@ -375,11 +375,11 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             &c,
             &manager,
             DIRECTORY_PORT,
-            json!({"kind":"positions","company_id":1,"as_of":"2026-10-24","page_size":1}),
+            json!({"read":"positions","company_id":1,"as_of":"2026-10-24","page_size":1}),
         )
         .await
         .map_err(|_| Error::Internal)?;
-    let continued = ports.call_json(&c, &manager, DIRECTORY_PORT, json!({"kind":"positions","company_id":1,"as_of":"2026-10-24","page_size":1,"cursor":positions["next_cursor"]})).await.map_err(|_| Error::Internal)?;
+    let continued = ports.call_json(&c, &manager, DIRECTORY_PORT, json!({"read":"positions","company_id":1,"as_of":"2026-10-24","page_size":1,"cursor":positions["next_cursor"]})).await.map_err(|_| Error::Internal)?;
     prove(
         positions["positions"]
             .as_array()
@@ -512,7 +512,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
                     &c,
                     &manager,
                     DIRECTORY_PORT,
-                    json!({"kind":"company","company_id":3})
+                    json!({"read":"company","company_id":3})
                 )
                 .await,
             Err(PortError::Refused(Error::NotFound))

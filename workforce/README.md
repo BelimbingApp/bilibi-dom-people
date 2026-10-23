@@ -368,17 +368,17 @@ The provider is `people/workforce.directory`. Call it through Base Ports with th
 Request:
 
 ```json
-{"kind":"company","company_id":1}
+{"read":"company","company_id":1}
 ```
 
-The answer contains `freshness: "current"` and `company`, with the existing `Company` fields: `reference`, `platform_company_id`, `workforce_company_id`, `name` and `code`. Native company axes currently both name the Core company. Keep both axes when validating a connection. A reference is `{ "source_id": "people/native", "type": "company", "stable_id": "1" }`.
+The answer contains `freshness: "current"` and `value`, with the existing `Company` fields: `reference`, `platform_company_id`, `workforce_company_id`, `name` and `code`. Native company axes currently both name the Core company. Keep both axes when validating a connection. A reference is `{ "source_id": "people/native", "type": "company", "stable_id": "1" }`.
 
 ### Employee pages
 
 Start a pass with:
 
 ```json
-{"kind":"employees","company_id":1,"page_size":250,"cursor":null}
+{"read":"employees","company_id":1,"page_size":250,"cursor":null}
 ```
 
 The answer contains:
@@ -405,7 +405,7 @@ The same scan is available to People callers through `employee_page(scope, compa
 Request:
 
 ```json
-{"kind":"positions","company_id":1,"as_of":"2026-10-24","page_size":50,"cursor":null}
+{"read":"positions","company_id":1,"as_of":"2026-10-24","page_size":50,"cursor":null}
 ```
 
 Workforce passes the scan through `people/organisation.positions` on the caller's client. The default size is 50; the allowed range is 1–100. The answer has the existing `PositionPage` fields (`positions`, `next_cursor`, `high_water_id`), plus `freshness: "current"`, `snapshot: true` and the per-pass `watermark`. Position and assignment fields are the same as in the Positions contract above. The outer cursor preserves the observation time and binds tenant, company, day and page size while carrying Organisation's opaque keyset cursor. Continue with the same request bounds until `next_cursor` is null.
@@ -414,7 +414,7 @@ Without Organisation, the answer is `freshness: "unavailable"`, `reason: "organi
 
 ### Refusals
 
-Unknown kinds or fields, malformed values, out-of-range page sizes and invalid or mismatched cursors are `PortError::Refused(Error::Invalid)`. Missing, archived, deleted, cross-tenant companies are `NotFound` or `Forbidden`, according to the company owner's proof. No request field can replace the caller's scope or select a different actor. A database failure remains a failure; it never becomes an empty successful page.
+Unknown reads or fields, malformed values, out-of-range page sizes and invalid or mismatched cursors are `PortError::Refused(Error::Invalid)`. Missing, archived, deleted, cross-tenant companies are `NotFound` or `Forbidden`, according to the company owner's proof. No request field can replace the caller's scope or select a different actor. A database failure remains a failure; it never becomes an empty successful page.
 
 ## PW2 proof
 

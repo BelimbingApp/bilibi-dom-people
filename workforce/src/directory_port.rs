@@ -16,7 +16,7 @@ pub(crate) fn install(facade: Arc<Workforce>) {
 }
 
 #[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(tag = "read", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
     Company {
         company_id: i64,
@@ -70,7 +70,7 @@ impl PortProvider for DirectoryPort {
                     let read =
                         on_client!(client, |c| facade.company_on(c, scope, company_id).await)
                             .map_err(refused)?;
-                    Ok(json!({"company": read.value, "freshness": "current"}))
+                    Ok(json!({"value": read.value, "freshness": "current"}))
                 }
                 Request::Employees {
                     company_id,
