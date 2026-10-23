@@ -4140,3 +4140,9 @@ mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
 }
+
+// PW2: standalone settings and directory-port proof, independent of other slices.
+mod workforce_settings;
+pub async fn workforce_settings(url: &str, action: &str) -> Result<()> {
+    workforce_settings::run(url, action).await
+}
