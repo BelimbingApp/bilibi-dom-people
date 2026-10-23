@@ -519,6 +519,45 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         ),
         "directory refuses an archived company",
     )?;
+    // More concurrent renders than the pool can serve at once must finish:
+    // an access-check rental cannot be held while the facade rents another.
+    let mut loads = tokio::task::JoinSet::new();
+    for _ in 0..40 {
+        let pages = pages.clone();
+        let scope = manager.clone();
+        loads.spawn(async move {
+            let empty = HashMap::new();
+            pages
+                .0
+                .render(PageRequest {
+                    operation: "settings",
+                    scope: Some(&scope),
+                    path: &empty,
+                    query: &empty,
+                    body: &[],
+                    framed: false,
+                })
+                .await
+                .map(|body| body.html.contains("workforce-settings-form"))
+                .unwrap_or(false)
+        });
+    }
+    let concurrent = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let mut completed = 0;
+        while let Some(result) = loads.join_next().await {
+            if result.unwrap_or(false) {
+                completed += 1;
+            }
+        }
+        completed == 40
+    })
+    .await
+    .unwrap_or(false);
+    loads.abort_all();
+    prove(
+        concurrent,
+        "40 parallel settings renders complete within the pool limit",
+    )?;
     let _ = third;
     println!("PW2 browser fixture ready: admin@example.test, manager@example.test and viewer@example.test; password bilibi-dev.");
     Ok(())
