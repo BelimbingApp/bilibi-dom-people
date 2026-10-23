@@ -20,7 +20,7 @@
 //! (Base DateTime's `localization.timezone`) bounds its days.
 //!
 //! The catalog, participation, evidence and learning governance share this facade. The Courses and
-//! Sessions & calendar pages (PT6) and the menu leaves land with them.
+//! Sessions & calendar pages provide the catalog UI and menu leaves.
 //! See `README.md`.
 mod evaluation;
 mod evaluation_store;
@@ -40,6 +40,7 @@ mod insights;
 mod participation;
 mod passport;
 mod passport_store;
+mod web_catalog;
 pub use insights::{InsightDrillRow, InsightPeriod, InsightRow, INSIGHTS_VIEW};
 pub use passport::{
     Passport, PassportAudience, PassportDirectory, PassportEvidence, PassportRow, TrainingPage,
@@ -235,6 +236,8 @@ pub enum TrainingError {
     /// Refused values, in the words a form shows beside each field.
     #[error("Check the entered values. Codes must be unique and capacity must be a positive whole number.")]
     Invalid(Vec<FieldError>),
+    #[error("This course changed. Refresh and try again.")]
+    CourseChanged,
     /// A database or capture failure; never a refusal.
     #[error("That could not be completed. Refresh and try again.")]
     Failed(Error),
@@ -289,6 +292,13 @@ pub struct Course {
     pub active: bool,
     pub actor_user_id: i64,
     pub impersonator_id: Option<i64>,
+}
+
+impl Course {
+    /// Opaque stored-value snapshot for inline draft conflict detection.
+    pub fn edit_version(&self) -> String {
+        serde_json::json!([self.name, self.description, self.active]).to_string()
+    }
 }
 
 /// An active course as a form offers it.
@@ -450,6 +460,32 @@ impl Training {
         course_id: i64,
         update: &CourseUpdate,
     ) -> Result<Course> {
+        self.update_course_inner(scope, company_id, course_id, update, None)
+            .await
+    }
+
+    /// Inline edits carry the stored snapshot they began from. The writable
+    /// company and course locks make the comparison atomic with the update.
+    pub async fn update_course_versioned(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        course_id: i64,
+        update: &CourseUpdate,
+        expected: &str,
+    ) -> Result<Course> {
+        self.update_course_inner(scope, company_id, course_id, update, Some(expected))
+            .await
+    }
+
+    async fn update_course_inner(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        course_id: i64,
+        update: &CourseUpdate,
+        expected: Option<&str>,
+    ) -> Result<Course> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company_id, COURSES_MANAGE)
             .await?;
@@ -465,6 +501,9 @@ impl Training {
             .authorize(tx.sql(), scope, company_id, COURSES_MANAGE)
             .await?;
         let current = catalog::lock_course(tx.sql(), scope.tenant(), company_id, course_id).await?;
+        if expected.is_some_and(|version| version != current.edit_version()) {
+            return Err(TrainingError::CourseChanged);
+        }
         let valid = catalog::validate_course_update(&current, update)?;
         let active = update.active.unwrap_or(current.active);
         let course =
