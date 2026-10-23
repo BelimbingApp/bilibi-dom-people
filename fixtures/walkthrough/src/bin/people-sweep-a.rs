@@ -274,6 +274,83 @@ async fn main() -> Result<()> {
             }),
         "overlapping leave slots refuse on the employee half-day index",
     )?;
+    drop(client);
+    archive_queued_write(&db, &services, &admin).await?;
     println!("PV1 sweep A complete; use the same database for Chrome captures.");
     Ok(())
+}
+
+async fn wait_for_blocked(db: &bilibi_database::Db, count: i64) -> Result<()> {
+    let client = db.get().await?;
+    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        loop {
+            let waiting: i64 = client.query_one("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND cardinality(pg_blocking_pids(pid))>0", &[]).await?.get(0);
+            if waiting >= count {
+                return Ok(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }).await.map_err(|_| Error::Internal)?
+}
+
+async fn archive_queued_write(
+    db: &bilibi_database::Db,
+    services: &Services,
+    admin: &Scope,
+) -> Result<()> {
+    // Company 062 belongs to the Platform's disposable fixture. Hold only a
+    // read lock here; Core owns the actual archive and its audit mutation.
+    let mut client = db.get().await?;
+    let tx = client.transaction().await?;
+    let row = tx
+        .query_one(
+            "SELECT status FROM companies WHERE tenant_id=$1 AND id=62 FOR UPDATE",
+            &[&admin.tenant()],
+        )
+        .await?;
+    prove(
+        row.get::<_, String>(0) != "archived",
+        "archive proof company starts writable",
+    )?;
+    let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
+    let archive_scope = admin.clone();
+    let archive = tokio::spawn(async move {
+        companies
+            .archive_company(&archive_scope, 62, Some("PV1 queued-write proof"))
+            .await
+    });
+    if let Err(error) = wait_for_blocked(db, 1).await {
+        archive.abort();
+        tx.rollback().await?;
+        return Err(error);
+    }
+    // PostgreSQL queues the company's archive before the People writer.
+    let workforce =
+        services.get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
+    let write_scope = admin.clone();
+    let write = tokio::spawn(async move {
+        workforce
+            .put_working_statuses(&write_scope, 62, &["active".into()])
+            .await
+    });
+    if let Err(error) = wait_for_blocked(db, 2).await {
+        archive.abort();
+        write.abort();
+        tx.rollback().await?;
+        return Err(error);
+    }
+    tx.commit().await?;
+    let archived = archive.await.map_err(|_| Error::Internal)?;
+    prove(
+        archived.is_ok(),
+        "Core archives the company ahead of the waiting write",
+    )?;
+    let outcome = write.await.map_err(|_| Error::Internal)?;
+    prove(
+        matches!(
+            outcome,
+            Err(bilibi_people_workforce::WorkforceError::CompanyArchived)
+        ),
+        "People write queued before archival refuses after obtaining the company lock",
+    )
 }
