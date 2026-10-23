@@ -266,7 +266,9 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         "communicated target keeps the server-held selection",
     )?;
 
-    let long_evidence = format!("PM2 evidence {}", "Attributable observation. ".repeat(100));
+    let long_evidence = format!("PM2 evidence {}", "Attributable observation. ".repeat(100))
+        .trim_end()
+        .to_owned();
     event(
         &mut state,
         &manager,
