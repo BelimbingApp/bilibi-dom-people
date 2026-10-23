@@ -959,8 +959,11 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // PT6: catalog page events and browser records, after other slices' grant proofs.
+    training_catalog_pages::run(&services, &admin, &manager, &viewer).await?;
+
     println!(
-        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
+        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Courses and Sessions & calendar are available. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
@@ -4140,3 +4143,6 @@ mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
 }
+
+// PT6: catalog page interaction proof, using real services and disposable records.
+mod training_catalog_pages;

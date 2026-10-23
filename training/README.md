@@ -17,6 +17,7 @@ the schema is private.
 | `create_course` | `people.training.courses.manage` | Adds an active course from a `NewCourse` (code, name, optional description) |
 | `update_course` | `people.training.courses.manage` | Changes a course's name, description or active flag (`CourseUpdate`: each `Some` replaces, `None` keeps; an empty description clears it); a course of another company or missing is `NotFound` |
 | `set_course_active` | `people.training.courses.manage` | Deactivates or reactivates a course through `update_course` (the page's Deactivate and Reactivate actions) |
+| `update_course_versioned` | `people.training.courses.manage` | Updates inline drafts only when their stored-value snapshot still matches under the course lock |
 | `events` | `people.training.sessions.view` | The company's events (`Event`) with their course names, by name |
 | `event_courses` | `people.training.sessions.manage` | The active courses an event may deliver, as `(id, name)` choices, so a session manager picks a course without course-management permission |
 | `create_event` | `people.training.sessions.manage` | Adds an event (`NewEvent`: an active course of the company, a name, a positive capacity) |
@@ -340,4 +341,4 @@ Open **Development → Sessions & calendar** to create an event for an active co
 
 Both pages use shared FlexTables with column controls and compact rows. Their company selection and pagination stay in the URL: Courses uses `page`; Events uses `event_page`; Sessions uses `session_page`. All use `perPage` with 25, 50, 100 or 300 rows. Scheduling also keeps `date` (normalized to the first day of its month) and `view=list|calendar`. Each calendar day includes sessions occupying that company-local day, including sessions crossing midnight and excluding an end exactly at midnight. A warning appears at the 500-session limit.
 
-The page checks access before each write-shaped event and the facade checks again inside the company lock. Company selection comes from the authorized URL state; forms cannot supply a different company. Status confirmations retain the chosen course and desired status on the server. Writes still use the declared `PageWrites` allowance until their operation contracts are reviewed.
+The page checks access before each write-shaped event and the facade checks again inside the company lock. Company selection comes from the authorized URL state; forms cannot supply a different company. Status confirmations retain the chosen course and desired status on the server. Inline editors carry `Course::edit_version()` and compare it inside the course lock, so a stale draft cannot overwrite a later edit. Writes still use the declared `PageWrites` allowance until their operation contracts are reviewed.

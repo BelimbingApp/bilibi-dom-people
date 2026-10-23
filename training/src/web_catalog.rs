@@ -325,15 +325,6 @@ impl Catalog {
             self.list.paginate(&self.events);
             self.session_list.paginate(&self.sessions);
         }
-        self.columns.set_available(if self.courses_page {
-            vec!["course", "code", "description", "status"]
-                .into_iter()
-                .chain(self.can_manage.then_some("actions"))
-                .map(str::to_owned)
-                .collect()
-        } else {
-            vec!["event".into(), "course".into(), "capacity".into()]
-        });
         Ok(())
     }
     async fn load_sessions(&mut self, scope: &Scope, company: i64) -> crate::Result<()> {
@@ -442,7 +433,7 @@ impl Catalog {
                 self.draft.insert("time_zone".into(), self.zone.clone());
             }
             "create_course" if self.courses_page && self.modal == Some("course") => {
-                self.draft = params::form_values(payload, "course");
+                self.draft = entry_values(payload, "course");
                 let result = self
                     .training
                     .create_course(
@@ -458,7 +449,7 @@ impl Catalog {
                 self.finish(result, "Course added.");
             }
             "create_event" if !self.courses_page && self.modal == Some("event") => {
-                self.draft = params::form_values(payload, "entry");
+                self.draft = entry_values(payload, "entry");
                 let result = self
                     .training
                     .create_event(
@@ -474,7 +465,7 @@ impl Catalog {
                 self.finish(result, "Event added.");
             }
             "create_session" if !self.courses_page && self.modal == Some("session") => {
-                self.draft = params::form_values(payload, "entry");
+                self.draft = entry_values(payload, "entry");
                 let result = self
                     .training
                     .create_session(
@@ -510,7 +501,13 @@ impl Catalog {
                     };
                     let outcome = match self
                         .training
-                        .update_course(scope, company, id, &update)
+                        .update_course_versioned(
+                            scope,
+                            company,
+                            id,
+                            &update,
+                            &posted(payload, "version"),
+                        )
                         .await
                     {
                         Ok(_) => CommitStatus::Saved,
@@ -622,6 +619,7 @@ impl Catalog {
                         InlineField::new(format!("course-{name}-{}", c.id), name, label, value)
                             .status(self.commits.get(&format!("{}:{name}", c.id)));
                     f.id_value = c.id.to_string();
+                    f.version = c.edit_version();
                     f.save_event = "save_course_field".into();
                     f.editable = self.can_manage;
                     if name == "description" {
@@ -670,6 +668,7 @@ impl Catalog {
         let mut clock = clock.clone();
         if company {
             clock.mode = bilibi_datetime::Mode::Company;
+            clock.timezone.clone_from(&self.zone);
         }
         let value = clock.render(instant, format, bilibi_datetime::Precision::Minute);
         if company {
@@ -726,13 +725,19 @@ impl Catalog {
         id: &str,
         columns: &ListColumns,
         rows: Vec<FlexRow>,
-        empty: Option<EmptyState<'_>>,
+        empty: Option<EmptyState>,
         event: &str,
     ) -> DbResult<Html> {
-        let mut table = FlexTable::new(id, columns.flex_columns(), rows);
+        let mut shown = columns.flex_columns();
+        let mut suggestions = columns.flex_suggestions();
+        if self.courses_page && !self.can_manage {
+            shown.retain(|c| c.id != "actions");
+            suggestions.retain(|c| c.id != "actions");
+        }
+        let mut table = FlexTable::new(id, shown, rows);
         table.event = event;
         table.zoom = columns.zoom;
-        table.suggestions = columns.flex_suggestions();
+        table.suggestions = suggestions;
         table.add_query = &columns.add_query;
         table.empty = empty.map(TableEmpty::State);
         render(&table)
@@ -1192,4 +1197,28 @@ struct Calendar {
 )]
 struct TimeView {
     instant: bilibi_ui::Instant,
+}
+
+// The shared parser limits strings to 1 KiB; course descriptions allow 4,000
+// characters. Keep the small fixed field vocabulary and let the facade validate.
+fn entry_values(payload: &Value, namespace: &str) -> HashMap<String, String> {
+    [
+        "code",
+        "name",
+        "description",
+        "capacity",
+        "course_id",
+        "event_id",
+        "time_zone",
+        "starts_local",
+        "ends_local",
+    ]
+    .into_iter()
+    .filter_map(|key| {
+        payload
+            .get(format!("{namespace}[{key}]"))?
+            .as_str()
+            .map(|value| (key.to_owned(), value.to_owned()))
+    })
+    .collect()
 }
