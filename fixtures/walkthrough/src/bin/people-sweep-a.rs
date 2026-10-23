@@ -218,13 +218,13 @@ async fn main() -> Result<()> {
     // Roll back even if a guard is missing. Each probe requires an actual row
     // and a specific SQLSTATE, so missing fixtures cannot silently pass.
     for (label, table, predicate, sql, code) in [
-        ("leave ledger update", "people_leave_ledger_entries", "TRUE", "UPDATE people_leave_ledger_entries SET quantity=quantity WHERE id=$1", "P0001"),
-        ("leave ledger delete", "people_leave_ledger_entries", "TRUE", "DELETE FROM people_leave_ledger_entries WHERE id=$1", "P0001"),
-        ("leave event update", "people_leave_request_events", "TRUE", "UPDATE people_leave_request_events SET id=id WHERE id=$1", "P0001"),
-        ("claim event delete", "people_claim_request_events", "TRUE", "DELETE FROM people_claim_request_events WHERE id=$1", "P0001"),
-        ("published scale update", "people_skill_scales", "status='published'", "UPDATE people_skill_scales SET name=name WHERE id=$1", "P0001"),
-        ("published profile update", "people_skill_profiles", "status='published'", "UPDATE people_skill_profiles SET name=name WHERE id=$1", "P0001"),
-        ("overlapping substantive assignments", "people_position_placements", "kind='substantive'", "INSERT INTO people_position_placements(position_id,employee_id,kind,effective_from,effective_to) SELECT position_id,employee_id,kind,effective_from,effective_to FROM people_position_placements WHERE id=$1", "23P01"),
+        ("leave ledger update", "people_leave_ledger_entries", "tenant_id=1 AND company_id=1", "UPDATE people_leave_ledger_entries SET quantity=quantity WHERE id=$1", "P0001"),
+        ("leave ledger delete", "people_leave_ledger_entries", "tenant_id=1 AND company_id=1", "DELETE FROM people_leave_ledger_entries WHERE id=$1", "P0001"),
+        ("leave event update", "people_leave_request_events", "tenant_id=1 AND company_id=1", "UPDATE people_leave_request_events SET id=id WHERE id=$1", "P0001"),
+        ("claim event delete", "people_claim_request_events", "tenant_id=1 AND company_id=1", "DELETE FROM people_claim_request_events WHERE id=$1", "P0001"),
+        ("published scale update", "people_skill_scales", "company_id=1 AND status='published'", "UPDATE people_skill_scales SET name=name WHERE id=$1", "P0001"),
+        ("published profile update", "people_skill_profiles", "company_id=1 AND status='published'", "UPDATE people_skill_profiles SET name=name WHERE id=$1", "P0001"),
+        ("overlapping substantive assignments", "people_position_placements", "kind='substantive' AND position_id IN (SELECT id FROM people_positions WHERE company_id=1)", "INSERT INTO people_position_placements(position_id,employee_id,kind,effective_from,effective_to) SELECT position_id,employee_id,kind,effective_from,effective_to FROM people_position_placements WHERE id=$1", "23P01"),
     ] {
         // Identifiers and predicates are compile-time fixture literals above.
         let id: i64 = client.query_one(&format!("SELECT id FROM {table} WHERE {predicate} ORDER BY id LIMIT 1"), &[]).await?.get(0);
@@ -233,6 +233,30 @@ async fn main() -> Result<()> {
         tx.rollback().await?;
         prove(result.as_ref().err().and_then(|e| e.as_db_error()).is_some_and(|e| e.code().code()==code), &format!("database refuses {label} with {code}"))?;
     }
+    let slot: i64 = client.query_one("SELECT id FROM people_leave_application_dates WHERE tenant_id=1 AND company_id=1 AND active ORDER BY id LIMIT 1", &[]).await?.get(0);
+    let tx = client.transaction().await?;
+    // A different request avoids mistaking the per-request date uniqueness
+    // check for the employee's cross-request half-day reservation guard.
+    let request: i64 = tx.query_one("INSERT INTO people_leave_applications(tenant_id,company_id,employee_id,leave_type_id,leave_year,starts_on,ends_on,day_part,quantity,unit,status,request_key,requested_by_user_id) SELECT tenant_id,company_id,employee_id,leave_type_id,leave_year,starts_on,ends_on,day_part,quantity,unit,'pending','pv1-slot-guard',requested_by_user_id FROM people_leave_applications WHERE id=(SELECT request_id FROM people_leave_application_dates WHERE id=$1) RETURNING id", &[&slot]).await?.get(0);
+    let result = tx.execute("INSERT INTO people_leave_application_dates(tenant_id,company_id,employee_id,request_id,on_date,am,pm,quantity,active) SELECT tenant_id,company_id,employee_id,$2,on_date,am,pm,quantity,true FROM people_leave_application_dates WHERE id=$1", &[&slot, &request]).await;
+    tx.rollback().await?;
+    prove(
+        result
+            .as_ref()
+            .err()
+            .and_then(|e| e.as_db_error())
+            .is_some_and(|e| {
+                e.code().code() == "23505"
+                    && matches!(
+                        e.constraint(),
+                        Some(
+                            "people_leave_application_dates_am_unique"
+                                | "people_leave_application_dates_pm_unique"
+                        )
+                    )
+            }),
+        "overlapping leave slots refuse on the employee half-day index",
+    )?;
     println!("PV1 sweep A complete; use the same database for Chrome captures.");
     Ok(())
 }
