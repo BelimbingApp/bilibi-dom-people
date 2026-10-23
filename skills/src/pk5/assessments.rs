@@ -352,7 +352,7 @@ impl Assessments {
             }
             "create_assessment" => {
                 if self.allowed(scope, ASSESSMENTS_SUBMIT).await {
-                    self.draft = params::form_values(p, "assessment");
+                    self.draft = form_values(p, "assessment");
                     let input =
                         assessment_input(&self.draft, &self.request_key).map(|mut input| {
                             input.supersedes_assessment_id =
@@ -433,7 +433,7 @@ impl Assessments {
             }
             "create_reassessment_request" => {
                 if self.allowed(scope, REASSESSMENTS_SUBMIT).await {
-                    self.request_draft = params::form_values(p, "request");
+                    self.request_draft = form_values(p, "request");
                     let get = |k: &str| {
                         self.request_draft
                             .get(k)
@@ -473,7 +473,7 @@ impl Assessments {
                 if self.allowed(scope, REASSESSMENTS_EXECUTE).await
                     && self.allowed(scope, ASSESSMENTS_SUBMIT).await
                 {
-                    self.perform_draft = params::form_values(p, "perform");
+                    self.perform_draft = form_values(p, "perform");
                     let input = assessment_input(&self.perform_draft, &self.request_key);
                     let result = match (self.performing, self.company.id, input) {
                         (Some(r), Some(c), Ok(input)) => {
@@ -495,25 +495,28 @@ impl Assessments {
                 }
             }
             "cancel_reassessment" => {
-                if self.allowed(scope, REASSESSMENTS_EXECUTE).await
-                    || self.allowed(scope, REASSESSMENTS_SUBMIT).await
+                let executable = self
+                    .company
+                    .allowed(&self.core, scope, REASSESSMENTS_EXECUTE)
+                    .await;
+                if !executable && !self.allowed(scope, REASSESSMENTS_SUBMIT).await {
+                    return Ok(());
+                }
+                if let Some(v) = self
+                    .requests
+                    .iter()
+                    .find(|r| Some(r.request.id) == id(p, "id"))
                 {
-                    if let Some(v) = self
-                        .requests
-                        .iter()
-                        .find(|r| Some(r.request.id) == id(p, "id"))
-                    {
-                        self.pending = self.company.id.map(|company| Pending {
-                            company,
-                            command: Command::Cancel(v.request.id),
-                            detail: format!(
-                                "{} · {} · due {}",
-                                v.employee_name,
-                                v.skill_name.as_deref().unwrap_or_default(),
-                                shown(v.request.due_on)
-                            ),
-                        });
-                    }
+                    self.pending = self.company.id.map(|company| Pending {
+                        company,
+                        command: Command::Cancel(v.request.id),
+                        detail: format!(
+                            "{} · {} · due {}",
+                            v.employee_name,
+                            v.skill_name.as_deref().unwrap_or_default(),
+                            shown(v.request.due_on)
+                        ),
+                    });
                 }
             }
             _ => (),
@@ -628,6 +631,14 @@ fn assessment_input(draft: &HashMap<String, String>, key: &str) -> crate::Result
 }
 
 impl Assessments {
+    fn company_field(&self, mut field: Field) -> Field {
+        field.id = format!(
+            "{}-company-{}",
+            field.id,
+            self.company.id.unwrap_or_default()
+        );
+        field
+    }
     fn assessment_form(&self) -> Result<Html> {
         if !self.can_submit {
             return empty(
@@ -645,7 +656,10 @@ impl Assessments {
             return Ok(Html::EMPTY);
         }
         let get = |k: &str| self.draft.get(k).cloned().unwrap_or_default();
-        let f = |k: &str, title: &str| field(&format!("assessment[{k}]"), title).value(get(k));
+        let f = |k: &str, title: &str| {
+            self.company_field(field(&format!("assessment[{k}]"), title))
+                .value(get(k))
+        };
         let corrected = self.correcting.as_ref().map(|r| &r.assessment);
         let employee = self
             .draft
@@ -671,7 +685,11 @@ impl Assessments {
                         .map(|p| (p.name.clone(), p.id.to_string()))
                         .collect(),
                 )
-                .value(employee),
+                .value(employee)
+                .id(format!(
+                    "assessment-employee-company-{}",
+                    self.company.id.unwrap_or_default()
+                )),
                 select(
                     "assessment[skill_id]",
                     "Skill",
@@ -680,7 +698,11 @@ impl Assessments {
                         .map(|s| (s.name.clone(), s.id.to_string()))
                         .collect(),
                 )
-                .value(skill),
+                .value(skill)
+                .id(format!(
+                    "assessment-skill-company-{}",
+                    self.company.id.unwrap_or_default()
+                )),
                 f("assessed_level", "Assessed level")
                     .kind(InputKind::Number)
                     .attr("min", "0")
@@ -966,16 +988,18 @@ impl Assessments {
                 "Waiting on you",
                 self.queue()?,
             )?);
-            body.push(&section(
-                "assessment-form-section",
-                "Assess an employee",
-                self.assessment_form()?,
-            )?);
-            body.push(&section(
-                "reassessment-section",
-                "Reassessment requests",
-                self.reassessments()?,
-            )?);
+            body.push(&render(&AssessmentForms {
+                assessment: section(
+                    "assessment-form-section",
+                    "Assess an employee",
+                    self.assessment_form()?,
+                )?,
+                reassessment: section(
+                    "reassessment-section",
+                    "Reassessment requests",
+                    self.reassessments()?,
+                )?,
+            })?);
             let mut register = render(&Form {
                 id: "register-filter",
                 event: "filter_register",
@@ -1135,4 +1159,30 @@ impl LiveState<Scope, Error> for Assessments {
             })
         })
     }
+}
+
+// Evidence permits 4,000 characters; params::form_values deliberately only
+// accepts 1 KiB per field. Keep these bounded long values for owner validation.
+fn form_values(payload: &Value, namespace: &str) -> HashMap<String, String> {
+    payload
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(k, v)| {
+            let key = k
+                .strip_prefix(namespace)?
+                .strip_prefix('[')?
+                .strip_suffix(']')?;
+            let value = v.as_str().filter(|v| v.len() <= 16_000)?;
+            Some((key.to_owned(), value.to_owned()))
+        })
+        .take(32)
+        .collect()
+}
+
+#[derive(askama::Template)]
+#[template(path = "pk5_assessment_forms.html")]
+struct AssessmentForms {
+    assessment: Html,
+    reassessment: Html,
 }

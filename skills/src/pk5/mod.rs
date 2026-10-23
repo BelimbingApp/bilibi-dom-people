@@ -166,7 +166,12 @@ impl Table {
         })
     }
     fn load<T>(&mut self, rows: &[T], key: impl Fn(&T) -> String) {
+        // Refresh row availability without erasing an in-progress column search.
+        let suggestions = std::mem::take(&mut self.columns.suggestions);
+        let query = std::mem::take(&mut self.columns.add_query);
         self.columns.load(rows, key);
+        self.columns.suggestions = suggestions;
+        self.columns.add_query = query;
     }
     fn event(&mut self, payload: &Value) {
         self.columns.handle(&params::string_values(payload));
@@ -183,9 +188,13 @@ impl Table {
         if none {
             t.empty = Some(TableEmpty::State(EmptyState::missing(empty, "").id(
                 match self.columns.id.as_str() {
-                    "assessments" => "actions-empty-message".to_owned(),
-                    "action-types" => "action-types-none".to_owned(),
-                    "reminders-due" => "reminders-none".to_owned(),
+                    "assessment-register" => "assessment-register-empty".to_owned(),
+                    "team-gaps" => "team-gaps-empty".to_owned(),
+                    "coverage" => "coverage-empty".to_owned(),
+                    "reassessment-requests" => "reassessment-empty".to_owned(),
+                    "my-skills" => "my-skills-empty".to_owned(),
+                    "my-actions" => "my-actions-empty".to_owned(),
+                    "my-reassessments" => "my-reminders-empty".to_owned(),
                     _ => format!("{}-empty-message", self.columns.id),
                 },
             )));
