@@ -238,12 +238,14 @@ async fn main() -> Result<()> {
             concurrency: 2,
             poll_interval: Duration::from_millis(100),
             lease_seconds: 30,
-            max_runtime: Duration::from_secs(60),
+            max_runtime: Duration::from_secs(180),
         },
     )?;
     let (stop, shutdown) = tokio::sync::watch::channel(false);
     let task = tokio::spawn(executor.run(shutdown));
-    let completed = tokio::time::timeout(Duration::from_secs(60), async {
+    // The preceding Payroll proof creates more than 1,000 employees. Leave
+    // checks each eligible employee, and replay may await an expired lease.
+    let completed = tokio::time::timeout(Duration::from_secs(180), async {
         loop {
             let c = db.get().await?;
             let jobs: i64 = c.query_one("SELECT count(*) FROM base_queue_jobs WHERE tenant_id=1 AND id=ANY($1) AND state='completed'", &[&worker_jobs]).await?.get(0);
