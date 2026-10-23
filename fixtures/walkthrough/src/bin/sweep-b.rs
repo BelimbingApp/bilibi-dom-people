@@ -219,10 +219,8 @@ async fn main() -> Result<()> {
             .await?;
     }
     drop(client);
-    let queue = services.get::<bilibi_queue::Queue>("base/queue.store")?;
-    let executor = Executor::new(
-        queue,
-        Arc::new(services),
+    let executor = Executor::from_services(
+        &services,
         Config {
             concurrency: 2,
             poll_interval: Duration::from_millis(100),
