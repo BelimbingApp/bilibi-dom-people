@@ -1,0 +1,5 @@
+{% import "feedback.html" as feedback %}
+<p class="text-sm">Set this company's evaluation settings before publication. Unsaved fields show proposed starting values; nothing applies until you save. Each published version captures due days, checkpoints and reminder lead.</p>
+{% call feedback::error_summary(summary=summary) %}{% endcall %}
+{{ form }}
+{% if !period.is_empty() %}<p id="report-period-start" class="text-sm">The configured reporting period length takes effect from {{ period }}; a changed length starts the day after the last frozen period.</p>{% endif %}

@@ -1,0 +1,4 @@
+{% import "feedback.html" as feedback %}
+<p>Leave a score blank when the outcome is unknown. Submitted answers are permanent.</p>
+{% call feedback::error_summary(summary=summary) %}{% endcall %}
+{{ form }}

@@ -1,0 +1,12 @@
+{# Mirrors Bilimbi Training.Web.InsightsLive. #}
+{% import "components.html" as ui %}{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call ui::page(id="people-learning-insights",class="space-y-4") %}
+{% call ui::header() %}Learning insights{% endcall %}
+<p>Latest session attendance by completion date in UTC. Small employee cohorts and counts are suppressed; effectiveness scores remain in frozen Effectiveness summaries.</p>
+{% if !can_drill %}<p id="insights-period-note">Without record-view access, choose a frozen Effectiveness reporting period.</p>{% endif %}
+{{ toolbar }}
+{% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
+{{ body }}
+{% endcall %}
+</div>

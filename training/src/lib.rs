@@ -752,3 +752,7 @@ async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -
 
 mod web_learning;
 pub use web_learning::LEARNING_VIEW;
+
+mod web_effectiveness;
+mod web_evaluation;
+mod web_insights;

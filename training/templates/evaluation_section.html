@@ -1,0 +1,5 @@
+{% import "components.html" as ui %}
+<section id="{{ id }}" class="space-y-3">
+{% call ui::section_heading(title=title, description=description) %}{% endcall %}
+{{ body }}
+</section>
