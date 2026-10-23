@@ -653,7 +653,7 @@ impl Records {
                             .await;
                         self.finish(result, "Evidence added.");
                     } else {
-                        self.fail("Choose a PDF evidence document.");
+                        self.fail("Choose an evidence PDF first.");
                     }
                 } else {
                     self.fail("Select an attendance fact and obtain evidence management access.");

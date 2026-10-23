@@ -356,3 +356,6 @@ Open `/people/training/records/my` for your latest attendance, or `/people/train
 | Generate a passport PDF | Audience access plus `passport.generate` |
 
 Each write event rechecks its permissions before calling Training, which authorizes again. A retained browser form cannot switch to another company when access is revoked. The UI proof uses the disposable walkthrough and the existing `training-passports` executable; no production rows are installed.
+
+
+For a stale-control browser check, keep the manager's records page open and run `cargo run -p bilibi-people-walkthrough --bin training-records-control -- deny-record` on the same disposable database. Submit the retained form: attendance must be refused. `allow-record` restores access. The command also accepts `deny-evidence`, `allow-evidence`, `deny-retention`, `allow-retention`, `deny-read`, `allow-read`, `deny-workspace`, and `allow-workspace`. `hub-only` lets the staff account open the records task chooser while company-wide attendance stays withheld. The existing `training-passports` controls cover passport revocation and account unlinking.
