@@ -334,7 +334,6 @@ impl Catalog {
         Ok(())
     }
     async fn load_sessions(&mut self, scope: &Scope, company: i64) -> crate::Result<()> {
-        self.zone = self.training.company_zone(scope, company).await?;
         self.month = self
             .list
             .filters
@@ -350,10 +349,12 @@ impl Catalog {
             .last_of_month()
             .checked_add(jiff::Span::new().days(1))
             .map_err(|_| TrainingError::InvalidCalendarRange)?;
-        let (from, until, _) = self
+        let (from, until, zone) = self
             .training
             .company_day_bounds(scope, company, self.month, until)
             .await?;
+        // The bounds and grid must use the same zone if settings change mid-read.
+        self.zone = zone;
         self.sessions = self.training.calendar(scope, company, from, until).await?;
         self.events = self.training.events(scope, company).await?;
         if self.can_manage {
