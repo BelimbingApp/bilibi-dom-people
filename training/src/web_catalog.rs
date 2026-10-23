@@ -661,7 +661,13 @@ impl Catalog {
             })
             .collect()
     }
-    fn time(&self, instant: Timestamp, format: bilibi_datetime::Format, company: bool) -> Html {
+    fn time(
+        &self,
+        id: &str,
+        instant: Timestamp,
+        format: bilibi_datetime::Format,
+        company: bool,
+    ) -> Html {
         let Some(clock) = &self.clock else {
             return Html::EMPTY;
         };
@@ -676,6 +682,7 @@ impl Catalog {
         }
         // The shared instant follows the saved clock in the session list.
         render(&TimeView {
+            id,
             instant: bilibi_ui::Instant::new(
                 &value.iso,
                 &value.text,
@@ -707,11 +714,21 @@ impl Catalog {
                     )
                     .slot(
                         "start",
-                        self.time(s.starts_at, bilibi_datetime::Format::DateTime, false),
+                        self.time(
+                            &format!("session-start-{}", s.id),
+                            s.starts_at,
+                            bilibi_datetime::Format::DateTime,
+                            false,
+                        ),
                     )
                     .slot(
                         "end",
-                        self.time(s.ends_at, bilibi_datetime::Format::DateTime, false),
+                        self.time(
+                            &format!("session-end-{}", s.id),
+                            s.ends_at,
+                            bilibi_datetime::Format::DateTime,
+                            false,
+                        ),
                     )
                     .cell("zone", Cell::text(&s.time_zone))
                     .cell("capacity", Cell::text(s.capacity.to_string()));
@@ -882,7 +899,7 @@ impl Catalog {
                 })
                 .map(|s| CalendarEntry {
                     name: s.name.clone(),
-                    time: self.time(s.starts_at, bilibi_datetime::Format::Time, true),
+                    time: self.time("", s.starts_at, bilibi_datetime::Format::Time, true),
                     capacity: s.capacity,
                 })
                 .collect();
@@ -1192,10 +1209,11 @@ struct Calendar {
 
 #[derive(Template)]
 #[template(
-    source = "{% import \"flex_table.html\" as table %}{% call table::instant(id=instant.iso, i=instant) %}{% endcall %}",
+    source = "{% import \"flex_table.html\" as table %}{% call table::instant(id=id, i=instant) %}{% endcall %}",
     ext = "html"
 )]
-struct TimeView {
+struct TimeView<'a> {
+    id: &'a str,
     instant: bilibi_ui::Instant,
 }
 
