@@ -919,6 +919,7 @@ impl State {
         let mut table = FlexTable::new(TABLES[index].0, host.columns.flex_columns(), rows);
         let event = format!("grid_{index}");
         table.event = &event;
+        table.framed = index != 6; // My targets are already inside the reference card.
         table.zoom = host.columns.zoom;
         table.suggestions = host.columns.flex_suggestions();
         table.add_query = &host.columns.add_query;
