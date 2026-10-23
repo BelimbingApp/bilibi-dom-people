@@ -40,6 +40,7 @@ mod insights;
 mod participation;
 mod passport;
 mod passport_store;
+mod web_records;
 pub use insights::{InsightDrillRow, InsightPeriod, InsightRow, INSIGHTS_VIEW};
 pub use passport::{
     Passport, PassportAudience, PassportDirectory, PassportEvidence, PassportRow, TrainingPage,

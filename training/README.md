@@ -2,7 +2,7 @@
 
 Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages below. The Courses and Sessions & calendar pages arrive in PT6, and Training records in PT7. Evaluation, passports and insights arrive in their own slices. An administrator grants Training access; no Training grant is added to a system role.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages below. The Courses and Sessions & calendar pages arrive in PT6, and Training records is available below. Evaluation and insight pages arrive in their own slices; passport pages are available below. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -328,6 +328,31 @@ Readers without `records.view` must select `period`, exactly matching a frozen E
 
 The company must configure `people.training.evaluation.minimum_cohort` to at least two. Below that many distinct employees, a course exposes no employee, confirmed or absent count. When the overall cohort is large enough but either attendance count is below the minimum, **both attendance counts are withheld**. Frozen periods supply the allowed boundaries; attendance counts still use the latest attendance revisions, matching Bilimbi. Effectiveness scores remain the separate immutable summaries.
 
-The passport/records pages are the PT7 slice and the insights page is PT9. This slice supplies their facade, types, permissions and download handlers.
+The insights page follows in PT9. The records and passport pages below use these permissions and download handlers.
 
 Run the PT5 disposable proof after the default walkthrough with `cargo run -p bilibi-people-walkthrough --bin training-passports`. It creates its own records through the owners, checks corrections and original evidence, both suppression rules, period-only access, revoked grants, unlinking, reporting-line changes, pagination, and complete PDFs at 1,000 and 1,001 records. A disposable SQL reservation gate proves that account unlinking waits for in-flight passport publication, then the old account scope is refused. It prints all four download addresses for browser checks. The same command accepts `deny-my`, `allow-my`, `unlink-staff` and `relink-staff` to change access while a browser session remains open.
+
+
+## Training records and passports
+
+Open `/people/training/records` to confirm attendance, correct a previous revision, attach evidence, or clean expired documents. The workspace permission `people.training.records.workspace.view` opens the page; it grants no company-wide attendance access.
+
+Choose a company and session, then select an employee, attendance status, correction reason, and record key. Reusing an identical key returns the original fact; changing its contents refuses the write. The sessions and revision tables use shared column controls and compact rows. Revisions use `page` and `perPage` (25, 50, 100, or 300).
+
+Select **View evidence** on a revision to see its documents or upload one PDF. Uploads use the shared file control and the operator's `artifacts.max_bytes` limit. The page holds the selected revision on the server and clears unfinished uploads when you change the company, session, or revision. Evidence remains on its original revision after attendance changes.
+
+**Purge expired training documents** and **Retry purge** each open a confirmation. The server keeps the selected company and document until confirmation, and checks retention access again before calling the owner. A partial purge reports the remaining holds rather than showing success.
+
+Open `/people/training/records/my` for your latest attendance, or `/people/training/records/team` for your current direct reports. Choose a company and employee; the passport table keeps pagination in the address. A stale Workforce read shows its notice, and PDF generation needs current data plus `people.training.passport.generate`. **Generate passport PDF** adds a download link for the selected employee. Changing the selection clears that link. Every document download checks the current account link and reporting relationship again.
+
+| Task | Permission under `people.training.` |
+| --- | --- |
+| Open Attendance & evidence | `records.workspace.view` |
+| Read sessions, revisions, and evidence | `records.view` |
+| Record or correct attendance | `records.manage` and record-view access |
+| Attach evidence | `evidence.manage` and record-view access |
+| Purge documents or retry holds | `retention.manage` |
+| Read My or Team passports | `passport.my.view` or `passport.team.view` |
+| Generate a passport PDF | Audience access plus `passport.generate` |
+
+Each write event rechecks its permissions before calling Training, which authorizes again. A retained browser form cannot switch to another company when access is revoked. The UI proof uses the disposable walkthrough and the existing `training-passports` executable; no production rows are installed.
