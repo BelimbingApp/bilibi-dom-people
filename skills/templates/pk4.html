@@ -1,0 +1,19 @@
+{# Bilimbi Skills.Web.CatalogLive and Skills.Web.ProfileLive, using shared UI. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+{% import "workspace.html" as workspace %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id=page_id) %}
+{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}
+{% if let Some(field) = company %}
+{% call forms::form(id="skills-company-form", event="select_company", change=true, class="mt-4") %}
+{% call forms::input(field=field) %}{% endcall %}
+{% endcall %}
+{% endif %}
+{% if let Some(id) = profile %}{% call workspace::announce(kind="people/skills", record_id=id) %}{% endcall %}{% endif %}
+{{ body }}
+{{ confirm }}
+{% endcall %}
+</div>
