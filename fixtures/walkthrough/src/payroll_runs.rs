@@ -15,7 +15,7 @@ use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::page::{LiveInput, LiveRequest, LiveState, PageRequest, PageService};
 use jiff::civil::date;
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, os::unix::fs::PermissionsExt, sync::Arc};
 fn prove(label: &str, yes: bool) -> Result<()> {
     if !yes {
         eprintln!("FAILED: {label}");
@@ -420,6 +420,8 @@ pub(super) async fn run(url: &str) -> Result<()> {
     // Configure private storage through Base Settings, just for this disposable proof.
     let root = std::env::var("BILIBI_PAYROLL_RUN_PROOF_OUT").map_err(|_| Error::Invalid)?;
     std::fs::create_dir_all(&root).map_err(|_| Error::Internal)?;
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
+        .map_err(|_| Error::Internal)?;
     let mut c = db.get().await?;
     let mut tx = services
         .get::<MutationBoundary>("base/database.mutations")?
