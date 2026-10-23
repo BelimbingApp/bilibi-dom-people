@@ -99,6 +99,22 @@ impl Skills {
         Ok(counts)
     }
 
+    /// Company delivery ledger for the policy operator, newest first (1–300).
+    pub async fn reminder_ledger(
+        &self,
+        scope: &Scope,
+        company: i64,
+        limit: i64,
+    ) -> Result<Vec<Reminder>> {
+        if !(1..=300).contains(&limit) {
+            return Err(SkillsError::InvalidReminders);
+        }
+        let client = self.db.get().await.map_err(Error::from)?;
+        authorization::authorize(&**client, scope, company, REMINDERS_SEND).await?;
+        self.current_company(scope, company).await?;
+        reminders::ledger(&**client, scope, company, limit).await
+    }
+
     /// Sent rows addressed to this signed-in account, newest first (1–300).
     pub async fn reminder_inbox(
         &self,

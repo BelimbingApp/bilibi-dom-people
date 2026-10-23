@@ -7,6 +7,7 @@ mod policies;
 mod store;
 mod types;
 mod validate;
+mod web;
 
 pub use contributions::{CAPABILITIES, POLICY_MANAGE, POLICY_VIEW, SELF_VIEW};
 pub use types::*;

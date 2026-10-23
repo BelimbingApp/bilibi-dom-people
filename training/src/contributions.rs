@@ -22,8 +22,12 @@ pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 25] = [
+pub const CAPABILITIES: [&str; 29] = [
     crate::LEARNING_VIEW,
+    crate::PASSPORT_MY_VIEW,
+    crate::PASSPORT_TEAM_VIEW,
+    crate::PASSPORT_GENERATE,
+    crate::INSIGHTS_VIEW,
     COURSES_VIEW,
     COURSES_MANAGE,
     SESSIONS_VIEW,
@@ -128,3 +132,47 @@ inventory::submit! {
             access: bilibi_module_registry::contributions::Access::Capability(RECORDS_VIEW),
         })
 }
+
+// Bilimbi Passport and Insights vocabulary. Pages/menu land with PT7/PT9.
+inventory::submit! {
+    Contribution::new(VOCABULARY, "people/training.passport_vocabulary", provenance!(), &VocabularyContribution {
+        domains: &["people"], verbs: &["generate"],
+        capabilities: &[C::tenant(crate::PASSPORT_MY_VIEW), C::tenant(crate::PASSPORT_TEAM_VIEW), C::tenant(crate::PASSPORT_GENERATE), C::tenant(crate::INSIGHTS_VIEW)],
+        roles: &[], system_principals: &[],
+    })
+}
+macro_rules! passport_download {
+    ($key:literal,$path:literal,$operation:literal,$cap:expr) => {
+        inventory::submit! {
+            Contribution::new(bilibi_module_registry::contributions::DOWNLOADS, $key, provenance!(),
+                &bilibi_module_registry::contributions::Download {
+                    path:$path, service:crate::download::SERVICE, operation:$operation,
+                    access:bilibi_module_registry::contributions::Access::Capability($cap),
+                })
+        }
+    };
+}
+passport_download!(
+    "people/training.passport.my.document",
+    "/people/training/records/my/document/{company_id}/{id}",
+    "my_document",
+    crate::PASSPORT_MY_VIEW
+);
+passport_download!(
+    "people/training.passport.my.evidence",
+    "/people/training/records/my/evidence/{company_id}/{id}",
+    "my_evidence",
+    crate::PASSPORT_MY_VIEW
+);
+passport_download!(
+    "people/training.passport.team.document",
+    "/people/training/records/team/document/{company_id}/{id}",
+    "team_document",
+    crate::PASSPORT_TEAM_VIEW
+);
+passport_download!(
+    "people/training.passport.team.evidence",
+    "/people/training/records/team/evidence/{company_id}/{id}",
+    "team_evidence",
+    crate::PASSPORT_TEAM_VIEW
+);

@@ -380,3 +380,13 @@ pub(super) async fn inbox(
 ) -> Result<Vec<Reminder>> {
     client.query(&format!("SELECT {COLUMNS} FROM people_skill_reminders WHERE tenant_id=$1 AND company_id=$2 AND recipient_user_id=$3 AND state='sent' ORDER BY id DESC LIMIT $4"), &[&scope.tenant(),&company,&scope.user(),&limit]).await.map_err(Error::from)?.iter().map(read).collect()
 }
+
+// Policy operators see delivery failures as well as sent rows, always scoped.
+pub(super) async fn ledger(
+    client: &impl GenericClient,
+    scope: &Scope,
+    company: i64,
+    limit: i64,
+) -> Result<Vec<Reminder>> {
+    client.query(&format!("SELECT {COLUMNS} FROM people_skill_reminders WHERE tenant_id=$1 AND company_id=$2 ORDER BY id DESC LIMIT $3"), &[&scope.tenant(), &company, &limit]).await.map_err(Error::from)?.iter().map(read).collect()
+}

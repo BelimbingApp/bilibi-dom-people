@@ -1,0 +1,11 @@
+{# Bilimbi Progression.Web.PolicyLive and MyLive through shared Bilibi UI. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id=id, variant=variant) %}
+{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}
+{{ body }}
+{% endcall %}
+{{ confirmation }}
+</div>

@@ -409,3 +409,46 @@ impl Workforce {
         })
     }
 }
+
+impl Workforce {
+    /// Object-safe subject proof for an Artifacts owner callback. The caller
+    /// authorizes its own capability and passes the live scope Artifacts just
+    /// re-proved. The caller holds the company's writable lock across its file
+    /// operation, and its self employment lock for a self-service operation.
+    /// This checks current membership on the callback transaction without taking
+    /// those locks again on a second connection. Settings is resolved afresh.
+    pub async fn prove_self_or_direct_report(
+        &self,
+        client: &dyn ProofClient,
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+        direct_report: bool,
+    ) -> Result<()> {
+        let affiliation = scope
+            .actor()
+            .affiliation()
+            .ok_or(WorkforceError::NotLinked)?
+            .get();
+        // ProofClient only offers single-row reads; Settings needs ReadClient.
+        // Resolve configuration on a short separate checkout, refusing pool
+        // saturation rather than waiting while holding an Artifacts checkout.
+        let mut timeouts = self.db.timeouts();
+        timeouts.wait = Some(std::time::Duration::ZERO);
+        let settings_client = self.db.timeout_get(&timeouts).await.map_err(Error::from)?;
+        let statuses = self
+            .working_statuses_of(&**settings_client, scope, company_id)
+            .await?;
+        drop(settings_client);
+        let row = client.query_opt(
+            "SELECT me.id FROM people_workforce_employments me
+             JOIN people_workforce_employments subject ON subject.tenant_id=me.tenant_id AND subject.company_id=me.company_id
+             WHERE me.tenant_id=$1 AND me.company_id=$2 AND me.affiliation_id=$3
+             AND me.status=ANY($4) AND subject.status=ANY($4) AND subject.id=$5
+             AND (($6 AND subject.supervisor_employment_id=me.id AND subject.id<>me.id) OR (NOT $6 AND subject.id=me.id))",
+            &[&scope.tenant(),&company_id,&affiliation,&statuses,&employee_id,&direct_report],
+        ).await?;
+        row.ok_or(WorkforceError::NotLinked)?;
+        Ok(())
+    }
+}
