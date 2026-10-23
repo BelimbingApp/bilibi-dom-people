@@ -24,7 +24,7 @@ macro_rules! provenance {
 }
 inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
-    dependencies: &["base/authz", "base/database", "base/events", "base/menu", "base/ui", "base/datetime", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
+    dependencies: &["base/artifacts", "base/authz", "base/database", "base/events", "base/menu", "base/ui", "base/datetime", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
     migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql")), ("people-payroll-003-outputs", include_str!("../migrations/003-outputs.sql"))],
     services: &[Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
         db: s.get::<Db>("base/database.pool")?.as_ref().clone(),
@@ -35,9 +35,14 @@ inventory::submit! { Module {
         claims: s.get(bilibi_people_claims::SERVICE)?,
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
         events: s.get(bilibi_events::SERVICE)?,
+        artifacts: s.get("base/artifacts.store")?,
     })) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
         s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
-    ))))) }],
+    ))))) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
+        bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(
+            Arc::new(crate::download::DocumentDownload { payroll: s.get(SERVICE)? })
+        )
+    )) }],
 } }
 inventory::submit! { Contribution::new(VOCABULARY, "people/payroll.vocabulary", provenance!(), &VocabularyContribution {
     domains: &["people"], verbs: &["approve"],
@@ -126,3 +131,14 @@ bilibi_menu::contribute!(
     .requires(bilibi_menu::Requirement::Capability(VIEW))
     .order(70)
 );
+
+// Bilimbi Payroll.Web.DocumentController: access is checked on every request.
+inventory::submit! { Contribution::new(
+    bilibi_module_registry::contributions::DOWNLOADS,
+    "people/payroll.documents.download", provenance!(),
+    &bilibi_module_registry::contributions::Download {
+        path: "/people/payroll/documents/{id}",
+        service: crate::download::SERVICE, operation: "document",
+        access: bilibi_module_registry::contributions::Access::Capability(VIEW),
+    }
+) }

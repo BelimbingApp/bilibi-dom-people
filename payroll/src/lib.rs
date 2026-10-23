@@ -2,6 +2,8 @@
 //! This facade owns authorization, version validation, snapshots and locking.
 mod calculation;
 mod contributions;
+mod documents;
+mod download;
 mod error;
 mod input;
 mod intake;
@@ -39,6 +41,7 @@ pub struct Payroll {
     claims: Arc<bilibi_people_claims::Claims>,
     attendance: Arc<bilibi_people_attendance::Attendance>,
     events: Arc<bilibi_events::Events>,
+    artifacts: Arc<bilibi_artifacts::Artifacts>,
 }
 impl Payroll {
     /// Presentation only; writes always authorize again in their transaction.

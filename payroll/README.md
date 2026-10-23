@@ -86,11 +86,39 @@ IDs are JSON integers. `reference` is the frozen period code, `currency` is the 
 
 Base Events limits payloads to 64 KiB and arrays to 100 entries. Approval returns `ApprovalTooLarge` if the aggregated components exceed either limit; the decision remains absent. `DecimalRange` likewise refuses approval before any decision when a component sum exceeds the exact range. Event or audit failure rolls back the decision with it.
 
+## Generate and download documents
+
+An approved run can produce a report for all employees or a payslip for one employee in its frozen totals:
+
+```rust,ignore
+let report = payroll.generate_document(&scope, company_id, run_id, "report", None).await?;
+let payslip = payroll.generate_document(&scope, company_id, run_id, "payslip", Some(employee_id)).await?;
+let document = payroll.read_document(&scope, company_id, &report.artifact_id).await?;
+```
+
+Generation requires both `people.payroll.manage` and `people.payroll.view`. Reads require `people.payroll.view`. Unapproved and rejected runs cannot produce documents. A report must have no employee selection; a payslip must select an employment ID present in the frozen calculation. Current employment changes do not rewrite approved history.
+
+`DocumentOwner` implements Base Artifacts `Owner` and `PdfOwner`. Its stable owner ID is `people/payroll`; its concrete Rust type name is persisted too. **Do not rename this adapter without a data migration.** The renderer re-reads the approved calculation, taking only the employee selection from its input. It prints the currency, digest, frozen lines and totals in Bilimbi's order and wording. Base Artifacts supplies the compact A4 pagination and deterministic PDF serializer. Repeated generation creates separate artifact and provenance IDs with identical PDF bytes.
+
+Base Artifacts must have an effective private storage folder and retention period. An explicitly cleared `artifacts.storage_root` (empty string) or `artifacts.retention_days` (`null`) refuses generation. Configure them through Global settings; Payroll adds no storage setting of its own. Other Base limits, including maximum document size, also apply.
+
+Download through `/people/payroll/documents/{artifact_id}?company_id={company_id}`. The `DOWNLOADS` contribution checks the current view grant on every request. Payroll and Artifacts reauthorize the account, company and approved run again before releasing bytes. The owner returns 404 for missing or inaccessible documents; the host handles session and route access first. `FileBody` supplies the attachment filename, `private, no-store`, `nosniff` and restrictive content policy.
+
+Artifacts commits reservations and publication before Payroll links the immutable document record through `MutationBoundary`, under the writable company lock. If that link fails, the artifact stays tracked for expiry and recovery. Never remove bytes directly after a failed link: publication might already have committed.
+
+## Purge expired bytes
+
+Use `purge` with `people.payroll.manage` to process Base Artifacts' bounded batch for this company and owner. Unexpired files stay available. Failed cleanup retains its tombstone and records the attempt; Base settings control retry delay, batch size and the attempt limit.
+
+`purge_holds` lists cleanup failures that reached that limit. After fixing storage, call `retry_purge` with the held artifact ID. It releases the cleanup hold and attempts removal again. Every callback checks current company reach, the manage grant and the approved run. These cleanup holds are Base Artifacts' operator worklist, separate from legal holds. No new worker or schedule is installed.
+
+Document provenance and audit evidence remain after the bytes expire or are purged. A listed download can therefore be unavailable; callers should handle that outcome.
+
 ## Verification and next slices
 
 `fixtures/walkthrough` holds the disposable-database Payroll proof. Run its default binary first, then `cargo run -p bilibi-people-walkthrough --bin payroll`. Then run `cargo run -p bilibi-people-walkthrough --bin payroll_calculation`. The proofs create records through public facades and check exact values, canonical digest, concurrent retries, reviewer exclusions, event publication, grant revocation and PostgreSQL guards. Use only a disposable database.
 
-PY4 contributes the Setup and Attendance mapping pages and the two setup menu leaves. PY2 supplies contribution intake, exact calculation, independent decisions and events; private documents follow in PY3, then run pages in PY5. The facade needs no Platform changes.
+PY4 contributes the Setup and Attendance mapping pages and the two setup menu leaves. PY2 supplies contribution intake, exact calculation, independent decisions and events; PY3 supplies private documents. Run pages follow in PY5. The facade needs no Platform changes.
 
 ## Setup pages
 
@@ -105,3 +133,7 @@ The Payroll runs link is shared with the run page delivered by PY5. Page writes 
 Company choices use Workforce's authorized selectable companies and exclude archived companies. Workforce's public summary currently exposes only the archived flag. Matching Bilimbi's active-only company filter also needs the full company status from its owner; the pages do not query Core's table or require an extra administration grant to infer it.
 
 For the page proof, run `cargo run -p bilibi-people-walkthrough --bin payroll_pages` against a fresh disposable database. It installs the Platform fixture and exercises the mounted page services with real database writes: each add form, exact decimals, field errors, both source mappings, a future attendance rule, overlap refusals, freeze cancellation and forged parameters, company switching, revoked permission before locking, and a read-only viewer. The resulting accounts can then be used for browser checks.
+
+For PY3, run the default walkthrough on a fresh database, then `BILIBI_PAYROLL_PROOF_OUT=/absolute/private/task-directory cargo run -p bilibi-people-walkthrough --bin payroll_documents`. It creates its own approved run and proves pagination inputs, deterministic reports, payslip selection, policy refusals, download headers, grant revocation, expiry and held cleanup recovery. The output directory receives PDFs and frozen calculation data for comparison with Bilimbi.
+
+PY1–PY3 contribute no page or menu leaf. Run pages follow in PY5. No Platform change is required.

@@ -37,6 +37,7 @@ mod assessment_types;
 mod assessments;
 mod catalog;
 mod contributions;
+mod pk6;
 mod policy;
 mod positions;
 mod profiles;
