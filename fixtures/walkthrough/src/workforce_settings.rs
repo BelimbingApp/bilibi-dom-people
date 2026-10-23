@@ -96,6 +96,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         SETTINGS_MANAGE,
         EMPLOYMENT_VIEW,
         bilibi_company::TENANT_WIDE,
+        bilibi_affiliation::contributions::LIST,
     ] {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
@@ -284,6 +285,14 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         "port sees pending Core contact changes on the caller's transaction",
     )?;
     contact_tx.rollback().await?;
+    grants
+        .set_direct(
+            &admin,
+            2,
+            bilibi_affiliation::contributions::LIST,
+            Some(false),
+        )
+        .await?;
     let hidden = ports
         .call_json(
             &c,

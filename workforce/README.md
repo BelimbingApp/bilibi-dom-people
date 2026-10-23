@@ -418,4 +418,6 @@ Unknown kinds or fields, malformed values, out-of-range page sizes and invalid o
 
 ## PW2 proof
 
-The PW2 block at the end of `fixtures/walkthrough/src/lib.rs` exercises this port on the fixture database: both company axes, one-row employee pages, stable watermarks, bounded continuation, mismatched cursors, Core contact permissions, and the Organisation pass-through. Open the settings page as the fixture administrator to exercise company selection, status saves, empty-selection refusal and the counts table.
+Run `cargo run -p bilibi-people-walkthrough --bin workforce-settings -- setup` against an empty disposable database. The PW2 block exported at the end of `fixtures/walkthrough/src/lib.rs` exercises this port: both company axes, one-row employee pages, stable watermarks, bounded continuation, mismatched cursors, Core contact permissions, pending Core contact changes on the caller’s transaction, archived-company refusals and the Organisation pass-through. Open the settings page as the fixture administrator to exercise company selection, status saves, empty-selection refusal and the counts table.
+
+While the manager’s page stays open, run the same binary with `revoke` or `restore` to change its settings grant through Authz. The `archive` action archives Company 004 through Core for a mounted-page refusal check. These controls are fixture commands, never application routes.
