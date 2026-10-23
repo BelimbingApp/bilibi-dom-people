@@ -312,6 +312,20 @@ impl Assessments {
     }
     async fn event(&mut self, scope: &Scope, p: &Value) -> Result<()> {
         let event = text(p, "type");
+        if matches!(
+            event,
+            "start_correction"
+                | "review_assessment"
+                | "start_return"
+                | "finalize_assessment"
+                | "return_assessment"
+                | "start_perform"
+                | "cancel_reassessment"
+        ) {
+            // Another reviewer may have acted since the last render. Resolve
+            // selections against the current scoped queue before holding them.
+            self.load(scope).await?;
+        }
         match event {
             "clear-flash" => self.flash.clear(p),
             "select_company" => {

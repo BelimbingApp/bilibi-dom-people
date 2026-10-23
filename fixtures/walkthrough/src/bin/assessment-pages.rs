@@ -300,6 +300,16 @@ async fn main() -> Result<()> {
         html.contains("Assessment submitted for review."),
         "returned work is corrected by a new submission",
     )?;
+    check(
+        must(
+            skills
+                .list_assessments(&admin, 1, &AssessmentFilters::default())
+                .await,
+        )?
+        .iter()
+        .any(|r| r.assessment.supersedes_assessment_id == Some(submitted.assessment.id)),
+        "correction retains the returned assessment as its predecessor",
+    )?;
     let html = event(
         &mut page,
         &manager,
