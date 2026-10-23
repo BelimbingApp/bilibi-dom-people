@@ -83,10 +83,10 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
             saved(
                 services
                     .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
-                    .archive_company(&admin, 3, Some("PW2 mounted-page proof"))
+                    .archive_company(&admin, 4, Some("PW2 mounted-page proof"))
                     .await,
             )?;
-            println!("PW2 archived company 3 through Core");
+            println!("PW2 archived company 4 through Core");
             return Ok(());
         }
         "setup" => (),
@@ -241,6 +241,49 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         next["employees"][0]["email"] == "pw2-2@example.test",
         "Core supplies the work email",
     )?;
+    // Change a Core contact on the caller's audited transaction, then roll it
+    // back. The port must see the pending owner write without another rental.
+    let mutations = services.get::<bilibi_database::MutationBoundary>("base/database.mutations")?;
+    let mut contact_client = db.get().await?;
+    let mut contact_tx = mutations
+        .begin(
+            &mut contact_client,
+            admin.mutation_context("people.workforce.directory_visibility_proof"),
+        )
+        .await?;
+    let affiliation_id =
+        bilibi_party_ids::AffiliationId::new(second.affiliation_id).map_err(|_| Error::Invalid)?;
+    let affiliation =
+        bilibi_affiliation::identity::read(contact_tx.sql(), &admin, affiliation_id).await?;
+    let mut contact = affiliation.affiliation;
+    contact.work_email = Some("pw2-pending@example.test".into());
+    bilibi_affiliation::identity::update(
+        &mut contact_tx,
+        &admin,
+        affiliation_id,
+        &bilibi_affiliation::Update {
+            version: affiliation.version,
+            affiliation: contact,
+        },
+    )
+    .await?;
+    let pending = ports
+        .call_json(
+            &contact_tx,
+            &admin,
+            DIRECTORY_PORT,
+            json!({"kind":"employees","company_id":1}),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    prove(
+        pending["employees"].as_array().is_some_and(|rows| {
+            rows.iter()
+                .any(|r| r["email"] == "pw2-pending@example.test")
+        }),
+        "port sees pending Core contact changes on the caller's transaction",
+    )?;
+    contact_tx.rollback().await?;
     let hidden = ports
         .call_json(
             &c,
@@ -427,6 +470,45 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         !body.html.contains("workforce-employment-counts")
             && body.html.contains("workforce-settings-form"),
         "employment counts require their own read grant",
+    )?;
+    event(
+        &mut *state,
+        &manager,
+        json!({"type":"select_company","company_id":"3"}),
+    )
+    .await?;
+    saved(
+        services
+            .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
+            .archive_company(&admin, 3, Some("PW2 archive refusal proof"))
+            .await,
+    )?;
+    let archived = event(
+        &mut *state,
+        &manager,
+        json!({"type":"save_statuses","statuses[active]":"true"}),
+    )
+    .await?;
+    prove(
+        archived
+            .html
+            .contains("Working statuses could not be saved.")
+            && !archived.html.contains("workforce-settings-form"),
+        "a company archived after selection refuses the next save",
+    )?;
+    prove(
+        matches!(
+            ports
+                .call_json(
+                    &c,
+                    &manager,
+                    DIRECTORY_PORT,
+                    json!({"kind":"company","company_id":3})
+                )
+                .await,
+            Err(PortError::Refused(Error::NotFound))
+        ),
+        "directory refuses an archived company",
     )?;
     let _ = third;
     println!("PW2 browser fixture ready: admin@example.test, manager@example.test and viewer@example.test; password bilibi-dev.");
