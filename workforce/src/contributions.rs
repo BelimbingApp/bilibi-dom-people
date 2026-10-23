@@ -6,8 +6,13 @@
 use crate::{Workforce, EMPLOYEE_STATUSES, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, RoleDefinition, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
-use bilibi_module_registry::{Contribution, Layer, Module, Provenance, Service};
+use bilibi_module_registry::{
+    contributions::{Access, Method, PageWrites, Pending, Route, PAGE_WRITES, ROUTES},
+    Contribution, Layer, Module, Provenance, Service,
+};
 use bilibi_settings::{Definition, Editor, ScopeKind, Setting, Validator, ValueType, DEFINITIONS};
+use bilibi_tenancy::Scope;
+use bilibi_ui::page::PageService;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -43,7 +48,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/ports", "base/principal_directory", "base/settings", "base/tenancy",
+            "base/ports", "base/principal_directory", "base/settings", "base/tenancy", "base/ui",
             "core/affiliation", "core/company", "core/person",
         ],
         migrations: &[(
@@ -53,7 +58,7 @@ inventory::submit! {
         services: &[Service {
             id: SERVICE,
             factory: |services| {
-                Ok(Arc::new(Workforce {
+                let facade = Arc::new(Workforce {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
@@ -61,8 +66,16 @@ inventory::submit! {
                     directory: services.get("base/principal_directory.directory")?,
                     authentication: services.get("base/tenancy.authentication")?,
                     ports: services.get(bilibi_ports::SERVICE)?,
-                }))
+                });
+                crate::directory_port::install(facade.clone());
+                Ok(facade)
             },
+        }, Service {
+            id: PAGES,
+            factory: |services| Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+                services.get::<Db>("base/database.pool")?.as_ref().clone(),
+                services.get(SERVICE)?,
+            ))))),
         }],
     }
 }
@@ -105,3 +118,23 @@ inventory::submit! { Contribution::new(DEFINITIONS, WORKING_STATUSES_KEY, proven
     validator: Some(Validator { accepts: working_statuses_valid, message: "Give one or more of pending, probation, active, inactive and terminated, each once" }),
     editor: Some(Editor { group: "People", label: "Working employee statuses", help: "Employee statuses People treats as working staff for this company.", capability: Some(SETTINGS_MANAGE), reveal_duration_ms: 5_000 }),
 })) }
+
+// Bilimbi Workforce.Web.SettingsLive; this page has no menu leaf.
+const PAGES: &str = "people/workforce.pages";
+inventory::submit! {
+    Contribution::new(ROUTES, "people/workforce.settings", provenance!(), &Route {
+        method: Method::Get, path: "/people/workforce/settings", service: PAGES, operation: "settings",
+        access: Access::Capability(SETTINGS_MANAGE), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(PAGE_WRITES, PAGES, provenance!(), &PageWrites {
+        service: PAGES, contracts: &[],
+        pending: Pending::Every { reason: "Working statuses write through the Workforce facade; no operation contract has been reviewed for this setting." },
+    })
+}
+inventory::submit! {
+    Contribution::new(bilibi_ports::PORTS, crate::DIRECTORY_PORT, provenance!(), &bilibi_ports::Port {
+        provider: &crate::directory_port::DirectoryPort,
+    })
+}

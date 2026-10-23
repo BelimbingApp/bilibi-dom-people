@@ -4192,6 +4192,12 @@ pub async fn payroll_runs(url: &str) -> Result<()> {
     payroll_runs::run(url).await
 }
 
+// PW2: standalone settings and directory-port proof, independent of other slices.
+mod workforce_settings;
+pub async fn workforce_settings(url: &str, action: &str) -> Result<()> {
+    workforce_settings::run(url, action).await
+}
+
 // PC4: the registered Claim policies page, broad membership arrays and reauthorization.
 mod claim_setup;
 pub async fn claim_setup(url: &str, action: &str) -> Result<()> {
