@@ -329,3 +329,17 @@ BILIBI_ENV=development DATABASE_URL=… cargo run -p bilibi-people-walkthrough -
 The executable mounts the real page services and calls their events against the database. It checks independent approval, server-held confirmation targets, cancellation, history, invalid policy values, revoked policy access and reminder-ledger permissions. It leaves proposed and in-progress work for browser checks.
 
 Open both routes as the fixture manager. Use the administrator to approve the manager's proposal, and the staff account to progress its owned work. The `skill-pages` modes `revoke-policy`, `revoke-actions` and `restore` change the manager's grants for a second-session check. The `request` mode creates a pending reassessment; `archive-company-three` archives Company 003 for a stale-confirmation check. These commands belong only to the disposable fixture. Switching company clears a pending confirmation and replaces that company's form fields, so a typed draft cannot carry into another company's settings or proposal.
+
+## Assessments and My skills
+
+Open **Development › Assessments** to assess an employee, review evidence, or request a reassessment. **My work › My skills** shows your finalized scores, approved development actions, pending reassessments and reminders.
+
+`/people/skills/assessments` requires `people.skills.assessments.view`. The page shows the independent review and finalization queues, returned work for correction, the assessment register, current gaps and critical-skill coverage. Coverage is visible only with `people.skills.assessments.manage`. The register keeps its status filter in the URL. Each bounded list uses the shared FlexTable column picker and compact rows; Bilimbi does not sort or paginate these lists.
+
+The submission form requires an employee within reach, an active skill, an assessed level and evidence. Optional fields hold the assessment date, method, validity and notes. A returned assessment's **Correct** action starts a new submission that supersedes the returned record. The page retains its submission key until the write succeeds. Validation refusals keep the entered values.
+
+**Verify**, **Return**, **Finalize** and **Cancel request** open a ConfirmDialog with the selected record held on the server. Returning needs a reason. Confirmation checks the current permission again before calling the facade, which checks once more under the company lock. Changing companies discards a pending confirmation and the previous company's draft. Reassessment execution requires both reassessment execution and assessment submission permissions; finalization still requires an independent reviewer.
+
+`/people/skills/my` requires `people.skills.self.view`. Every refresh and table event resolves the signed-in employee again through `Skills::standing`; unlinking or ending that employment replaces the scores with the account-link message. The page never accepts an employee ID from a form or URL.
+
+The page services mirror Bilimbi `Skills.Web.AssessmentsLive` and `Skills.Web.MySkillsLive` in `src/pk5/`. They call the existing Skills facade and declare the temporary page-write allowance used by the other People pages. They add no schema or production records.

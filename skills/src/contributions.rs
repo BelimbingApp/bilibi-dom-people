@@ -96,6 +96,9 @@ inventory::submit! {
                 }))
             },
         }, Service {
+            id: crate::pk5::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk5::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
+        }, Service {
             id: crate::pk6::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
         }, Service {
@@ -198,4 +201,40 @@ bilibi_menu::contribute!(
     .under("people.settings")
     .requires(bilibi_menu::Requirement::Capability(POLICY_MANAGE))
     .order(40)
+);
+
+// PK5 mirrors Skills.Web.AssessmentsLive and Skills.Web.MySkillsLive.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::pk5::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::pk5::PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Skills assessment and reassessment writes call the Skills facade; operation contracts await review." },
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.assessments", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/skills/assessments",
+    service: crate::pk5::PAGES, operation: "assessments",
+    access: bilibi_module_registry::contributions::Access::Capability(ASSESSMENTS_VIEW), framed: true,
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.my", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/skills/my",
+    service: crate::pk5::PAGES, operation: "my",
+    access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
+}) }
+bilibi_menu::contribute!(
+    "people/skills",
+    bilibi_menu::MenuItem::page(
+        "people.development.assessments",
+        "Assessments",
+        "/people/skills/assessments"
+    )
+    .icon("clipboard-document-list")
+    .under("people.development")
+    .requires(bilibi_menu::Requirement::Capability(ASSESSMENTS_VIEW))
+    .order(20)
+);
+bilibi_menu::contribute!(
+    "people/skills",
+    bilibi_menu::MenuItem::page("people.my_work.skills", "My skills", "/people/skills/my")
+        .icon("puzzle-piece")
+        .under("people.my_work")
+        .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
+        .order(40)
 );
