@@ -170,9 +170,12 @@ impl MySkills {
                         .slot("due", Html::text(&shown(r.due_on)))
                 })
                 .collect();
-            let mut reminders =
+            let mut reminders = if !standing.reassessments.is_empty() || self.inbox.is_empty() {
                 self.requests
-                    .render("Reassessments", rows, "Nothing is waiting for you.")?;
+                    .render("Reassessments", rows, "Nothing is waiting for you.")?
+            } else {
+                Html::EMPTY
+            };
             let rows = self
                 .inbox
                 .iter()

@@ -343,3 +343,5 @@ The submission form requires an employee within reach, an active skill, an asses
 `/people/skills/my` requires `people.skills.self.view`. Every refresh and table event resolves the signed-in employee again through `Skills::standing`; unlinking or ending that employment replaces the scores with the account-link message. The page never accepts an employee ID from a form or URL.
 
 The page services mirror Bilimbi `Skills.Web.AssessmentsLive` and `Skills.Web.MySkillsLive` in `src/pk5/`. They call the existing Skills facade and declare the temporary page-write allowance used by the other People pages. They add no schema or production records.
+
+For a disposable browser proof, run the default People walkthrough, then `cargo run -p bilibi-people-walkthrough --bin assessment-pages`. It creates independent review work and proves the page events, including a revoked grant between opening and confirming, long evidence, correction, and account unlinking while My skills stays mounted. Its `revoke-review`, `restore-review`, `unlink-staff` and `relink-staff` commands support the same two-session checks in Chrome.
