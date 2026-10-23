@@ -147,6 +147,70 @@ async fn main() -> Result<()> {
         request_key: "pk5-page-review".into(),
         ..AssessmentInput::default()
     };
+    if mode == "browser-records" {
+        let coordinator: i64 = client.query_one("SELECT id FROM people_workforce_employments WHERE tenant_id=1 AND company_id=1 AND employee_number='E-001'", &[]).await?.get(0);
+        let kind = must(
+            skills
+                .create_action_type(
+                    &admin,
+                    1,
+                    &NewActionType {
+                        code: "pk5-observation".into(),
+                        name: "Observed practice".into(),
+                        requires_provider: false,
+                    },
+                )
+                .await,
+        )?;
+        let action = must(
+            skills
+                .propose_action(
+                    &manager,
+                    1,
+                    &ActionInput {
+                        source: ActionSource::Manual {
+                            employee_id: employee,
+                            skill_id: skill.id,
+                            starting_level: 0,
+                            target_level: 1,
+                            criticality: "essential".into(),
+                            mandatory: false,
+                            reason: "Observed practice needs follow-up.".into(),
+                        },
+                        plan: ActionPlan {
+                            action_type_id: kind.id,
+                            owner_employee_id: employee,
+                            coordinator_employee_id: coordinator,
+                            objective: "Retain the practice and observation record.".into(),
+                            intervention: "Practice with feedback.".into(),
+                            expected_evidence: "Recorded observation.".into(),
+                            due_on: Some(
+                                jiff::Timestamp::now()
+                                    .to_zoned(jiff::tz::TimeZone::UTC)
+                                    .date(),
+                            ),
+                            ..ActionPlan::default()
+                        },
+                        request_key: "pk5-browser-action".into(),
+                    },
+                )
+                .await,
+        )?;
+        must(skills.approve_action(&admin, 1, action.id).await)?;
+        must(
+            skills
+                .request_reassessment(
+                    &manager,
+                    1,
+                    employee,
+                    skill.id,
+                    "Observe the next practice session.",
+                )
+                .await,
+        )?;
+        println!("PK5 My skills action and reassessment browser records ready.");
+        return Ok(());
+    }
     let a = must(skills.submit_assessment(&admin, 1, &input).await)?;
     let mut page = mount(&services, &manager, "assessments").await?;
     let html = event(
