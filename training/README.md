@@ -329,7 +329,7 @@ Readers without `records.view` must select `period`, exactly matching a frozen E
 
 The company must configure `people.training.evaluation.minimum_cohort` to at least two. Below that many distinct employees, a course exposes no employee, confirmed or absent count. When the overall cohort is large enough but either attendance count is below the minimum, **both attendance counts are withheld**. Frozen periods supply the allowed boundaries; attendance counts still use the latest attendance revisions, matching Bilimbi. Effectiveness scores remain the separate immutable summaries.
 
-The insights page follows in PT9. The records and passport pages below use these permissions and download handlers.
+Learning insights is available at `/people/training/insights`. The records and passport pages below use these permissions and download handlers.
 
 Run the PT5 disposable proof after the default walkthrough with `cargo run -p bilibi-people-walkthrough --bin training-passports`. It creates its own records through the owners, checks corrections and original evidence, both suppression rules, period-only access, revoked grants, unlinking, reporting-line changes, pagination, and complete PDFs at 1,000 and 1,001 records. A disposable SQL reservation gate proves that account unlinking waits for in-flight passport publication, then the old account scope is refused. It prints all four download addresses for browser checks. The same command accepts `deny-my`, `allow-my`, `unlink-staff` and `relink-staff` to change access while a browser session remains open.
 
@@ -373,3 +373,34 @@ Each write event rechecks its permissions before calling Training, which authori
 For a stale-control browser check, keep the manager's records page open and run `cargo run -p bilibi-people-walkthrough --bin training-records-control -- deny-record` on the same disposable database. Submit the retained form: attendance must be refused. `allow-record` restores access. The command also accepts `deny-evidence`, `allow-evidence`, `deny-retention`, `allow-retention`, `deny-read`, `allow-read`, `deny-workspace`, and `allow-workspace`. `hub-only` lets the staff account open the records task chooser while company-wide attendance stays withheld. `unlink-staff` and `relink-staff` change the current account link; `detach-staff` and `restore-staff` change the direct-report relationship through Workforce.
 
 On a new disposable database, run `bilibi-web migrate` and `BILIBI_ENV=development bilibi-web seed-production` first. Set `BILIBI_TRAINING_PROOF_ROOT` to a private scratch directory, then run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin training-records-control -- prepare`. It installs the Platform fixture, creates its own employments and course, and records 27 completed sessions, 27 attendance revisions on one session, and original-revision evidence through the owners. It prints the record and team-passport URLs for the browser proof. Run this preparation once on a fresh disposable database.
+
+## Effectiveness and evaluation pages
+
+Open **Effectiveness** at `/people/training/effectiveness` to answer direct reports' reviews, read frozen summaries, or configure evaluation policy.
+
+For example, save the company's evaluation settings, publish effective-dated criteria, then enter a completed session and choose **Prepare reviews**. Review the confirmation before preparing obligations. Employees answer under **My learning → My evaluations**; heads of department answer under **Effectiveness → Review**. Leave a score blank for an unknown outcome, add evidence and an explanation, then confirm. **Submitted answers and published criteria are permanent.**
+
+| Page section | Permission under `people.training.` |
+| --- | --- |
+| Effectiveness entry | `effectiveness.view` |
+| Direct-report reviews | Entry plus `effectiveness.answer` |
+| Frozen HR summaries | Entry plus `effectiveness.summary.view` |
+| Settings and published criteria | Entry plus `evaluation.policy.manage` |
+| Prepare reviews, refresh reminders, freeze closed periods | Entry plus `evaluation.reminders.manage` |
+| My evaluations | My learning entry plus both `requests.submit` and `evaluation.submit` |
+
+Unsaved settings show proposed starting values: seven evaluation days, checkpoints at 30 and 90 days, three reminder days, a disclosure minimum of five, three reporting months, and 14 grace days. **These proposals do not apply until saved.** The next reporting-period start appears below the settings form. Published policies capture timing and criteria; changing settings leaves earlier policies intact.
+
+Reviews, published policy history and frozen summary scores use shared FlexTables with column controls and compact rows. Review pages use `page` and `perPage`, with 25, 50, 100 or 300 rows. My evaluations keeps its independent state in `evaluation_page` and `evaluation_perPage`. Bilimbi defines no search or record sorting for these lists. Blank scores appear as “Unknown” in recorded answers. Suppressed summary rows expose neither their known-answer count nor their mean.
+
+Policy publication and answers wait for a ConfirmDialog. Preparing reviews, refreshing reminders and freezing periods also wait for confirmation. The mounted page keeps the selected company, session, answer values and policy input on the server. Every write-shaped event checks current permission; the Training facade repeats its checks under the company lock. A revoked grant, unlinked account or archived company returns a recoverable message. Switching companies closes old drafts and confirmations.
+
+## Learning insights page
+
+Open `/people/training/insights` to compare attendance by course, then choose **View attendance** when you have record-view access.
+
+With `insights.view` and `records.view`, choose inclusive UTC completion dates covering at most 366 days. Without record-view access, the page offers only frozen Effectiveness periods and says “Record-view access required” beside each course. A forged drill address still requires both grants. Course totals and attendance drill use FlexTables and bounded `page` / `perPage` state; page sizes cannot exceed 300. Completion instants follow the account's saved display policy. Course totals and attendance counts obey the disclosure rules above; no evaluation scores appear here.
+
+Run the PT9 mounted-page proof on an empty disposable database with `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin training-effectiveness-pages -- setup`. It installs the Platform fixture and creates its own People records, then proves policy forms beyond 64 fields, cancelled and confirmed maintenance, explicit unknown answers, revoked grants, own evaluations, frozen-period access and bounded drills. It leaves unanswered browser reviews. With a page still open, the same binary accepts `deny-answer`, `allow-answer`, `deny-policy`, `allow-policy`, `unlink-staff`, `relink-staff` and `archive-company-three` to change the condition through its owner. Archive Company 003 last; it is permanent. These commands belong only on that disposable database.
+
+Before starting this disposable fixture over plain HTTP, run `BILIBI_ENV=development bilibi-web seed-production` against the same database to initialize its stored Dev role. Then set `APP_ORIGIN` to the exact loopback URL you browse.

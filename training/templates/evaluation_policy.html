@@ -1,0 +1,11 @@
+{% import "forms.html" as forms %}{% import "components.html" as ui %}{% import "feedback.html" as feedback %}
+{% call feedback::error_summary(summary=summary) %}{% endcall %}
+{% call forms::form(id="evaluation-policy-form",event="save_policy",actions=actions) %}
+{% for field in dates %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{% for (label,fields,add) in groups %}
+{% call ui::section_heading(title=label) %}{% endcall %}
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{{ add }}
+{% endfor %}
+{% call forms::input(field=reason) %}{% endcall %}
+{% endcall %}

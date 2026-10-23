@@ -1,0 +1,11 @@
+{# Mirrors Bilimbi Training.Web.EffectivenessLive. #}
+{% import "components.html" as ui %}{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-effectiveness",class="space-y-4") %}
+{% call ui::header(actions=actions) %}Effectiveness{% endcall %}
+{{ toolbar }}
+{% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
+{{ body }}
+{% endcall %}
+</div>
