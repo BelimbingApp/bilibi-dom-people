@@ -38,6 +38,7 @@ mod assessments;
 mod catalog;
 mod contributions;
 mod pk4;
+mod pk5;
 mod pk6;
 mod policy;
 mod positions;
