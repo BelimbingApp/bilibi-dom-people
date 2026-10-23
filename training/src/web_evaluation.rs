@@ -113,7 +113,7 @@ pub(crate) fn spec(filters: &[&str], prefix: &str) -> DbResult<Arc<ListSpec>> {
     .shared()
     .map_err(|_| Error::Internal)
 }
-pub(crate) fn flash<'a>(value: &'a Option<(StatusKind, String)>) -> FlashMap<'a> {
+pub(crate) fn flash(value: &Option<(StatusKind, String)>) -> FlashMap<'_> {
     let mut result = NO_FLASH;
     if let Some((kind, text)) = value {
         match kind {

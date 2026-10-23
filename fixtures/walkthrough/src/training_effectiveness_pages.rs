@@ -27,7 +27,7 @@ fn saved<T>(result: bilibi_people_training::Result<T>) -> Result<T> {
 async fn mount(
     page: &PageService<Scope, Error>,
     scope: &Scope,
-    operation: &str,
+    operation: &'static str,
     query: &HashMap<String, String>,
 ) -> Result<Mounted> {
     page.0

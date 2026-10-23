@@ -347,10 +347,10 @@ impl Insights {
                         let mut query = self.list.to_params();
                         query.insert("course_id".into(), r.course_id.to_string());
                         query.insert("page".into(), "1".into());
-                        render(&Button {
+                        render(&ActionLink {
                             href: &params::address("/people/training/insights", &query),
                             body: Html::text("View attendance"),
-                            ..Button::default()
+                            ..ActionLink::default()
                         })?
                     } else {
                         Html::text("Record-view access required")
