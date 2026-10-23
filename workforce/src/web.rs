@@ -13,8 +13,8 @@ use bilibi_ui::{
         LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
         PageFuture, PageRequest,
     },
-    params, BuiltinColumn, Button, ButtonVariant, EmptyState, Field, FlashMap, FlexRow, FlexTable,
-    Html, InputKind, ListColumns, ListSpec, ListState, StatusKind, NO_FLASH,
+    params, BuiltinColumn, Button, ButtonVariant, EmptyState, Fact, Facts, Field, FlashMap,
+    FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec, ListState, StatusKind, NO_FLASH,
 };
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
@@ -67,7 +67,7 @@ struct View<'a> {
     statuses: Vec<Field>,
     actions: Html,
     counts: Html,
-    summary: String,
+    summary: Html,
     has_counts: bool,
 }
 struct SettingsPage {
@@ -275,13 +275,24 @@ impl SettingsPage {
             table.framed = false;
             (
                 html(&table)?,
-                format!(
-                    "Employees: {}. Working staff: {}.",
-                    counts.total, counts.working
-                ),
+                html(&Facts {
+                    id: "workforce-employment-summary",
+                    items: vec![
+                        Fact {
+                            id: "workforce-employment-total",
+                            title: "Employees",
+                            value: Html::text(&counts.total.to_string()),
+                        },
+                        Fact {
+                            id: "workforce-employment-working",
+                            title: "Working staff",
+                            value: Html::text(&counts.working.to_string()),
+                        },
+                    ],
+                })?,
             )
         } else {
-            (Html::default(), String::new())
+            (Html::default(), Html::default())
         };
         View {
             flash,

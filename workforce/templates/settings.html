@@ -17,8 +17,9 @@
 {% endcall %}
 {% endcall %}
 {% if has_counts %}
-{% call ui::section_heading(title="Employment records", description=summary, class="mt-5") %}{% endcall %}
-{% call ui::card(id="workforce-employment-records", inner_class="p-0") %}{{ counts }}{% endcall %}
+{% call ui::section_heading(title="Employment records", description="People owns employee numbers, employment types, statuses and dates.", class="mt-5") %}{% endcall %}
+{% call ui::card(id="workforce-employment-records") %}{{ summary }}{% endcall %}
+{{ counts }}
 {% endif %}
 {% else %}
 {{ empty }}
