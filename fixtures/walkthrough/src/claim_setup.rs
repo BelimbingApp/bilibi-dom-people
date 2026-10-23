@@ -108,7 +108,17 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
         return Err(Error::Invalid);
     }
     let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
-    let company = 2;
+    let company = 1;
+    // The full walkthrough archives Company 002 as part of its refusal proofs.
+    let switch_company =
+        bilibi_people_workforce::authorization::selectable_companies(&**client, &manager, MANAGE)
+            .await
+            .map_err(|_| Error::Invalid)?
+            .into_iter()
+            .find(|choice| choice.id != company)
+            .ok_or(Error::NotFound)?
+            .id
+            .to_string();
     let stamp = jiff::Timestamp::now().as_second();
     let category = saved(
         claims
@@ -311,12 +321,12 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
     let body = event(
         page.as_mut(),
         &manager,
-        json!({"type":"select_company", "company_id":"1"}),
+        json!({"type":"select_company", "company_id": &switch_company}),
     )
     .await?;
     require(
         !body.html.contains("claim-setup-confirm")
-            && body.query.get("company_id").map(String::as_str) == Some("1"),
+            && body.query.get("company_id").map(String::as_str) == Some(switch_company.as_str()),
         "changing company clears pending confirmation and updates the address",
     )?;
     require(
