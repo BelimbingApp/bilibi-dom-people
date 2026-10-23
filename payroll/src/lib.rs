@@ -12,6 +12,7 @@ mod replay;
 mod setup;
 mod snapshot;
 mod store;
+mod web;
 use bilibi_company::organisation;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_party_ids::OrganisationId;

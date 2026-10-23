@@ -118,6 +118,22 @@ Document provenance and audit evidence remain after the bytes expire or are purg
 
 `fixtures/walkthrough` holds the disposable-database Payroll proof. Run its default binary first, then `cargo run -p bilibi-people-walkthrough --bin payroll`. Then run `cargo run -p bilibi-people-walkthrough --bin payroll_calculation`. The proofs create records through public facades and check exact values, canonical digest, concurrent retries, reviewer exclusions, event publication, grant revocation and PostgreSQL guards. Use only a disposable database.
 
+PY4 contributes the Setup and Attendance mapping pages and the two setup menu leaves. PY2 supplies contribution intake, exact calculation, independent decisions and events; PY3 supplies private documents. Run pages follow in PY5. The facade needs no Platform changes.
+
+## Setup pages
+
+Open `/people/payroll/setup` to choose a company, set its country and currencies, and add classification versions, pay items, periods and Leave or Claims mappings. The page keeps Bilimbi's labels, refusal messages and append-only version rules. Each list uses the shared FlexTable with column choices and compact rows; these lists have no pagination or sort controls in Bilimbi.
+
+`/people/payroll/setup/mappings` serves the same page with the mappings section focused and highlighted. The Attendance mappings link appears only with `people.payroll.attendance-mappings.manage`. Its destination, `/people/payroll/attendance-mappings`, shows current and future allowance rules, today's mapped items, the add form and mapping history.
+
+Freeze setup asks for confirmation before preserving a period and currency. Lock permanently asks separately before locking a run. Both selections stay on the server, are cleared when the company changes, and recheck the current grant when confirmed. A read-only viewer sees the setup and Bilimbi's withheld-control sentence. Every write event checks its grant again, then calls the facade, which checks inside its transaction.
+
+The Payroll runs link is shared with the run page delivered by PY5. Page writes declare a `Pending::Every` allowance until their operation contracts are reviewed.
+
+Company choices use Workforce's authorized selectable companies and exclude archived companies. Workforce's public summary currently exposes only the archived flag. Matching Bilimbi's active-only company filter also needs the full company status from its owner; the pages do not query Core's table or require an extra administration grant to infer it.
+
+For the page proof, run `cargo run -p bilibi-people-walkthrough --bin payroll_pages` against a fresh disposable database. It installs the Platform fixture and exercises the mounted page services with real database writes: each add form, exact decimals, field errors, both source mappings, a future attendance rule, overlap refusals, freeze cancellation and forged parameters, company switching, revoked permission before locking, and a read-only viewer. The resulting accounts can then be used for browser checks.
+
 For PY3, run the default walkthrough on a fresh database, then `BILIBI_PAYROLL_PROOF_OUT=/absolute/private/task-directory cargo run -p bilibi-people-walkthrough --bin payroll_documents`. It creates its own approved run and proves pagination inputs, deterministic reports, payslip selection, policy refusals, download headers, grant revocation, expiry and held cleanup recovery. The output directory receives PDFs and frozen calculation data for comparison with Bilimbi.
 
-PY1–PY3 contribute no page or menu leaf. Setup and Attendance mapping pages follow in PY4; run pages follow in PY5. No Platform change is required.
+PY1–PY3 contribute no page or menu leaf. Run pages follow in PY5. No Platform change is required.

@@ -1,0 +1,31 @@
+{# Mirrors Bilimbi Payroll.Web.SetupLive; lists use shared FlexTables. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+{% import "lists.html" as lists %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="payroll-setup") %}
+{% call ui::header(subtitle="Periods, pay items and effective-dated mappings for one company.") %}Payroll setup{% endcall %}
+{% if available %}
+<div class="mt-5 space-y-5">
+{% call forms::form(id="payroll-company", event="select_company", change=true) %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% if withheld %}<p class="text-sm text-ink-muted">You can view this company's setup. A payroll operator can add records.</p>{% endif %}
+{{ policy }}
+{{ classifications }}
+{{ items }}
+{{ periods }}
+{# Native autofocus works on a focusable section without Domain JavaScript. #}
+<section id="payroll-mappings-section" tabindex="-1"{% if mappings_focus %} autofocus class="rounded-xl border border-brand-strong"{% endif %}>
+{{ mappings }}
+</section>
+{{ runs }}
+</div>
+{% else %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("No company is available for payroll setup.", "").id("payroll-unavailable")) %}{% endcall %}
+{% endif %}
+{{ confirm }}
+{% endcall %}
+</div>

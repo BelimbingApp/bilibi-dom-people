@@ -9,11 +9,14 @@ publish = false
 
 [dependencies]
 bilibi-artifacts.workspace = true
-bilibi-ui.workspace = true
 bilibi-authz.workspace = true
 bilibi-company.workspace = true
 bilibi-database.workspace = true
 bilibi-events.workspace = true
+bilibi-menu.workspace = true
+bilibi-ui.workspace = true
+bilibi-datetime.workspace = true
+askama.workspace = true
 bilibi-module-registry.workspace = true
 bilibi-party-ids.workspace = true
 bilibi-settings.workspace = true
@@ -31,3 +34,4 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio-postgres.workspace = true
+tokio.workspace = true

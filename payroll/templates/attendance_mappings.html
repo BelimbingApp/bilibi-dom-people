@@ -1,0 +1,28 @@
+{# Mirrors Bilimbi Payroll.Web.AttendanceMappingsLive. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+{% import "lists.html" as lists %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="payroll-attendance-mappings-page") %}
+{% call ui::header(subtitle="Map each Attendance allowance rule code to a company pay item for an effective period. Versions are append-only.") %}Attendance pay-item mappings{% endcall %}
+{% if has_companies %}
+{% call forms::form(id="payroll-mapping-company-form", event="select_company", change=true, class="mt-4") %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% endif %}
+{% if !has_company %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("No active company is available for pay-item mappings.", "").id("payroll-mappings-no-company")) %}{% endcall %}
+{% elif !available %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("Attendance allowance sources are unavailable for this company.", "The company's workforce is not current.").id("payroll-mappings-unavailable")) %}{% endcall %}
+{% else %}
+<div class="mt-5 space-y-5">
+{{ table }}
+{% if no_items %}<p id="payroll-mappings-no-items" class="text-sm text-ink-muted">Add a pay item in Payroll setup before mapping allowance rules.</p>{% endif %}
+{{ form }}
+{{ history }}
+</div>
+{% endif %}
+{% endcall %}
+</div>

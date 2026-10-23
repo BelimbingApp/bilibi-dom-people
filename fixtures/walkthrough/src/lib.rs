@@ -4109,6 +4109,12 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
 
+// PY4: Payroll setup and Attendance mapping page interaction proof.
+mod payroll_pages;
+pub async fn payroll_pages(url: &str) -> Result<()> {
+    payroll_pages::run(url).await
+}
+
 // PM2: performance page mounts and live-event workflow on disposable data.
 mod performance_pages;
 pub use performance_pages::run as performance_pages;

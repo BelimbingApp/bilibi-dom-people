@@ -24,7 +24,7 @@ macro_rules! provenance {
 }
 inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
-    dependencies: &["base/artifacts", "base/ui", "base/authz", "base/database", "base/events", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
+    dependencies: &["base/artifacts", "base/authz", "base/database", "base/events", "base/menu", "base/ui", "base/datetime", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
     migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql")), ("people-payroll-003-outputs", include_str!("../migrations/003-outputs.sql"))],
     services: &[Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
         db: s.get::<Db>("base/database.pool")?.as_ref().clone(),
@@ -36,7 +36,9 @@ inventory::submit! { Module {
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
         events: s.get(bilibi_events::SERVICE)?,
         artifacts: s.get("base/artifacts.store")?,
-    })) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
+    })) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+        s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
+    ))))) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
         bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(
             Arc::new(crate::download::DocumentDownload { payroll: s.get(SERVICE)? })
         )
@@ -73,6 +75,62 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
 /// Facts released to other Domains only after independent approval.
 pub const RUN_APPROVED: &str = "people/payroll.run_approved";
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, RUN_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }
+
+// PY4: Bilimbi Payroll.Web.SetupLive and AttendanceMappingsLive.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::web::PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Payroll setup writes use the authorized facade; their operation contracts have not been reviewed." },
+}) }
+macro_rules! page {
+    ($id:literal, $path:literal, $operation:literal, $cap:expr) => {
+        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+            method: bilibi_module_registry::contributions::Method::Get, path: $path, service: crate::web::PAGES, operation: $operation,
+            access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,
+        }) }
+    };
+}
+page!(
+    "people/payroll.setup",
+    "/people/payroll/setup",
+    "setup",
+    VIEW
+);
+page!(
+    "people/payroll.mappings",
+    "/people/payroll/setup/mappings",
+    "mappings",
+    VIEW
+);
+page!(
+    "people/payroll.attendance_mappings",
+    "/people/payroll/attendance-mappings",
+    "attendance_mappings",
+    ATTENDANCE_MAPPINGS_MANAGE
+);
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page(
+        "people.payroll.mappings",
+        "Pay-item mappings",
+        "/people/payroll/setup/mappings"
+    )
+    .icon("squares-2x2")
+    .under("people.payroll")
+    .requires(bilibi_menu::Requirement::Capability(VIEW))
+    .order(20)
+);
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page(
+        "people.settings.payroll_setup",
+        "Payroll setup",
+        "/people/payroll/setup"
+    )
+    .icon("cog-6-tooth")
+    .under("people.settings")
+    .requires(bilibi_menu::Requirement::Capability(VIEW))
+    .order(70)
+);
 
 // Bilimbi Payroll.Web.DocumentController: access is checked on every request.
 inventory::submit! { Contribution::new(
