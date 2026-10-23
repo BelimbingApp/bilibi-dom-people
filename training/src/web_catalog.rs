@@ -273,9 +273,11 @@ impl Catalog {
         self.error = None;
         self.can_manage = false;
         let Some(company) = self.company else {
-            self.error = Some(
-                "No company is available. Ask an operator to check your company access.".into(),
-            );
+            self.error = Some(if self.courses_page {
+                "No company is available. Ask an operator to check your company access.".into()
+            } else {
+                TrainingError::Unauthorized.to_string()
+            });
             self.modal = None;
             self.pending = None;
             return Ok(());
