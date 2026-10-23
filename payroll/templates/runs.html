@@ -1,0 +1,52 @@
+{# Mirrors Bilimbi Payroll.Web.RunsLive; shared tables replace its record lists. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+{% import "lists.html" as lists %}
+<div data-shared-ui data-history="params">
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="payroll-runs-page") %}
+{% call ui::header(subtitle="Frozen rates, attested contributions and independent approval") %}Payroll runs{% endcall %}
+{% if has_companies %}
+{% call forms::form(id="runs-company", event="select_company", change=true) %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% endif %}
+{% if available %}
+<div class="space-y-4">
+{% call ui::card(id="payroll-runs") %}
+{% call ui::section_heading(id="frozen-runs", title="Runs") %}{% endcall %}
+<p class="mt-2 text-sm text-ink-muted">Create and permanently lock setup in {% call ui::action_link(href=setup_url) %}Payroll setup{% endcall %} before calculating.</p>
+{{ chooser }}{{ runs }}
+{% endcall %}
+{% if selected %}
+{% call ui::card(id="selected-run") %}
+{{ facts }}
+{% if unlocked %}<p class="text-sm text-ink-muted">Setup must be locked before calculation.</p>{% endif %}
+{% if read_only %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("Read-only payroll access", "Ask a payroll operator to attest contributions and calculate.").id("payroll-read-only")) %}{% endcall %}
+{% endif %}
+{% call ui::section_heading(id="run-contributions", title="Contributions") %}{% endcall %}
+<p class="text-sm text-ink-muted">An operator attests employee, date, exact units, direction and source evidence. Mapped sources use their frozen pay-item rate. No statutory formula or allowance eligibility is inferred.</p>
+{{ contributions }}{{ intake }}{{ actions }}
+{% if calculated %}
+<div id="payroll-result" class="mt-4 space-y-2">
+{% call ui::section_heading(id="run-results", title="Frozen results") %}{% endcall %}
+<p class="break-all text-xs text-ink-muted">Replay digest: {{ digest }}</p>
+{{ results }}{{ totals }}
+{% if undecided %}<p class="text-sm text-ink-muted">An independent approver must decide before documents can be generated. Run creators, calculators and contribution authors cannot decide their own work.</p>{% endif %}
+{{ decision_form }}{{ decision }}{{ report }}
+<p class="text-sm text-ink-muted">Private documents require an operator-configured Base Artifacts storage directory and retention period.</p>
+</div>
+{% endif %}
+{% call ui::section_heading(id="run-documents", title="Documents") %}{% endcall %}
+{{ documents }}
+{% endcall %}
+{% endif %}
+</div>
+{% else %}
+{% call lists::empty_state(e=bilibi_ui::EmptyState::missing("Payroll is unavailable for this company.", "").id("payroll-runs-unavailable")) %}{% endcall %}
+{% endif %}
+{{ confirm }}
+{% endcall %}
+</div>

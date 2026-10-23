@@ -26,7 +26,9 @@ inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
     dependencies: &["base/artifacts", "base/authz", "base/database", "base/events", "base/menu", "base/ui", "base/datetime", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
     migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql")), ("people-payroll-003-outputs", include_str!("../migrations/003-outputs.sql"))],
-    services: &[Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
+    services: &[Service { id: crate::web::RUN_PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Runs::new(
+        s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
+    ))))) }, Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
         db: s.get::<Db>("base/database.pool")?.as_ref().clone(),
         mutations: s.get::<MutationBoundary>("base/database.mutations")?,
         settings: s.get("base/settings.store")?,
@@ -142,3 +144,21 @@ inventory::submit! { Contribution::new(
         access: bilibi_module_registry::contributions::Access::Capability(VIEW),
     }
 ) }
+
+// PY5: Bilimbi Payroll.Web.RunsLive.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::RUN_PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::web::RUN_PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Payroll run writes use the authorized facade; their operation contracts have not been reviewed." },
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/payroll.runs", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/payroll/runs", service: crate::web::RUN_PAGES, operation: "runs",
+    access: bilibi_module_registry::contributions::Access::Capability(VIEW), framed: true,
+}) }
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page("people.payroll.runs", "Runs", "/people/payroll/runs")
+        .icon("circle-stack")
+        .under("people.payroll")
+        .requires(bilibi_menu::Requirement::Capability(VIEW))
+        .order(10)
+);
