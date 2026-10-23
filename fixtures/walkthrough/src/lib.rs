@@ -4140,3 +4140,9 @@ mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
 }
+
+// PT9: mounted Effectiveness, My evaluations and Learning insights proof.
+mod training_effectiveness_pages;
+pub async fn training_effectiveness_pages(url: &str, action: &str) -> Result<()> {
+    training_effectiveness_pages::run(url, action).await
+}

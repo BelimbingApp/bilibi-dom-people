@@ -7,6 +7,7 @@ use bilibi_module_registry::{
     contributions::{Access, Method, Route, ROUTES},
     Contribution, Provenance,
 };
+use bilibi_ui::page::Page;
 use bilibi_ui::{page::*, params, *};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -295,7 +296,7 @@ impl Insights {
             query.remove("page");
             body.push(&render(&BackLink {
                 href: &params::address("/people/training/insights", &query),
-                label: "Back to course totals",
+                title: "Back to course totals",
                 ..BackLink::default()
             })?);
             let rows = self

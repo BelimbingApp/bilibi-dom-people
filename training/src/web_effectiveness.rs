@@ -7,6 +7,7 @@ use bilibi_module_registry::{
     contributions::{Access, Method, PageWrites, Pending, Route, PAGE_WRITES, ROUTES},
     Contribution, Provenance,
 };
+use bilibi_ui::page::Page;
 use bilibi_ui::{page::*, params, *};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -286,6 +287,7 @@ impl Effectiveness {
         if matches!(event, "select_company" | "filters") {
             self.list
                 .apply_filters(&params::form_values(payload, "filters"));
+            self.reviews.list.page = 1;
             self.reset();
             return Ok(());
         }
@@ -728,7 +730,7 @@ impl Effectiveness {
         table("effectiveness-summary",&self.columns["effectiveness-summary"],rows,"table-effectiveness-summary","No frozen reporting period","A period's summary appears once it ends, its answer grace window passes and an operator freezes it.")
     }
     fn render(&self) -> DbResult<String> {
-        let mut body = self.reviews.render()?;
+        let mut body = self.reviews.render(flash(&self.flash))?;
         if self.summary_access {
             body.push(&render(&Section{id:"effectiveness-summary-section",title:"Summary",description:"Fixed company reporting periods, frozen after the answer grace window; small cohorts and insufficient known answers are suppressed.",body:self.summary_table()?})?);
         }
@@ -758,7 +760,10 @@ impl Effectiveness {
                         .cell("reason", Cell::text(&p.reason))
                 })
                 .collect();
-            let mut content = self.settings_form()?;
+            let mut content = render(&Card {
+                body: self.settings_form()?,
+                ..Card::default()
+            })?;
             content.push(&table(
                 "evaluation-policies",
                 &self.columns["evaluation-policies"],
@@ -783,7 +788,7 @@ impl Effectiveness {
             )?;
             content.push(&button("run_reminders", "Refresh reminders", "")?);
             content.push(&button("freeze_summaries", "Freeze closed periods", "")?);
-            body.push(&render(&Section{id:"effectiveness-maintenance",title:"Due reminders",description:"Prepare session reviews, refresh the durable worklist and freeze closed reporting periods. This does not send email.",body:content})?);
+            body.push(&render(&Section{id:"effectiveness-maintenance",title:"Due reminders",description:"Prepare session reviews, refresh the durable worklist and freeze closed reporting periods. This does not send email.",body:render(&Card { body: content, ..Card::default() })?})?);
         }
         if !self.reviews.enabled
             && !self.summary_access
@@ -899,10 +904,4 @@ struct PolicyBody<'a> {
     reason: Field,
     summary: &'a ErrorSummary,
     actions: Html,
-}
-#[derive(Template)]
-#[template(path = "evaluation_lines.html")]
-pub(crate) struct Lines<'a> {
-    pub heading: &'a str,
-    pub lines: Vec<String>,
 }

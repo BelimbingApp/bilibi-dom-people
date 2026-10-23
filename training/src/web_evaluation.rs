@@ -216,7 +216,26 @@ impl Reviews {
             return;
         }
         match training.evaluation_reviews(scope, company, self.kind).await {
-            Ok(tasks) => self.tasks = tasks,
+            Ok(tasks) => {
+                self.tasks = tasks;
+                self.list.page = self.list.paginate(&self.tasks).counts.page;
+                let visible = |id| {
+                    self.tasks
+                        .iter()
+                        .any(|t| t.review.id == id && t.answer.is_none())
+                };
+                if self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|t| !visible(t.review.id))
+                    || self
+                        .pending
+                        .as_ref()
+                        .is_some_and(|(t, _, _)| !visible(t.review.id))
+                {
+                    self.reset();
+                }
+            }
             Err(e) => {
                 self.error = Some(e.to_string());
                 self.reset();
@@ -372,7 +391,7 @@ impl Reviews {
         }
         Ok(None)
     }
-    pub fn render(&self) -> DbResult<Html> {
+    pub fn render(&self, flash: FlashMap<'_>) -> DbResult<Html> {
         if !self.enabled {
             return Ok(Html::EMPTY);
         }
@@ -405,8 +424,13 @@ impl Reviews {
                                         .unwrap_or_else(|| "Unknown".into())
                                 )
                             })
-                            .collect();
-                        answer = render(&crate::web_effectiveness::Lines {
+                            .collect::<Vec<_>>();
+                        let lines = if self.columns.mode() == RowMode::Compact {
+                            vec![]
+                        } else {
+                            lines
+                        };
+                        answer = render(&Lines {
                             heading: &a.reason,
                             lines,
                         })?;
@@ -485,8 +509,8 @@ impl Reviews {
                         .id(format!("evaluation-answer-{}", c.code))
                         .label(&c.label)
                         .kind(InputKind::Number)
-                        .attr("min", c.minimum.to_string())
-                        .attr("max", c.maximum.to_string())
+                        .attr("min", &c.minimum.to_string())
+                        .attr("max", &c.maximum.to_string())
                         .value(self.draft.get(&name).cloned().unwrap_or_default())
                 })
                 .collect::<Vec<_>>();
@@ -526,6 +550,7 @@ impl Reviews {
                     "Answer review"
                 },
                 cancel_event: self.event_name("close_evaluation", "close_answer"),
+                flash: Some(flash),
                 body: render(&AnswerBody {
                     summary: &self.summary,
                     form,
@@ -561,4 +586,11 @@ impl Reviews {
 struct AnswerBody<'a> {
     summary: &'a ErrorSummary,
     form: Html,
+}
+
+#[derive(Template)]
+#[template(path = "evaluation_lines.html")]
+struct Lines<'a> {
+    heading: &'a str,
+    lines: Vec<String>,
 }

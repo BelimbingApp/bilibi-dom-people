@@ -1218,7 +1218,7 @@ impl Learning {
             pagination,
             entry: self.entry_dialog()?,
             confirmation,
-            evaluations: self.evaluations.render()?,
+            evaluations: self.evaluations.render(self.flash_map())?,
         };
         view.render().map_err(|_| Error::Internal)
     }
