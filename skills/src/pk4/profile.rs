@@ -506,7 +506,7 @@ impl ProfilePage {
                     id: "skill-profile-scale",
                     items: vec![bilibi_ui::Fact {
                         title: "Scale",
-                        value: Html::text(format!(
+                        value: Html::text(&format!(
                             "{} v{} ({})",
                             scale.name, scale.version, scale.status
                         )),
@@ -619,7 +619,7 @@ impl ProfilePage {
             id: "skill-profile-total",
             items: vec![bilibi_ui::Fact {
                 title: "Total weight",
-                value: Html::text(format!("{total}% of 100%.")),
+                value: Html::text(&format!("{total}% of 100%.")),
                 ..bilibi_ui::Fact::default()
             }],
         })?);

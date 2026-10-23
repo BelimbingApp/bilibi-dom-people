@@ -485,7 +485,7 @@ impl Catalog {
     }
     fn render(&self) -> Result<String> {
         use askama::Template;
-        let mut body = Html::EMPTY;
+        let body;
         if self.company.selected.is_none() {
             body = render(
                 &EmptyState::missing("No active company is available for skills.", "")
