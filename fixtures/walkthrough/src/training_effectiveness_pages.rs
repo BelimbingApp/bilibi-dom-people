@@ -118,7 +118,10 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             .await?;
         return Ok(());
     }
-    if action == "unlink-staff" || action == "relink-staff" {
+    if matches!(
+        action,
+        "unlink-staff" | "relink-staff" | "archive-company-three"
+    ) {
         return crate::training_learning_control(url, action).await;
     }
     for cap in [
