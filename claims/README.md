@@ -2,7 +2,7 @@
 
 Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
 
-Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`, and Claim operations at `/people/claims/operations`. Claim policies is delivered separately.
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`, and Claim operations at `/people/claims/operations`. Claim policies is available at `/people/claims/setup`.
 
 ## Ownership
 
@@ -188,3 +188,15 @@ Both lists use `FlexTable` with `ListColumns` for column selection, order and co
 Every page update resolves the account’s current employee link again. Every write event checks `people.claims.submit` before parsing input, and the facade checks again under its locks. A revoked grant or removed link clears the private rows, form and pending withdrawal. Refusals stay on the page as messages; field validation also appears beside the fields and in an error summary.
 
 For browser checks on a disposable database, first run the default People walkthrough, then run `cargo run -p bilibi-people-walkthrough --bin claims-page -- relink` followed by `cargo run -p bilibi-people-walkthrough --bin claims-page -- prepare`. The relink step restores the staff account after other slices’ account-link refusal proofs. Sign in as `staff@example.test` to see submitted, partly approved, rejected and reimbursed expenses, plus three open receipt rules. The same binary accepts `revoke`/`restore` and `unlink`/`relink` to change that account while its page is open.
+
+## Claim policies
+
+Open **People → Settings → Claim policies** at `/people/claims/setup` to set up expenses for a company. Choose a company, save its currency codes, then add categories, claim types, assignments and effective-dated policies.
+
+The five lists use `FlexTable` with `ListState` and `ListColumns`, including the currency list. Each table has column selection, ordering and compact rows. Bilimbi's setup page has no sorting, search or pagination, so those controls are absent. Company selection stays in the address and works in a workspace tile.
+
+An assignment opens assigned-only claim types to selected employees. Its row has two shared multi-selects and **Save members**. Empty selections remove all members. The page reads the event's exact keys and bounds both arrays at 1,000 entries; selections after the first 64 fields are retained. Compact rows show member counts; return to normal row height to edit members.
+
+**End** on an open policy or assignment reviews its end date in `ConfirmDialog`. Cancel and Escape leave the record unchanged. The server keeps the selected company, record and date; confirmation cannot replace them. The facade refuses an end before the start or, for a policy, before an existing claim's expense date. End dates cannot be changed after saving.
+
+Every write-shaped event rechecks `people.claims.manage` for the selected company, and the Claims facade checks again under the company lock. Switching company discards unfinished forms and confirmations. Revoked permission clears private setup rows and prevents the next write. Archived companies remain readable and refuse writes with a page message. Form refusals retain entered values, with validation beside the fields and in an error summary. Messages survive table events until dismissed or replaced.
