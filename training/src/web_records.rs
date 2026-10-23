@@ -683,7 +683,7 @@ impl Records {
                         self.finish(result, "Document purged.");
                     } else {
                         match self.training.purge(scope, company).await {
-                            Ok(result) if !result.errors.is_empty() => self.fail("Some documents could not be purged. Check retention holds and retry."),
+                            Ok(result) if !result.failed.is_empty() => self.fail("Some documents could not be purged. Check retention holds and retry."),
                             result => { self.finish(result, "Retention run complete."); },
                         }
                     }
@@ -741,7 +741,7 @@ impl Records {
         id: &str,
         caption: &str,
         rows: Vec<FlexRow>,
-        empty: EmptyState<'_>,
+        empty: EmptyState,
     ) -> DbResult<Html> {
         let columns = &self.columns[key];
         let mut table = FlexTable::new(id, columns.flex_columns(), rows);
@@ -760,14 +760,14 @@ impl Records {
         render(&table)
     }
     fn tabs(&self) -> DbResult<Html> {
-        let mut tabs = vec![];
+        let mut links = vec![];
         for (task, label) in [
             (Task::My, "My passport"),
             (Task::Team, "Team passports"),
             (Task::Records, "Attendance & evidence"),
         ] {
             if self.can(task.capability()) {
-                tabs.push(Tab::link(
+                links.push((
                     params::address(
                         task.path(),
                         &HashMap::from([(
@@ -781,8 +781,8 @@ impl Records {
             }
         }
         if self.task != Task::Records && self.can(LEARNING_VIEW) {
-            tabs.push(Tab::link(
-                "/people/training/my",
+            links.push((
+                "/people/training/my".into(),
                 "Learning requests & evaluations",
                 false,
             ));
@@ -790,7 +790,10 @@ impl Records {
         render(&Tabs {
             id: "training-records-tabs",
             label: "Training records",
-            tabs,
+            tabs: links
+                .iter()
+                .map(|(path, label, current)| Tab::link(path, label, *current))
+                .collect(),
             ..Tabs::default()
         })
     }
@@ -847,11 +850,11 @@ impl Records {
             .map(|s| {
                 Ok(FlexRow::new(s.id.to_string())
                     .cell("name", bilibi_ui::Cell::text(&s.name))
-                    .slot(
+                    .cell(
                         "starts",
                         self.instant(&format!("session-start-{}", s.id), &s.starts_at.to_string())?,
                     )
-                    .slot(
+                    .cell(
                         "ends",
                         self.instant(&format!("session-end-{}", s.id), &s.ends_at.to_string())?,
                     )
@@ -898,7 +901,7 @@ impl Records {
                     .cell("status", bilibi_ui::Cell::text(fact.status.as_str()))
                     .cell("reason", bilibi_ui::Cell::text(&fact.reason))
                     .cell("actor", bilibi_ui::Cell::text(actor))
-                    .slot(
+                    .cell(
                         "time",
                         self.instant(&format!("fact-time-{}", fact.id), &fact.inserted_at)?,
                     )
@@ -1122,7 +1125,7 @@ impl Records {
                 Ok(FlexRow::new(r.fact_id.to_string())
                     .cell("course", bilibi_ui::Cell::text(&r.course))
                     .cell("session", bilibi_ui::Cell::text(&r.session))
-                    .slot(
+                    .cell(
                         "completed",
                         self.instant(&format!("passport-date-{}", r.fact_id), &r.ends_at)?,
                     )
