@@ -1,6 +1,6 @@
 {% import "forms.html" as forms %}
 {% import "feedback.html" as feedback %}
 {% call feedback::error_summary(summary=summary) %}{% endcall %}
-{% call forms::form(id="training-catalog-form",event=event,actions=actions) %}
+{% call forms::form(id=id,event=event,actions=actions) %}
 {% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
 {% endcall %}

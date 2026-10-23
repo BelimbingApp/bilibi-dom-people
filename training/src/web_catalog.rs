@@ -590,7 +590,15 @@ impl Catalog {
                 if let TrainingError::Invalid(errors) = &error {
                     for e in errors {
                         self.summary.push(
-                            format!("catalog-{}", e.field),
+                            format!(
+                                "{}_{}",
+                                if self.modal == Some("course") {
+                                    "course"
+                                } else {
+                                    "entry"
+                                },
+                                e.field
+                            ),
                             format!("{} {}", e.field, e.message),
                         );
                     }
@@ -787,7 +795,10 @@ impl Catalog {
         let mut fields = Vec::new();
         let field = |key: &str, label: &str| {
             Field::in_form(if kind == "course" { "course" } else { "entry" }, key)
-                .id(format!("catalog-{key}"))
+                .id(format!(
+                    "{}_{key}",
+                    if kind == "course" { "course" } else { "entry" }
+                ))
                 .label(label)
                 .value(self.value(key))
         };
@@ -850,6 +861,11 @@ impl Catalog {
         }
         let event = format!("create_{kind}");
         let body = render(&Entry {
+            id: if kind == "course" {
+                "course-form"
+            } else {
+                "training-entry-form"
+            },
             fields,
             event: &event,
             summary: &self.summary,
@@ -1198,6 +1214,7 @@ struct View<'a> {
 #[derive(Template)]
 #[template(path = "catalog_entry.html")]
 struct Entry<'a> {
+    id: &'a str,
     fields: Vec<Field>,
     event: &'a str,
     summary: &'a ErrorSummary,
