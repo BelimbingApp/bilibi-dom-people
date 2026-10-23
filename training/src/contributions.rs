@@ -100,6 +100,9 @@ inventory::submit! {
                 training: services.get(SERVICE)?,
             })))),
         }, Service {
+            id: crate::web_catalog::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_catalog::Pages(services.get(SERVICE)?))))),
+        }, Service {
             id: crate::web_records::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_records::Pages(services.get(SERVICE)?))))),
         }, Service {

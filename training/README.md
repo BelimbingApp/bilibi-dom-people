@@ -2,7 +2,7 @@
 
 Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages and the records and passport pages below. Courses and Sessions & calendar are the PT6 slice; Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages, Courses, Sessions & calendar, and the records and passport pages below. Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -17,6 +17,7 @@ the schema is private.
 | `create_course` | `people.training.courses.manage` | Adds an active course from a `NewCourse` (code, name, optional description) |
 | `update_course` | `people.training.courses.manage` | Changes a course's name, description or active flag (`CourseUpdate`: each `Some` replaces, `None` keeps; an empty description clears it); a course of another company or missing is `NotFound` |
 | `set_course_active` | `people.training.courses.manage` | Deactivates or reactivates a course through `update_course` (the page's Deactivate and Reactivate actions) |
+| `update_course_versioned` | `people.training.courses.manage` | Updates inline drafts only when their stored-value snapshot still matches under the course lock |
 | `events` | `people.training.sessions.view` | The company's events (`Event`) with their course names, by name |
 | `event_courses` | `people.training.sessions.manage` | The active courses an event may deliver, as `(id, name)` choices, so a session manager picks a course without course-management permission |
 | `create_event` | `people.training.sessions.manage` | Adds an event (`NewEvent`: an active course of the company, a name, a positive capacity) |
@@ -331,6 +332,18 @@ The company must configure `people.training.evaluation.minimum_cohort` to at lea
 The insights page follows in PT9. The records and passport pages below use these permissions and download handlers.
 
 Run the PT5 disposable proof after the default walkthrough with `cargo run -p bilibi-people-walkthrough --bin training-passports`. It creates its own records through the owners, checks corrections and original evidence, both suppression rules, period-only access, revoked grants, unlinking, reporting-line changes, pagination, and complete PDFs at 1,000 and 1,001 records. A disposable SQL reservation gate proves that account unlinking waits for in-flight passport publication, then the old account scope is refused. It prints all four download addresses for browser checks. The same command accepts `deny-my`, `allow-my`, `unlink-staff` and `relink-staff` to change access while a browser session remains open.
+
+## Courses and scheduling pages
+
+Open **Development → Courses** to add a course, edit its name or description in place, or deactivate it. Deactivation keeps existing events and sessions; Reactivate makes the course available again. Course codes stay fixed. Readers without course management access see the catalog and the read-only explanation.
+
+Open **Development → Sessions & calendar** to create an event for an active course, then schedule sessions for that event. Enter the delivery zone and local start and end times. The form starts with the company zone; invalid zones, clock changes and excess capacity return a refusal without closing the form.
+
+Both pages use shared FlexTables with column controls and compact rows. Their company selection and pagination stay in the URL: Courses uses `page`; Events uses `event_page`; Sessions uses `session_page`. All use `perPage` with 25, 50, 100 or 300 rows. Scheduling also keeps `date` (normalized to the first day of its month) and `view=list|calendar`. Each calendar day includes sessions occupying that company-local day, including sessions crossing midnight and excluding an end exactly at midnight. A warning appears at the 500-session limit.
+
+The page checks access before each write-shaped event and the facade checks again inside the company lock. Company selection comes from the authorized URL state; forms cannot supply a different company. Status controls carry their intended active flag, so repeated clicks cannot invert the result. Inline editors carry `Course::edit_version()` and compare it inside the course lock, so a stale draft cannot overwrite a later edit. Writes still use the declared `PageWrites` allowance until their operation contracts are reviewed.
+
+Run the catalog and page proof independently on a disposable database with `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin training-catalog-pages`. It installs the Platform fixture, runs the PT1 catalog proofs, and exercises real page mounts and events. PT6 covers long descriptions, inline save and stale drafts, deactivate/reactivate and repeated intent, revoked grants, read-only controls, URL pagination, the company-zone midnight boundary and session capacity refusal. It leaves manager and viewer accounts ready for browser checks.
 
 
 ## Training records and passports
