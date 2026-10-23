@@ -938,11 +938,11 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         exceeds.result_band == "exceeds" && exceeds.gap == 0,
     )?;
     check(
-        "standing treats the inclusive due day as overdue, not expired",
+        "standing reports a score past its validity date as expired",
         saved(skills.standing(&staff, company).await)?
             .scores
             .iter()
-            .any(|s| s.score.assessment_id == exceeds.id && s.state == "overdue"),
+            .any(|s| s.score.assessment_id == exceeds.id && s.state == "expired"),
     )?;
     // Revoked grants and unlinked accounts are checked against this same Scope.
     grants
