@@ -4185,3 +4185,9 @@ pub async fn training_catalog_pages(url: &str) -> Result<()> {
     training::run(&services, &client, &admin, &manager, &viewer).await?;
     training_catalog_pages::run(&services, &admin, &manager, &viewer).await
 }
+
+// Payroll Runs page (PY5): contribution, confirmation, decision and document proof.
+mod payroll_runs;
+pub async fn payroll_runs(url: &str) -> Result<()> {
+    payroll_runs::run(url).await
+}

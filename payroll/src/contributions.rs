@@ -36,7 +36,9 @@ inventory::submit! { Module {
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
         events: s.get(bilibi_events::SERVICE)?,
         artifacts: s.get("base/artifacts.store")?,
-    })) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+    })) }, Service { id: crate::web::RUN_PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Runs::new(
+        s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
+    ))))) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
         s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
     ))))) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
         bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(
@@ -142,3 +144,21 @@ inventory::submit! { Contribution::new(
         access: bilibi_module_registry::contributions::Access::Capability(VIEW),
     }
 ) }
+
+// PY5: Bilimbi Payroll.Web.RunsLive.
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::RUN_PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
+    service: crate::web::RUN_PAGES, contracts: &[],
+    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Payroll run writes use the authorized facade; their operation contracts have not been reviewed." },
+}) }
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/payroll.runs", provenance!(), &bilibi_module_registry::contributions::Route {
+    method: bilibi_module_registry::contributions::Method::Get, path: "/people/payroll/runs", service: crate::web::RUN_PAGES, operation: "runs",
+    access: bilibi_module_registry::contributions::Access::Capability(VIEW), framed: true,
+}) }
+bilibi_menu::contribute!(
+    "people/payroll",
+    bilibi_menu::MenuItem::page("people.payroll.runs", "Runs", "/people/payroll/runs")
+        .icon("circle-stack")
+        .under("people.payroll")
+        .requires(bilibi_menu::Requirement::Capability(VIEW))
+        .order(10)
+);
