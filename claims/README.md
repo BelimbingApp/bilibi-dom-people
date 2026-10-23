@@ -195,8 +195,11 @@ Open **People → Settings → Claim policies** at `/people/claims/setup` to set
 
 The five lists use `FlexTable` with `ListState` and `ListColumns`, including the currency list. Each table has column selection, ordering and compact rows. Bilimbi's setup page has no sorting, search or pagination, so those controls are absent. Company selection stays in the address and works in a workspace tile.
 
-An assignment opens assigned-only claim types to selected employees. Its row has two shared multi-selects and **Save members**. Empty selections remove all members. The page reads the event's exact keys and bounds both arrays at 1,000 entries; selections after the first 64 fields are retained. Compact rows show member counts; return to normal row height to edit members.
+An assignment opens assigned-only claim types to selected employees. Its row has two shared multi-selects and **Save members**. Empty selections remove all members. The page reads the event's exact keys and bounds both arrays at 1,000 entries; selections after the first 64 fields are retained. Compact rows show member counts; return to normal row height to edit members or end dates.
 
 **End** on an open policy or assignment reviews its end date in `ConfirmDialog`. Cancel and Escape leave the record unchanged. The server keeps the selected company, record and date; confirmation cannot replace them. The facade refuses an end before the start or, for a policy, before an existing claim's expense date. End dates cannot be changed after saving.
 
 Every write-shaped event rechecks `people.claims.manage` for the selected company, and the Claims facade checks again under the company lock. Switching company discards unfinished forms and confirmations. Revoked permission clears private setup rows and prevents the next write. Archived companies remain readable and refuse writes with a page message. Form refusals retain entered values, with validation beside the fields and in an error summary. Messages survive table events until dismissed or replaced.
+
+
+The PC4 walkthrough runs the registered live page against those records: `cargo run -p bilibi-people-walkthrough --bin claim-setup -- proof`. It creates 70 claim types at Company 002, posts membership arrays after 80 unrelated fields, checks empty and malformed selections, and exercises cancellation, revoked permission, company changes and tampered confirmations. `revoke` and `restore` change the manager's setup permission while the browser stays open. `archive` archives disposable Company 002 for the read-only write refusal.

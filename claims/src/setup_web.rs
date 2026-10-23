@@ -759,11 +759,17 @@ impl Setup {
                 .kind(InputKind::Hidden)
                 .value(id.to_string()),
         )?;
-        body.push(&render(
-            &self
-                .field(&form, "effective_to", label, InputKind::Date)
-                .required(),
-        )?);
+        let field = self
+            .field(&form, "effective_to", label, InputKind::Date)
+            .required();
+        if !field.errors.is_empty() {
+            let mut summary = ErrorSummary::new(format!("{form}-errors"));
+            for error in &field.errors {
+                summary.push(&field.id, bilibi_ui::error_sentence(label, error));
+            }
+            body.push(&render(&summary)?);
+        }
+        body.push(&render(&field)?);
         render(&Form {
             id: &form,
             event,
@@ -904,7 +910,9 @@ impl Setup {
                         .slot("to", Html::text(&end_date(a.effective_to)))
                         .slot("members", members);
                     row.dom_id = Some(format!("claim-assignment-{}", a.id));
-                    if a.effective_to.is_none() {
+                    if a.effective_to.is_none()
+                        && self.columns[3].mode() != bilibi_ui::RowMode::Compact
+                    {
                         row.actions = self.end_form(a.id, EndKind::Assignment)?;
                     }
                     Ok(row)
@@ -931,7 +939,9 @@ impl Setup {
                         );
                     }
                     row.dom_id = Some(format!("claim-policy-{}", p.id));
-                    if p.effective_to.is_none() {
+                    if p.effective_to.is_none()
+                        && self.columns[4].mode() != bilibi_ui::RowMode::Compact
+                    {
                         row.actions = self.end_form(p.id, EndKind::Policy)?;
                     }
                     Ok(row)
