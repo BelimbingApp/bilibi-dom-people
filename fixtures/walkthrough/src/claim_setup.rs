@@ -78,8 +78,8 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
         let count = async || -> Result<i64> {
             Ok(client
                 .query_one(
-                    "SELECT count(*) FROM people_claim_catalog_groups WHERE company_id = 2",
-                    &[],
+                    "SELECT count(*) FROM people_claim_catalog_groups WHERE tenant_id = $1 AND company_id = $2",
+                    &[&manager.tenant(), &2_i64],
                 )
                 .await?
                 .get(0))
