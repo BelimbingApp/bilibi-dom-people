@@ -62,15 +62,16 @@ async fn refresh(state: &mut Mounted, scope: &Scope) -> Result<LiveBody> {
 }
 
 pub async fn run(url: &str, action: &str) -> Result<()> {
-    if action == "setup" {
-        crate::run(url).await?;
-    }
     bilibi_base::link();
     bilibi_core::link();
     bilibi_domains::link();
     bilibi_extensions::link();
     let db = bilibi_database::pool(url)?;
     let modules = bilibi_module_registry::discover()?;
+    if action == "setup" {
+        bilibi_database::migrate(&db, &modules).await?;
+        bilibi_walkthrough_fixture::install(&db).await?;
+    }
     let mut services = Services::default();
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
@@ -88,14 +89,17 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
     let manager = auth
         .authenticate(&**client, TENANT, MANAGER, "walkthrough".into())
         .await?;
-    let staff = auth
-        .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
-        .await?;
     let viewer = auth
         .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
         .await?;
     let training = services.get::<Training>(SERVICE)?;
     let grants = services.get::<Grants>("base/authz.grants")?;
+    if action == "setup" {
+        setup(&services, &admin, &manager).await?;
+    }
+    let staff = auth
+        .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
+        .await?;
     if action == "deny-answer" || action == "allow-answer" {
         grants
             .set_direct(
@@ -536,5 +540,143 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         "PT9 browser records ready: session {}, course {}",
         browser_session.id, course.id
     );
+    Ok(())
+}
+
+// Keep this page proof independent of the date-sensitive Skills walkthrough.
+// Only the Platform fixture is installed; every People row goes through its owner.
+async fn setup(services: &Services, admin: &Scope, manager: &Scope) -> Result<()> {
+    use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates};
+    use bilibi_party_ids::OrganisationId;
+    use bilibi_people_reference_data::{NewEntry, ReferenceData};
+    use bilibi_people_workforce::NewEmployment;
+    use bilibi_person::{PersonInput, PersonKind, PersonService};
+    use bilibi_user::UserService;
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    grants.reconcile().await?;
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let client = db.get().await?;
+    let role = crate::tenant_owner_role(&**client, admin).await?;
+    grants.assign_role(admin, MANAGER, role, true).await?;
+    for cap in CAPABILITIES {
+        grants.set_direct(admin, MANAGER, cap, Some(true)).await?;
+    }
+    services
+        .get::<ReferenceData>(bilibi_people_reference_data::SERVICE)?
+        .create_entry(
+            admin,
+            COMPANY,
+            &NewEntry::new("employment_type", "pt9_type", "Review employment"),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let people = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
+    let manager_employee = people
+        .create_employment(
+            admin,
+            COMPANY,
+            &NewEmployment::new(1, 1, "PT9-001", "pt9_type", "active"),
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let person = services
+        .get::<PersonService>(bilibi_person::SERVICE)?
+        .create(
+            admin,
+            &PersonInput {
+                name: "Sam Staff".into(),
+                kind: PersonKind::Human,
+                email: None,
+                phone: None,
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let affiliation = services
+        .get::<AffiliationService>(bilibi_affiliation::SERVICE)?
+        .create(
+            admin,
+            &AffiliationInput {
+                person_id: person.id,
+                organisation_id: OrganisationId::new(COMPANY).map_err(|_| Error::Invalid)?,
+                title: None,
+                work_email: None,
+                work_phone: None,
+                dates: EffectiveDates::new(None, None).map_err(|_| Error::Invalid)?,
+            },
+        )
+        .await?;
+    let users = services.get::<UserService>("core/user.accounts")?;
+    users
+        .link_person(admin, STAFF, person.id)
+        .await
+        .map_err(|_| Error::Internal)?;
+    users
+        .link_affiliation(admin, STAFF, affiliation.id)
+        .await
+        .map_err(|_| Error::Internal)?;
+    people
+        .create_employment(
+            admin,
+            COMPANY,
+            &NewEmployment {
+                supervisor_employment_id: Some(manager_employee.id),
+                ..NewEmployment::new(
+                    person.id.get(),
+                    affiliation.id.get(),
+                    "PT9-002",
+                    "pt9_type",
+                    "active",
+                )
+            },
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
+    let training = services.get::<Training>(SERVICE)?;
+    saved(
+        training
+            .put_evaluation_settings(
+                manager,
+                COMPANY,
+                &EvaluationSettings {
+                    evaluation_days: Some(0),
+                    checkpoints: Some(vec![1, 7]),
+                    reminder_days: Some(0),
+                    minimum_cohort: Some(2),
+                    report_months: Some(3),
+                    report_grace_days: Some(2),
+                },
+            )
+            .await,
+    )?;
+    let criteria = vec![
+        EvaluationCriterion {
+            code: "outcome".into(),
+            label: "Observed outcome".into(),
+            minimum: 0,
+            maximum: 5,
+        },
+        EvaluationCriterion {
+            code: "uncertain".into(),
+            label: "Unobserved outcome".into(),
+            minimum: 0,
+            maximum: 5,
+        },
+    ];
+    saved(
+        training
+            .publish_evaluation_policy(
+                manager,
+                COMPANY,
+                &NewEvaluationPolicy {
+                    effective_from: "2026-01-01".into(),
+                    effective_to: "2026-12-31".into(),
+                    criteria: criteria.clone(),
+                    effectiveness_criteria: criteria,
+                    reason: "Review page proof criteria".into(),
+                },
+            )
+            .await,
+    )?;
     Ok(())
 }
