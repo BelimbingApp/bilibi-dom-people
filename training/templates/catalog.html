@@ -1,0 +1,18 @@
+{# Bilimbi Training.Web.CoursesLive and SessionsLive. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="training-catalog",class="space-y-4") %}
+{% call ui::header(actions=actions) %}{{ title }}{% endcall %}
+{{ toolbar }}
+{% if !courses_page %}<p class="text-sm text-ink-muted">Calendar time zone: {{ zone }}</p>{% endif %}
+{% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
+{% if readonly %}<p class="text-sm text-ink-muted">{% if courses_page %}Read-only. Ask an operator with course management access to change the catalog.{% else %}Read-only. Ask an operator with session management access to schedule training.{% endif %}</p>{% endif %}
+{{ main }}
+{% if limited %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Warning) %}Showing the first 500 sessions in this month. An operator can review further sessions through a narrower calendar interval.{% endcall %}{% endif %}
+{{ sessions }}
+{{ dialog }}
+{{ confirmation }}
+{% endcall %}
+</div>

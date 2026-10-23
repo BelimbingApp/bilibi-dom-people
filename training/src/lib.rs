@@ -20,7 +20,7 @@
 //! (Base DateTime's `localization.timezone`) bounds its days.
 //!
 //! The catalog, participation, evidence and learning governance share this facade. The Courses and
-//! Sessions & calendar pages (PT6) and the menu leaves land with them.
+//! Sessions & calendar pages provide the catalog UI and menu leaves.
 //! See `README.md`.
 mod evaluation;
 mod evaluation_store;
@@ -40,6 +40,7 @@ mod insights;
 mod participation;
 mod passport;
 mod passport_store;
+mod web_catalog;
 pub use insights::{InsightDrillRow, InsightPeriod, InsightRow, INSIGHTS_VIEW};
 pub use passport::{
     Passport, PassportAudience, PassportDirectory, PassportEvidence, PassportRow, TrainingPage,

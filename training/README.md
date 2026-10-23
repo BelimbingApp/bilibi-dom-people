@@ -2,7 +2,7 @@
 
 Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages below. The Courses and Sessions & calendar pages arrive in PT6, and Training records in PT7. Evaluation, passports and insights arrive in their own slices. An administrator grants Training access; no Training grant is added to a system role.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages below. The Courses and Sessions & calendar pages are available, and Training records arrive in PT7. Evaluation, passports and insights arrive in their own slices. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -331,3 +331,13 @@ The company must configure `people.training.evaluation.minimum_cohort` to at lea
 The passport/records pages are the PT7 slice and the insights page is PT9. This slice supplies their facade, types, permissions and download handlers.
 
 Run the PT5 disposable proof after the default walkthrough with `cargo run -p bilibi-people-walkthrough --bin training-passports`. It creates its own records through the owners, checks corrections and original evidence, both suppression rules, period-only access, revoked grants, unlinking, reporting-line changes, pagination, and complete PDFs at 1,000 and 1,001 records. A disposable SQL reservation gate proves that account unlinking waits for in-flight passport publication, then the old account scope is refused. It prints all four download addresses for browser checks. The same command accepts `deny-my`, `allow-my`, `unlink-staff` and `relink-staff` to change access while a browser session remains open.
+
+## Courses and scheduling pages
+
+Open **Development → Courses** to add a course, edit its name or description in place, or deactivate it. Deactivation keeps existing events and sessions; confirmation also supports reactivation. Course codes stay fixed. Readers without course management access see the catalog and the read-only explanation.
+
+Open **Development → Sessions & calendar** to create an event for an active course, then schedule sessions for that event. Enter the delivery zone and local start and end times. The form starts with the company zone; invalid zones, clock changes and excess capacity return a refusal without closing the form.
+
+Both pages use shared FlexTables with column controls and compact rows. Their company selection and pagination stay in the URL: Courses uses `page`; Events uses `event_page`; Sessions uses `session_page`. All use `perPage` with 25, 50, 100 or 300 rows. Scheduling also keeps `date` (normalized to the first day of its month) and `view=list|calendar`. Each calendar day includes sessions occupying that company-local day, including sessions crossing midnight and excluding an end exactly at midnight. A warning appears at the 500-session limit.
+
+The page checks access before each write-shaped event and the facade checks again inside the company lock. Company selection comes from the authorized URL state; forms cannot supply a different company. Status confirmations retain the chosen course and desired status on the server. Writes still use the declared `PageWrites` allowance until their operation contracts are reviewed.
