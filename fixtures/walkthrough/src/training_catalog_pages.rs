@@ -41,7 +41,11 @@ pub(crate) async fn run(
     let training = services.get::<Training>(bilibi_people_training::SERVICE)?;
     let pages = services.get::<PageService<Scope, Error>>("people/training.catalog_pages")?;
     let grants = services.get::<Grants>("base/authz.grants")?;
-    for cap in [COURSES_VIEW, SESSIONS_VIEW] {
+    for cap in [
+        COURSES_VIEW,
+        SESSIONS_VIEW,
+        "admin.company.tenant-wide.manage",
+    ] {
         grants.set_direct(admin, VIEWER, cap, Some(true)).await?;
     }
     let path = HashMap::new();
