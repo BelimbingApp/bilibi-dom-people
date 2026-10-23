@@ -31,6 +31,7 @@ struct View<'a> {
     documents: Html,
     confirm: Html,
     setup_url: String,
+    run_title: String,
 }
 impl RunState {
     pub(super) fn render(&self) -> Result<String> {
@@ -73,6 +74,7 @@ impl RunState {
             report: Html::EMPTY,
             documents: Html::EMPTY,
             confirm: self.confirmation()?,
+            run_title: String::new(),
             setup_url: format!(
                 "/people/payroll/setup?company_id={}",
                 self.company_id.unwrap_or_default()
@@ -138,6 +140,7 @@ impl RunState {
         }
         if let Some(output) = &self.output {
             let run = &output.run;
+            view.run_title = format!("Run {} · {}", run.id, run.currency);
             let period = &run.snapshot["period"];
             view.unlocked = run.locked_at.is_none();
             view.calculated = output.calculation.is_some();

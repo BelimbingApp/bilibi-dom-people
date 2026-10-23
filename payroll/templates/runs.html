@@ -21,6 +21,7 @@
 {% endcall %}
 {% if selected %}
 {% call ui::card(id="selected-run") %}
+{% call ui::section_heading(id="selected-run-heading", title=run_title) %}{% endcall %}
 {{ facts }}
 {% if unlocked %}<p class="text-sm text-ink-muted">Setup must be locked before calculation.</p>{% endif %}
 {% if read_only %}
