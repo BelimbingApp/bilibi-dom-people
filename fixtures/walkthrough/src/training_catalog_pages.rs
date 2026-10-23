@@ -150,13 +150,16 @@ pub(crate) async fn run(
         json!({"type":"create_course","course[code]":"revoked","course[name]":"Revoked"}),
     )
     .await?;
+    let not_written = training
+        .courses(manager, COMPANY)
+        .await
+        .map_err(|_| Error::Internal)?
+        .iter()
+        .all(|c| c.code != "revoked");
     prove(
-        refused
-            .html
-            .contains("You cannot change this company&#x27;s courses.")
-            || refused
-                .html
-                .contains("You cannot change this company's courses."),
+        refused.html.contains("You cannot change this company")
+            && refused.html.contains("Read-only.")
+            && not_written,
         "revoked grant refuses the next event and keeps the live page",
     )?;
     grants
