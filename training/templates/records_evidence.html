@@ -1,0 +1,7 @@
+{% import "components.html" as ui %}
+<section id="training-selected-evidence" class="space-y-3">
+{% call ui::section_heading(title="Evidence") %}{% endcall %}
+{{ table }}
+{% if read_only %}<p>Read-only evidence. Ask an operator with evidence management access to add a document.</p>{% endif %}
+{{ upload }}
+</section>

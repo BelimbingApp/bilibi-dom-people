@@ -1,0 +1,9 @@
+{% import "components.html" as ui %}
+{{ sessions }}
+{% if limited %}<p>Showing the most recent 500 sessions.</p>{% endif %}
+{% if read_only %}<p>Read-only attendance. Ask an operator with training record management access to confirm or correct attendance.</p>{% endif %}
+{{ history }}
+{{ pagination }}
+{{ summary }}
+{{ entry }}
+{{ evidence }}
