@@ -925,7 +925,13 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 &AssessmentInput {
                     skill_id: other_skill.id,
                     assessed_level: 2,
-                    valid_until: Some(date(2026, 10, 22)),
+                    // This is a standing read at the real UTC clock, unlike the
+                    // explicit as-of coverage checks above.
+                    valid_until: Some(
+                        jiff::Timestamp::now()
+                            .to_zoned(jiff::tz::TimeZone::UTC)
+                            .date(),
+                    ),
                     request_key: "pk2-exceeds".into(),
                     ..base.clone()
                 },

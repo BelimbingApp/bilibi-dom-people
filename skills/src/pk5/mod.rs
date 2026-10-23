@@ -148,7 +148,14 @@ impl Table {
                 id,
                 labels
                     .iter()
-                    .map(|(k, l)| BuiltinColumn::new(k, l))
+                    .map(|(k, l)| {
+                        let column = BuiltinColumn::new(k, l);
+                        if ["Level", "Priority", "Holders", "Minimum"].contains(l) {
+                            column.right()
+                        } else {
+                            column
+                        }
+                    })
                     .collect(),
             )
             .map_err(|_| Error::Internal)?,
