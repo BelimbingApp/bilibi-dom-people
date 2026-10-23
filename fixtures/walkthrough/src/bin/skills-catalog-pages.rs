@@ -100,6 +100,18 @@ async fn main() -> Result<()> {
         .authenticate(&**client, 1, 1, "walkthrough".into())
         .await?;
     let grants = services.get::<Grants>("base/authz.grants")?;
+    if command == "archive" {
+        services
+            .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
+            .archive_company(&admin, 1, Some("PK4 disposable browser proof"))
+            .await
+            .map_err(|e| {
+                eprintln!("PK4 archive refusal: {e}");
+                Error::Internal
+            })?;
+        println!("PK4 archived Company 001 for the final stale-page check");
+        return Ok(());
+    }
     if command == "revoke-manage"
         || command == "restore-manage"
         || command == "revoke-publish"
@@ -120,7 +132,47 @@ async fn main() -> Result<()> {
         grants.set_direct(&admin, 1, cap, Some(true)).await?;
     }
     if command == "prepare" {
-        println!("PK4 prepared: manager can use the Skills catalog and publish profiles; no Skills records added.");
+        let person = services
+            .get::<bilibi_person::PersonService>(bilibi_person::SERVICE)?
+            .create(
+                &admin,
+                &bilibi_person::PersonInput {
+                    name: "PK4 catalog reader".into(),
+                    kind: bilibi_person::PersonKind::Human,
+                    email: None,
+                    phone: None,
+                },
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        let affiliation = services
+            .get::<bilibi_affiliation::AffiliationService>(bilibi_affiliation::SERVICE)?
+            .create(
+                &admin,
+                &bilibi_affiliation::AffiliationInput {
+                    person_id: person.id,
+                    organisation_id: bilibi_party_ids::OrganisationId::new(1)
+                        .map_err(|_| Error::Invalid)?,
+                    title: None,
+                    work_email: None,
+                    work_phone: None,
+                    dates: bilibi_affiliation::EffectiveDates::new(None, None)
+                        .map_err(|_| Error::Invalid)?,
+                },
+            )
+            .await?;
+        services
+            .get::<bilibi_user::UserService>("core/user.accounts")?
+            .link_affiliation(&admin, 2, affiliation.id)
+            .await
+            .map_err(|_| Error::Internal)?;
+        grants
+            .set_direct(&admin, 2, CATALOG_VIEW, Some(true))
+            .await?;
+        for cap in [CATALOG_MANAGE, PROFILES_PUBLISH] {
+            grants.set_direct(&admin, 2, cap, Some(false)).await?;
+        }
+        println!("PK4 prepared: manager can manage and publish; viewer has a linked affiliation and read-only catalog access. No Skills records added.");
         return Ok(());
     }
     let skills = services.get::<Skills>(bilibi_people_skills::SERVICE)?;

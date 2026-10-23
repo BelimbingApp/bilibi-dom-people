@@ -161,21 +161,20 @@ impl Catalog {
             self.levels
                 .retain(|id, _| self.scales.iter().any(|s| s.id == *id));
             for scale in &self.scales {
-                if !self.levels.contains_key(&scale.id) {
-                    self.levels.insert(
-                        scale.id,
-                        Table::new(
-                            &format!("skill-scale-levels-{}", scale.id),
-                            &format!("levels_grid_{}", scale.id),
-                            &[
-                                ("level", "Level"),
-                                ("name", "Name"),
-                                ("anchor", "Observable behaviour"),
-                                ("authority", "Authority"),
-                                ("actions", "Actions"),
-                            ],
-                        )?,
-                    );
+                if let std::collections::hash_map::Entry::Vacant(entry) =
+                    self.levels.entry(scale.id)
+                {
+                    entry.insert(Table::new(
+                        &format!("skill-scale-levels-{}", scale.id),
+                        &format!("levels_grid_{}", scale.id),
+                        &[
+                            ("level", "Level"),
+                            ("name", "Name"),
+                            ("anchor", "Observable behaviour"),
+                            ("authority", "Authority"),
+                            ("actions", "Actions"),
+                        ],
+                    )?);
                 }
                 if let Some(table) = self.levels.get_mut(&scale.id) {
                     table.load(&scale.levels, |l| l.level.to_string());
@@ -485,28 +484,27 @@ impl Catalog {
     }
     fn render(&self) -> Result<String> {
         use askama::Template;
-        let body;
-        if self.company.selected.is_none() {
-            body = render(
+        let body = if self.company.selected.is_none() {
+            render(
                 &EmptyState::missing("No active company is available for skills.", "")
                     .id("skills-no-company"),
-            )?;
+            )?
         } else if !self.available {
-            body = render(
+            render(
                 &EmptyState::missing(
                     "Skills are unavailable while this company's workforce is not current.",
                     "",
                 )
                 .id("skills-unavailable"),
-            )?;
+            )?
         } else {
-            body = render(&CatalogLayout {
+            render(&CatalogLayout {
                 categories: self.categories_section()?,
                 scales: self.scales_section()?,
                 skills: self.skills_section()?,
                 profiles: self.profiles_section()?,
-            })?;
-        }
+            })?
+        };
         View {
             flash: self.flash.map(),
             page_id: "skills-page",
