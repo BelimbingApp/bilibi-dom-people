@@ -63,7 +63,7 @@ pub use bilibi_people_workforce::{FieldError, Freshness};
 pub use clock::{day_start, local_instant};
 pub use contributions::{
     CAPABILITIES, COURSES_MANAGE, COURSES_VIEW, EVIDENCE_MANAGE, RECORDS_MANAGE, RECORDS_VIEW,
-    RETENTION_MANAGE, SESSIONS_MANAGE, SESSIONS_VIEW,
+    RECORDS_WORKSPACE_VIEW, RETENTION_MANAGE, SESSIONS_MANAGE, SESSIONS_VIEW,
 };
 
 use bilibi_company::{organisation, WriteError};
