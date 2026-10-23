@@ -38,6 +38,7 @@ mod money;
 mod operations_web;
 mod policies;
 mod requests;
+mod setup_web;
 mod web;
 mod workflow;
 

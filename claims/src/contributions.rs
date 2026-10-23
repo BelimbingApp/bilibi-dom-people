@@ -79,6 +79,11 @@ inventory::submit! {
                 }))
             },
         }, crate::downloads::SERVICE_DEFINITION, Service {
+            id: crate::setup_web::SERVICE,
+            factory: |services| Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(
+                crate::setup_web::Pages::new(services.get(SERVICE)?)
+            )))),
+        }, Service {
             id: "people/claims.operations_pages",
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::operations_web::Pages::new(
                 services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?,
@@ -178,4 +183,29 @@ bilibi_menu::contribute!(
         .under("people.my_work")
         .requires(Requirement::Capability(SUBMIT))
         .order(30)
+);
+
+// Bilimbi Claims.Web.SetupLive and its Settings menu leaf.
+inventory::submit! {
+    Contribution::new(ROUTES, "people/claims.setup", provenance!(), &Route {
+        method: Method::Get, path: "/people/claims/setup", service: crate::setup_web::SERVICE,
+        operation: "setup", access: Access::Capability(MANAGE), framed: true,
+    })
+}
+inventory::submit! {
+    Contribution::new(PAGE_WRITES, crate::setup_web::SERVICE, provenance!(), &PageWrites {
+        service: crate::setup_web::SERVICE, contracts: &[],
+        pending: Pending::Every { reason: "Claim setup writes use the authorized Claims facade; catalog, policy and assignment operation contracts have not been reviewed." },
+    })
+}
+bilibi_menu::contribute!(
+    "people/claims",
+    MenuItem::page(
+        "people.settings.claim_policies",
+        "Claim policies",
+        "/people/claims/setup"
+    )
+    .under("people.settings")
+    .requires(Requirement::Capability(MANAGE))
+    .order(40)
 );

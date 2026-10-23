@@ -1,0 +1,17 @@
+{# Bilimbi People Claims.Web.SetupLive; the shared UI owns all presentation. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-claim-setup", variant=bilibi_ui::PageVariant::Form) %}
+{% call ui::header(subtitle="Currencies, claim types, assignments, and effective-dated limits for one company.") %}Claim policies{% endcall %}
+{{ company }}
+{% if available %}
+{% for section in sections %}
+{% call ui::section_heading(id=section.id, title=section.title, description=section.description) %}{% endcall %}
+{% call ui::card(role="region", labelledby=section.id) %}{{ section.table }}{{ section.form }}{% endcall %}
+{% endfor %}
+{% else %}{{ empty }}{% endif %}
+{% endcall %}
+{{ confirmation }}
+</div>

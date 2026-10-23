@@ -4198,6 +4198,12 @@ pub async fn workforce_settings(url: &str, action: &str) -> Result<()> {
     workforce_settings::run(url, action).await
 }
 
+// PC4: the registered Claim policies page, broad membership arrays and reauthorization.
+mod claim_setup;
+pub async fn claim_setup(url: &str, action: &str) -> Result<()> {
+    claim_setup::run(url, action).await
+}
+
 // PT9: mounted Effectiveness, My evaluations and Learning insights proof.
 mod training_effectiveness_pages;
 pub async fn training_effectiveness_pages(url: &str, action: &str) -> Result<()> {
