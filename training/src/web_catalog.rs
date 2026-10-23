@@ -134,9 +134,7 @@ struct Catalog {
     modal: Option<&'static str>,
     draft: HashMap<String, String>,
     summary: ErrorSummary,
-    pending: Option<(i64, bool, String)>,
     commits: CommitStates,
-    instance_notice: String,
 }
 impl Catalog {
     fn new(
@@ -212,9 +210,7 @@ impl Catalog {
             modal: None,
             draft: HashMap::new(),
             summary: ErrorSummary::new("catalog-errors"),
-            pending: None,
             commits: CommitStates::default(),
-            instance_notice: String::new(),
         })
     }
     fn view_cap(&self) -> &'static str {
@@ -279,7 +275,6 @@ impl Catalog {
                 TrainingError::Unauthorized.to_string()
             });
             self.modal = None;
-            self.pending = None;
             return Ok(());
         };
         // Bind the first company to the URL once; lost reach never retargets an open form.
@@ -300,9 +295,6 @@ impl Catalog {
                 )
                 .await?,
         );
-        self.instance_notice = bilibi_system::Instance::resolve(&self.training.settings, &**client)
-            .await?
-            .notice();
         drop(client);
         let result = if self.courses_page {
             self.training
@@ -318,7 +310,6 @@ impl Catalog {
         if self.error.is_some() || !self.can_manage {
             self.can_manage = false;
             self.modal = None;
-            self.pending = None;
         }
         if self.courses_page {
             self.columns
@@ -389,7 +380,6 @@ impl Catalog {
                 self.list.apply_filters(&values);
                 self.session_list.apply_filters(&values);
                 self.modal = None;
-                self.pending = None;
                 self.draft.clear();
                 return Ok(());
             }
@@ -405,10 +395,6 @@ impl Catalog {
             }
             "close_modal" => {
                 self.modal = None;
-                return Ok(());
-            }
-            "cancel_active" => {
-                self.pending = None;
                 return Ok(());
             }
             _ => {}
@@ -540,29 +526,22 @@ impl Catalog {
                 }
             }
             "set_active" if self.courses_page => {
-                if let Some(c) = self
-                    .courses
-                    .iter()
-                    .find(|c| c.id.to_string() == posted(payload, "value"))
-                {
-                    self.pending = Some((c.id, !c.active, c.name.clone()));
-                }
-            }
-            "confirm_active" if self.courses_page => {
-                if let Some((id, active, _)) = self.pending.take() {
-                    let result = self
-                        .training
-                        .update_course(
-                            scope,
-                            company,
-                            id,
-                            &CourseUpdate {
-                                active: Some(active),
-                                ..CourseUpdate::default()
-                            },
-                        )
-                        .await;
-                    self.finish(result, "Course updated.");
+                if let Some((id, active)) = posted(payload, "value").split_once(':') {
+                    let id = params::positive_id(Some(id));
+                    let active = match active {
+                        "true" => Some(true),
+                        "false" => Some(false),
+                        _ => None,
+                    };
+                    if let (Some(id), Some(active)) = (id, active) {
+                        if self.courses.iter().any(|c| c.id == id) {
+                            let result = self
+                                .training
+                                .set_course_active(scope, company, id, active)
+                                .await;
+                            self.finish(result, "Course updated.");
+                        }
+                    }
                 }
             }
             _ => {}
@@ -679,11 +658,15 @@ impl Catalog {
                 if self.can_manage {
                     row = row.slot(
                         "actions",
-                        button(
-                            "set_active",
-                            if c.active { "Deactivate" } else { "Reactivate" },
-                            &c.id.to_string(),
-                        )?,
+                        render(&Button {
+                            event: "set_active",
+                            button_type: "button",
+                            name: "value",
+                            value: &format!("{}:{}", c.id, !c.active),
+                            working: "Saving…",
+                            body: Html::text(if c.active { "Deactivate" } else { "Reactivate" }),
+                            ..Button::default()
+                        })?,
                     );
                 }
                 Ok(row)
@@ -1088,30 +1071,6 @@ impl Catalog {
                 }
             }
         }
-        let confirmation = if let Some((_, active, name)) = &self.pending {
-            render(&ConfirmDialog {
-                id: "course-active-confirm",
-                consequence: &format!(
-                    "{} {name}?",
-                    if *active { "Reactivate" } else { "Deactivate" }
-                ),
-                detail: &format!(
-                    "{} {}",
-                    self.instance_notice,
-                    if *active {
-                        "The course will be available for new events."
-                    } else {
-                        "Existing events and sessions remain. The course will be unavailable for new events."
-                    }
-                ),
-                confirm: if *active { "Reactivate" } else { "Deactivate" },
-                working: "Saving…",
-                confirm_event: "confirm_active",
-                cancel_event: "cancel_active",
-            })?
-        } else {
-            Html::EMPTY
-        };
         View {
             title: self.title(),
             flash: self.flash_map(),
@@ -1125,7 +1084,6 @@ impl Catalog {
             main,
             sessions,
             dialog: self.dialog()?,
-            confirmation,
         }
         .render()
         .map_err(|_| Error::Internal)
@@ -1153,7 +1111,6 @@ impl LiveState<Scope, Error> for Catalog {
                     self.session_list = ListState::parse(query, spec("session_page", true)?)
                         .map_err(|_| Error::Internal)?;
                     self.modal = None;
-                    self.pending = None;
                 }
                 LiveInput::Event(payload) => self.event(req.scope, payload).await?,
             }
@@ -1212,7 +1169,6 @@ struct View<'a> {
     main: Html,
     sessions: Html,
     dialog: Html,
-    confirmation: Html,
 }
 #[derive(Template)]
 #[template(path = "catalog_entry.html")]

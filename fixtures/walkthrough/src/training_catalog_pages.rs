@@ -98,24 +98,45 @@ pub(crate) async fn run(
         stale.html.contains("This course changed."),
         "stale inline draft is refused under the course lock",
     )?;
-    let ask = send(
+    let changed = send(
         &mut *courses,
         manager,
-        json!({"type":"set_active","value":course.id.to_string()}),
+        json!({"type":"set_active","value":format!("{}:false",course.id)}),
     )
     .await?;
     prove(
-        ask.html.contains("course-active-confirm")
+        changed.html.contains("Course updated.")
             && training
                 .courses(manager, COMPANY)
                 .await
                 .map_err(|_| Error::Internal)?
                 .iter()
                 .find(|c| c.id == course.id)
-                .is_some_and(|c| c.active),
-        "deactivation waits for server-held confirmation",
+                .is_some_and(|c| !c.active),
+        "course deactivation follows Bilimbi's one-click workflow",
     )?;
-    send(&mut *courses, manager, json!({"type":"cancel_active"})).await?;
+    send(
+        &mut *courses,
+        manager,
+        json!({"type":"set_active","value":format!("{}:false",course.id)}),
+    )
+    .await?;
+    prove(
+        training
+            .courses(manager, COMPANY)
+            .await
+            .map_err(|_| Error::Internal)?
+            .iter()
+            .find(|c| c.id == course.id)
+            .is_some_and(|c| !c.active),
+        "repeated intent retains its requested status",
+    )?;
+    send(
+        &mut *courses,
+        manager,
+        json!({"type":"set_active","value":format!("{}:true",course.id)}),
+    )
+    .await?;
     grants
         .set_direct(admin, MANAGER, COURSES_MANAGE, Some(false))
         .await?;
