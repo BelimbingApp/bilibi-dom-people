@@ -103,13 +103,13 @@ async fn main() -> Result<()> {
     if command == "archive" {
         services
             .get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?
-            .archive_company(&admin, 1, Some("PK4 disposable browser proof"))
+            .archive_company(&admin, 2, Some("PK4 disposable browser proof"))
             .await
             .map_err(|e| {
                 eprintln!("PK4 archive refusal: {e}");
                 Error::Internal
             })?;
-        println!("PK4 archived Company 001 for the final stale-page check");
+        println!("PK4 archived Company 002 for the final stale-page check");
         return Ok(());
     }
     if command == "revoke-manage"
