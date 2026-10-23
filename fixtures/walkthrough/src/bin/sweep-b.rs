@@ -218,6 +218,19 @@ async fn main() -> Result<()> {
             )
             .await?;
     }
+    if finance {
+        // A running app may have attempted delivery before the operator
+        // enabled the system principal. Replay requeues those real facts.
+        services
+            .get::<bilibi_base::events::Events>(bilibi_base::events::SERVICE)?
+            .replay(
+                &admin,
+                "finance/payroll.people",
+                bilibi_base::events::ReplayFrom::Event(1),
+                1000,
+            )
+            .await?;
+    }
     drop(client);
     let executor = Executor::from_services(
         &services,
