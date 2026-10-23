@@ -421,3 +421,11 @@ Unknown reads or fields, malformed values, out-of-range page sizes and invalid o
 Run `cargo run -p bilibi-people-walkthrough --bin workforce-settings -- setup` against an empty disposable database. The PW2 block exported at the end of `fixtures/walkthrough/src/lib.rs` exercises this port: both company axes, one-row employee pages, stable watermarks, bounded continuation, mismatched cursors, Core contact permissions, pending Core contact changes on the caller’s transaction, archived-company refusals and the Organisation pass-through. Open the settings page as the fixture administrator to exercise company selection, status saves, empty-selection refusal and the counts table.
 
 While the manager’s page stays open, run the same binary with `revoke` or `restore` to change its settings grant through Authz. The `archive` action archives Company 004 through Core for a mounted-page refusal check. These controls are fixture commands, never application routes.
+
+## People sweep A
+
+Run the default People walkthrough on a fresh disposable database, then run `cargo run -p bilibi-people-walkthrough --bin people-sweep-a` on that database. The sweep keeps pages mounted, revokes each write permission through Authz, sends the next event with the original signed-in scope, and restores permission. A refusal must leave the page usable. It covers Workforce settings, People references, Organisation, the four Attendance settings pages, Rosters, Attendance approvals, Leave approvals and policies, and Claim policies and operations.
+
+The same command probes the append-only Leave ledger and Leave and Claim histories, immutable published Skills scales and profiles, and overlapping substantive assignments. Every probe requires a real record and its expected PostgreSQL error code. Each probe rolls back, so a missing guard fails the proof without changing the records used for browser checks.
+
+The command leaves the ordinary manager account ready for Chrome. Compare the Team, Time and expenses, and Settings routes with Bilimbi in light and dark themes. Repeat with a restricted account, then use the individual module walkthrough controls for self-approval, account unlinking and company archival while a page stays open. Screenshot and interaction evidence belongs outside the repository.

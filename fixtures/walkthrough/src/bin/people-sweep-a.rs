@@ -53,6 +53,18 @@ async fn main() -> Result<()> {
     let grants = services.get::<Grants>("base/authz.grants")?;
     let cases: &[(&str, &str, &str, Value)] = &[
         (
+            "people/employee_workspace.pages",
+            "employees",
+            "people.workforce.employment.manage",
+            json!({"type":"create_employment"}),
+        ),
+        (
+            "people/employee_workspace.pages",
+            "employee",
+            "people.employees.manage",
+            json!({"type":"request_change"}),
+        ),
+        (
             "people/workforce.pages",
             "settings",
             "people.workforce.settings.manage",
@@ -145,7 +157,8 @@ async fn main() -> Result<()> {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
     let query = HashMap::from([("company_id".into(), "1".into())]);
-    let path = query.clone();
+    let mut path = query.clone();
+    path.insert("id".into(), "1".into());
     for (service, operation, capability, payload) in cases {
         let pages = services.get::<PageService<Scope, Error>>(service)?;
         let mut state = pages
