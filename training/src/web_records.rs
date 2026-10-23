@@ -798,6 +798,9 @@ impl Records {
         })
     }
     fn toolbar(&self) -> DbResult<Html> {
+        if self.task == Task::Records && !self.can(RECORDS_VIEW) {
+            return Ok(Html::EMPTY);
+        }
         let mut controls = vec![ToolbarControl::select(
             "records-company",
             "company_id",
