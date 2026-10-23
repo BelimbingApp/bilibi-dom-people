@@ -113,6 +113,8 @@ impl SettingsPage {
         self.companies = authorization::selectable_companies(&**client, scope, SETTINGS_MANAGE)
             .await
             .map_err(failed)?;
+        // The facade rents its own connection for the reads below.
+        drop(client);
         if choose_default && !self.companies.iter().any(|c| Some(c.id) == self.company_id) {
             self.company_id = self.companies.first().map(|c| c.id);
         }
