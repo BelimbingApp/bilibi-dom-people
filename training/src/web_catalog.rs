@@ -319,6 +319,10 @@ impl Catalog {
             self.pending = None;
         }
         if self.courses_page {
+            self.columns
+                .set_available(&[bilibi_ui::RecordField::new("actions", "Actions")], |_| {
+                    self.can_manage
+                });
             self.list.paginate(&self.courses);
         }
         if !self.courses_page {
@@ -745,16 +749,10 @@ impl Catalog {
         empty: Option<EmptyState>,
         event: &str,
     ) -> DbResult<Html> {
-        let mut shown = columns.flex_columns();
-        let mut suggestions = columns.flex_suggestions();
-        if self.courses_page && !self.can_manage {
-            shown.retain(|c| c.id != "actions");
-            suggestions.retain(|c| c.id != "actions");
-        }
-        let mut table = FlexTable::new(id, shown, rows);
+        let mut table = FlexTable::new(id, columns.flex_columns(), rows);
         table.event = event;
         table.zoom = columns.zoom;
-        table.suggestions = suggestions;
+        table.suggestions = columns.flex_suggestions();
         table.add_query = &columns.add_query;
         table.empty = empty.map(TableEmpty::State);
         render(&table)
