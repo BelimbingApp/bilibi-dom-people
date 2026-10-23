@@ -4,7 +4,7 @@ Performance keeps position descriptions, individual KPI targets, evidence, revie
 
 For example, a manager proposes a target for a direct report. Another person reviews it with a reason and communicates it. The manager then records observations and drafts a review using those exact records. An independent approver releases the review, and the employee can respond once. Corrections create successor versions; they leave the original wording, evidence and response readable.
 
-This module mirrors `Bilimbi.People.Performance` in `b-dom-people`. Its service is `people/performance.performance`; callers use `Performance` and the input and record types exported by `src/lib.rs`. SQL, validation and transitions are private. PM1 supplies the service; the `/people/performance` and `/people/performance/my` pages and menu leaf follow in PM2.
+This module mirrors `Bilimbi.People.Performance` in `b-dom-people`. Its service is `people/performance.performance`; callers use `Performance` and the input and record types exported by `src/lib.rs`. SQL, validation and transitions are private. The `/people/performance` workspace and `/people/performance/my` page call the same service.
 
 ## Workflow
 
@@ -51,3 +51,13 @@ Migration `people-performance-001-performance` creates eight empty tables: `peop
 Database guards refuse content edits, deletion, invalid transitions, invalid successors, changed review rationale, unreviewed or confidential publication, evidence outside the review window, missing release pins and new pins after release. All application writes use `MutationBoundary`; each record and review pin returns a `Change`, and the deciding transaction captures audit evidence with the caller's attribution. A failure rolls back the entire operation.
 
 Run `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin performance` against an empty disposable PostgreSQL database. The Performance block in `fixtures/walkthrough` migrates it, installs the Platform fixture and creates its own records through owner facades. It exercises the facade workflow and its refusals; there are no unit tests or production seed rows. Run the mounted Platform's `scripts/domain-ci.sh` for the composition gate. See [Workforce](../workforce/README.md), [Organisation](../organisation/README.md) and [Skills](../skills/README.md) for the owner contracts this module uses.
+
+## Pages
+
+Open **Development › Performance reviews** to work with reviews, position descriptions, KPIs and evidence. The page uses your linked company. An administrator without a company link starts with the first company their grants allow. Each task has a FlexTable with column selection, compact rows and URL pagination. Review pagination keeps `page` and `page_size`; the other bounded lists use `release_`, `descriptions_`, `definitions_`, `targets_` and `evidence_` prefixes. Page sizes are 10, 25, 50 and 100. The planning lists and pickers retain the facade's 100-record bounds.
+
+Forms offer direct reports, current positions, published profiles and exact record versions. A correction selects a prior version and states its reason. Every write opens a confirmation with its input held on the server; Cancel discards the pending operation. Confirmations name the installation through Base System. The pinned `ConfirmDialog` has no body slot, so a private adapter renders its model with the shared Modal, buttons and instance banner. Confirmation rechecks the current grant, then the facade rechecks company reach, employment links and workflow rules. A changed or duplicated confirmation payload cannot replace the selection.
+
+**My performance** shows only communicated targets and released review versions. Each review retains its pinned evidence, targets and responses. Employees review a confirmation before recording one response or dispute per released version. An unlinked account sees the existing unavailable message. This page is linked from My standing, as in Bilimbi.
+
+Run `DATABASE_URL=… BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin performance-pages` on an empty disposable database to exercise page mounts and live events. It proves all task tables, pagination, cancellation, forged and duplicate confirmations, revoked grants, long evidence, description publication refusals, target review and communication, corrections, independent release, employee responses and an account unlinked while its response form is open.

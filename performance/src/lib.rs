@@ -1,6 +1,6 @@
 //! Performance (`people/performance`), ported from Bilimbi.People.Performance.
 //! One facade owns immutable descriptions, KPI targets, evidence and reviews.
-//! Pages follow in PM2; every caller uses this same authorization boundary.
+//! Pages and other callers use this same authorization boundary.
 mod access;
 mod contributions;
 mod descriptions;
@@ -12,6 +12,7 @@ mod tables;
 mod targets;
 mod types;
 mod validate;
+mod web;
 
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{

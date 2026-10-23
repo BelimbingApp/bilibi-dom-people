@@ -1,0 +1,9 @@
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+{% call ui::page(variant=variant) %}
+  {% call feedback::flash_group(messages=flash) %}{% endcall %}
+  {% call ui::header() %}{{ title }}{% endcall %}
+  {{ tabs }}
+  <div class="{{ content_class }}">{{ content }}</div>
+  {{ confirmation }}
+{% endcall %}

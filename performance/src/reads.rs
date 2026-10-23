@@ -173,12 +173,14 @@ impl Performance {
         let mut names = std::collections::BTreeMap::new();
         for employee in people {
             let employee_id = id(&employee.reference.stable_id)?;
-            if own.as_ref().is_some_and(|own| {
-                employee
-                    .supervisor_reference
-                    .as_ref()
-                    .is_some_and(|s| s.stable_id == *own)
-            }) {
+            if employees.len() < 100
+                && own.as_ref().is_some_and(|own| {
+                    employee
+                        .supervisor_reference
+                        .as_ref()
+                        .is_some_and(|s| s.stable_id == *own)
+                })
+            {
                 employees.push(EmployeeChoice {
                     id: employee_id,
                     name: employee.display_name.clone(),
@@ -228,6 +230,7 @@ impl Performance {
             .map_err(|_| PerformanceError::ProfileUnavailable)?
             .into_iter()
             .filter(|p| p.status == "published")
+            .take(100)
             .map(|p| ProfileChoice {
                 id: p.id,
                 code: p.code,

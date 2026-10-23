@@ -4109,6 +4109,10 @@ pub async fn attendance_pages(url: &str) -> Result<()> {
 // PT4: the evaluation and effectiveness proof block.
 mod training_evaluation;
 
+// PM2: performance page mounts and live-event workflow on disposable data.
+mod performance_pages;
+pub use performance_pages::run as performance_pages;
+
 // PT5: independent passport, PDF, disclosure and current-authority proof block.
 mod training_passports;
 pub async fn training_passports(url: &str, action: &str) -> Result<()> {
