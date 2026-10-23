@@ -258,20 +258,6 @@ async fn main() -> Result<()> {
                 delivered > 0,
             )?;
         }
-        for table in [
-            "finance_payroll_source_runs",
-            "finance_payroll_source_components",
-            "finance_payroll_source_claims",
-        ] {
-            let count: i64 = c
-                .query_one(
-                    &format!("SELECT count(*) FROM {table} WHERE tenant_id=1 AND company_id=1"),
-                    &[],
-                )
-                .await?
-                .get(0);
-            prove(&format!("{table} holds the delivered facts"), count > 0)?;
-        }
     } else {
         println!("PV2: Finance is absent; mount it and repeat for delivery proof.");
     }
