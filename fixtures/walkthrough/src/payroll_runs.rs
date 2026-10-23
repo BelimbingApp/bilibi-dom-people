@@ -1,4 +1,4 @@
-//! PY5 executable page proof on a disposable database after the default walkthrough.
+//! PY5 executable page proof on a fresh disposable database.
 use bilibi_authz::grants::Grants;
 use bilibi_database::{pool, Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
@@ -9,7 +9,8 @@ use bilibi_people_payroll::{
     NewAttendanceAllowanceMapping, NewClassification, NewItem, NewMapping, NewPeriod, Payroll,
     APPROVE, ATTENDANCE_MAPPINGS_MANAGE, MANAGE, VIEW,
 };
-use bilibi_people_workforce::Workforce;
+use bilibi_people_reference_data::{NewEntry, ReferenceData};
+use bilibi_people_workforce::{NewEmployment, Workforce};
 use bilibi_settings::{Settings, Target};
 use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::page::{LiveInput, LiveRequest, LiveState, PageRequest, PageService};
@@ -79,15 +80,19 @@ pub(super) async fn run(url: &str) -> Result<()> {
     bilibi_domains::link();
     bilibi_extensions::link();
     let db = pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    bilibi_database::migrate(&db, &modules).await?;
+    bilibi_walkthrough_fixture::install(&db).await?;
     let mut services = Services::default();
     services.provide("bootstrap.database", Arc::new(db.clone()))?;
     services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
-    services.install(&bilibi_module_registry::discover()?)?;
+    services.install(&modules)?;
     services
         .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
         .set_enforced(false);
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
     let grants = services.get::<Grants>("base/authz.grants")?;
+    grants.reconcile().await?;
     let c = db.get().await?;
     let manager = auth.authenticate(&**c, 1, 1, "PY5 proof".into()).await?;
     let viewer = auth.authenticate(&**c, 1, 2, "PY5 proof".into()).await?;
@@ -109,12 +114,43 @@ pub(super) async fn run(url: &str) -> Result<()> {
     }
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
+    // Keep this slice independent of the other modules' default proof blocks.
+    // Platform fixture account 1 holds human Person 1 and Company 1 affiliation 1.
+    if workforce
+        .employees(&manager, 1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .require_current()
+        .map_err(|_| Error::Internal)?
+        .is_empty()
+    {
+        services
+            .get::<ReferenceData>(bilibi_people_reference_data::SERVICE)?
+            .create_entry(
+                &admin,
+                1,
+                &NewEntry::new("employment_type", "py5_type", "Payroll proof type"),
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        workforce
+            .create_employment(
+                &admin,
+                1,
+                &NewEmployment::new(1, 1, "PY5-001", "py5_type", "active"),
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+    }
+
     let employee: i64 = workforce
         .employees(&manager, 1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
-        .map_err(|_| Error::Internal)?[0]
+        .map_err(|_| Error::Internal)?
+        .first()
+        .ok_or(Error::Internal)?
         .reference
         .stable_id
         .parse()

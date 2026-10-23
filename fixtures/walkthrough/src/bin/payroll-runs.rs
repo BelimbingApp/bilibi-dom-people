@@ -1,4 +1,4 @@
-//! PY5 proof; run after the default People walkthrough on a disposable database.
+//! PY5 proof; prepares its own records on a fresh disposable database.
 #[tokio::main]
 async fn main() -> bilibi_database::Result<()> {
     let url = std::env::var("DATABASE_URL").map_err(|_| bilibi_database::Error::Invalid)?;
