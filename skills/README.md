@@ -330,6 +330,23 @@ The executable mounts the real page services and calls their events against the 
 
 Open both routes as the fixture manager. Use the administrator to approve the manager's proposal, and the staff account to progress its owned work. The `skill-pages` modes `revoke-policy`, `revoke-actions` and `restore` change the manager's grants for a second-session check. The `request` mode creates a pending reassessment; `archive-company-three` archives Company 003 for a stale-confirmation check. These commands belong only to the disposable fixture. Switching company clears a pending confirmation and replaces that company's form fields, so a typed draft cannot carry into another company's settings or proposal.
 
+## Catalog and requirement profile pages
+
+Open **People → Development → Skills** to manage a company's categories, skills, proficiency scales and requirement profiles. Choose a company first. The chooser currently shows authorized, unarchived companies; Workforce does not yet expose lifecycle status for the active-only filter. Each list, including scale levels and profile targets, has the shared table controls for columns and row height. These Bilimbi lists have no search, sorting or pagination.
+
+Add a category and skill, then create a scale and save at least two levels numbered from zero. Publish the scale before adding a profile. Open the profile to save weighted skill requirements and choose either the whole company or positions. Requirement weights must total 100 before publication. Published versions are read-only; **Draft a new version** copies requirements and targets. The facade adopts the current version of that scale when its levels fit, and the page reports any missing levels.
+
+The catalog requires `people.skills.catalog.view`. Forms and draft changes require `people.skills.catalog.manage`; profile publication and retirement require `people.skills.profiles.publish`. Every submitted action and confirmation checks permissions again. Confirmations retain their company, record and dates on the server. A new action clears an earlier confirmation; an invalid replacement cannot confirm the previous record. Switching company clears pending confirmations and form drafts. Refused forms retain their values and show field errors. Discarding a profile draft returns to the catalog with its success message.
+
+Run the disposable page proof before opening the app:
+
+```sh
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skills-catalog-pages -- prepare
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skills-catalog-pages -- prove
+```
+
+Use an empty database for `prepare`. The proof exercises the mounted live pages, field errors, scale and profile publication, weight refusal, revoked permissions between opening and confirming, server-held confirmation dates, invalid replacement selections, version navigation, draft discard and PostgreSQL's published-requirement guard. The same fixture's `revoke-manage`, `restore-manage`, `revoke-publish` and `restore-publish` commands support browser checks in a second session. These commands belong only to the disposable walkthrough.
+
 ## Assessments and My skills
 
 Open **Development › Assessments** to assess an employee, review evidence, or request a reassessment. **My work › My skills** shows your finalized scores, approved development actions, pending reassessments and reminders.
@@ -340,7 +357,7 @@ The submission form requires an employee within reach, an active skill, an asses
 
 **Verify**, **Return**, **Finalize** and **Cancel request** open a ConfirmDialog with the selected record held on the server. Returning needs a reason. Confirmation checks the current permission again before calling the facade, which checks once more under the company lock. Changing companies discards a pending confirmation and the previous company's draft. Reassessment execution requires both reassessment execution and assessment submission permissions; finalization still requires an independent reviewer.
 
-`/people/skills/my` requires `people.skills.self.view`. Every refresh and table event resolves the signed-in employee again through `Skills::standing`; unlinking or ending that employment replaces the scores with the account-link message. The page never accepts an employee ID from a form or URL.
+`/people/skills/my` requires `people.skills.self.view`. When a company is available, every refresh and table event calls `Skills::standing` to resolve the signed-in employee again. Missing or nonworking links show no scores. Changing an account link may also end its session or remove access to the company; a fresh unlinked scope therefore sees the account-link message or the no-company state. The page never accepts an employee ID from a form or URL.
 
 The page services mirror Bilimbi `Skills.Web.AssessmentsLive` and `Skills.Web.MySkillsLive` in `src/pk5/`. They call the existing Skills facade and declare the temporary page-write allowance used by the other People pages. They add no schema or production records.
 
