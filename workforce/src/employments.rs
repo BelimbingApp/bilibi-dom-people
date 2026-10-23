@@ -710,3 +710,20 @@ pub(crate) async fn affiliation_links(
         &[&tenant,&company,&affiliations],
     ).await.map_err(Error::from)?.iter().map(|r| (r.get(0),r.get(1))).collect())
 }
+
+/// A bounded immutable-id page, including one lookahead row. An id watermark
+/// keeps new employments out of the pass; renumbering never changes its order.
+pub(crate) async fn scan(
+    client: &impl GenericClient,
+    tenant: i64,
+    company: i64,
+    statuses: &[String],
+    after: i64,
+    high_water: i64,
+    limit: i64,
+) -> Result<Vec<Row_>> {
+    client.query(
+        &format!("SELECT {COLUMNS} {FROM} WHERE e.tenant_id=$1 AND e.company_id=$2 AND e.status=ANY($3::text[]) AND e.id>$4 AND e.id<=$5 ORDER BY e.id LIMIT $6"),
+        &[&tenant, &company, &statuses, &after, &high_water, &limit],
+    ).await.map_err(Error::from)?.iter().map(read).collect()
+}

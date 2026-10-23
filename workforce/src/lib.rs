@@ -37,9 +37,12 @@
 //! See `README.md`.
 mod contributions;
 mod directory;
+mod directory_port;
+mod employee_scan;
 mod employments;
 mod positions;
 mod read_result;
+mod web;
 mod workspace_directory;
 pub use workspace_directory::{DirectoryEmployee, EmploymentType};
 
@@ -49,6 +52,8 @@ pub use authorization::SelfEmployee;
 pub use contributions::{
     CAPABILITIES, EMPLOYMENT_MANAGE, EMPLOYMENT_VIEW, SETTINGS_MANAGE, WORKING_STATUSES_KEY,
 };
+pub use directory_port::DIRECTORY_PORT;
+pub use employee_scan::{EmployeePage, EmployeeScan, EMPLOYEE_PAGE_SIZE_MAX};
 pub use positions::{
     Position, PositionAssignment, PositionPage, PositionScan, POSITIONS_PORT, POSITION_PAGE_SIZE,
     POSITION_PAGE_SIZE_MAX,
@@ -403,6 +408,8 @@ impl Workforce {
                 scope.mutation_context("people.workforce.put_working_statuses"),
             )
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, SETTINGS_MANAGE).await?;
+        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
         self.settings
             .put(
                 &mut tx,
@@ -966,7 +973,6 @@ impl Workforce {
             client,
             scope,
             &self.directory,
-            &self.affiliations,
             company_id,
             &person_ids,
             &affiliation_ids,
