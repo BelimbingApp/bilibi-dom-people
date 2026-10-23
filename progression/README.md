@@ -2,7 +2,19 @@
 
 Progression records company policy versions and explains whether the signed-in employee meets their criteria.
 
-This crate ports `Bilimbi.People.Progression`. Pages and navigation follow in PG2. It installs no policy rows and makes no promotion, employment, position or pay decision.
+This crate ports `Bilimbi.People.Progression`, including its policy history and My standing pages. It installs no policy rows and makes no promotion, employment, position or pay decision.
+
+## Use the pages
+
+Open **People → Development → Progression** (`/people/progression`) to read policy history. Choose **Read** to inspect a version’s skill thresholds, performance periods, accepted outcomes and publication time. The history keeps `page` and `page_size` in the URL, with sizes 10, 25, 50 or 100. Every table uses the shared column picker and compact rows.
+
+With `people.progression.policy.manage`, complete **Draft a policy version** and choose **Record draft**. Choose a published competency profile, require released performance evidence, or use both. The selected profile’s exact version and thresholds are copied by the service. A refused draft keeps your entered values.
+
+Choose **Publish** beside a draft and review the policy name, version and effective date in **Confirm publication**. Cancel leaves the draft unchanged. Confirmation publishes only the version selected on the server; each write checks current permissions again before the service repeats its checks.
+
+Open **People → My work → My standing** (`/people/progression/my`) to see your own eligibility explanation. The route and menu accept either `people.progression.self.view` or `people.performance.self.view`. Each section still checks its own permission: the Progression grant shows policy explanations, while the Performance grant shows **Open my performance**. The page never takes an employee ID from the URL or a form.
+
+No effective publication shows the no-policy explanation. A missing employment link, unavailable workforce data or denied evidence read shows the service’s refusal. Losing the policy manage grant leaves history read-only and removes drafting and publication controls.
 
 ## Record and publish a policy
 
@@ -37,3 +49,5 @@ BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin progression
 ```
 
 See [Skills](../skills/README.md) and [Performance](../performance/README.md) for the evidence contracts, and the Platform's `scripts/domain-ci.sh` for mounted validation.
+
+For page interaction proofs, start with `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin progression-pages -- prepare` on a fresh disposable database. It installs Performance’s example records and grants the manager policy access, the viewer read-only history, and staff both standing sections. Run the binary with `history` to add 26 drafts for pagination. Its `revoke-manage`, `restore-manage`, `performance-only`, `progression-only`, `both`, `neither`, `deny-evidence` `restore-evidence` and `unlinked` commands exercise current permission changes through Authz. These records exist only in the disposable walkthrough database.

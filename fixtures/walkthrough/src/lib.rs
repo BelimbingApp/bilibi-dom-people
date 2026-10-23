@@ -4115,9 +4115,21 @@ pub async fn payroll_pages(url: &str) -> Result<()> {
     payroll_pages::run(url).await
 }
 
+// PT5: independent passport, PDF, disclosure and current-authority proof block.
+mod training_passports;
+pub async fn training_passports(url: &str, action: &str) -> Result<()> {
+    training_passports::run(url, action).await
+}
+
 // PG1: reuse the Performance fixture, then exercise progression through facades.
 mod progression;
 pub use progression::run as progression;
+
+// Progression pages (PG2): disposable records and current permission changes.
+mod progression_pages;
+pub async fn progression_pages(url: &str, command: &str) -> Result<()> {
+    progression_pages::run(url, command).await
+}
 
 // PY3: approved private documents and retention, after the default walkthrough.
 mod payroll_documents;
