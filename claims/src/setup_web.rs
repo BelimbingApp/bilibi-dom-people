@@ -604,7 +604,11 @@ impl Setup {
             body,
             actions: render(&Button {
                 button_type: "submit",
-                variant: ButtonVariant::Primary,
+                variant: if matches!(event, "save_currencies" | "create_policy") {
+                    ButtonVariant::Primary
+                } else {
+                    ButtonVariant::Secondary
+                },
                 body: Html::text(label),
                 ..Button::default()
             })?,
@@ -1166,10 +1170,18 @@ fn ids(payload: &Value, key: &str) -> std::result::Result<Vec<i64>, ()> {
         Value::String(_) => vec![value],
         _ => return Err(()),
     };
-    values
+    // Shared MultiSelect posts one hidden empty value even when options are selected.
+    // Ignore that sentinel, but refuse every other malformed ID and bound real members.
+    let ids = values
         .into_iter()
+        .filter(|v| v.as_str() != Some(""))
         .map(|v| params::positive_id(v.as_str()).ok_or(()))
-        .collect()
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if ids.len() > crate::MEMBER_LIMIT {
+        Err(())
+    } else {
+        Ok(ids)
+    }
 }
 fn action(event: &str, label: &str, id: i64) -> Result<Html> {
     render(&Button {

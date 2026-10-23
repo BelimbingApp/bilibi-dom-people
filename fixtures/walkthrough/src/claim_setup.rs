@@ -78,13 +78,14 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
     }
     let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
     let company = 2;
+    let stamp = jiff::Timestamp::now().as_second();
     let category = saved(
         claims
             .create_category(
                 &manager,
                 company,
                 &NewCategory {
-                    code: "pc4_members".into(),
+                    code: format!("pc4_members_{stamp}"),
                     name: "Assignment proof category".into(),
                 },
             )
@@ -100,7 +101,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
                         company,
                         &NewClaimType {
                             category_id: category.id,
-                            code: format!("pc4_member_{n:03}"),
+                            code: format!("pc4_member_{stamp}_{n:03}"),
                             name: format!("Assignment proof type {n:03}"),
                             receipt_requirement: "never".into(),
                             eligibility: Some("assigned_only".into()),
@@ -122,7 +123,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
                 &manager,
                 company,
                 &NewAssignment {
-                    code: "pc4_members".into(),
+                    code: format!("pc4_members_{stamp}"),
                     name: "Assignment membership proof".into(),
                     effective_from: date(2025, 1, 1),
                     effective_to: None,
@@ -184,8 +185,8 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
         "five tables render from the registered page",
     )?;
     let mut payload = json!({ "type": "save_assignment_members", "assignment_id": assignment.id.to_string(),
-        "filters[claim_type_ids][]": types.iter().map(i64::to_string).collect::<Vec<_>>(),
-        "filters[employee_ids][]": employees.iter().map(|e| e.id.to_string()).collect::<Vec<_>>() });
+        "filters[claim_type_ids][]": std::iter::once(String::new()).chain(types.iter().map(i64::to_string)).collect::<Vec<_>>(),
+        "filters[employee_ids][]": std::iter::once(String::new()).chain(employees.iter().map(|e| e.id.to_string())).collect::<Vec<_>>() });
     // Alphabetically precede the real keys, as serde_json sorts object keys.
     for n in 0..80 {
         payload[format!("a_filler_{n:03}")] = json!("ignored");
@@ -215,12 +216,12 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
     let empty = event(
         page.as_mut(),
         &manager,
-        json!({"type":"save_assignment_members", "assignment_id":assignment.id.to_string()}),
+        json!({"type":"save_assignment_members", "assignment_id":assignment.id.to_string(), "filters[claim_type_ids][]":[""], "filters[employee_ids][]":[""]}),
     )
     .await?;
     require(
         empty.html.contains("Assignment members saved."),
-        "omitted arrays clear both selections",
+        "hidden empty values clear both selections",
     )?;
     let current = saved(claims.assignments(&manager, company).await)?
         .into_iter()
