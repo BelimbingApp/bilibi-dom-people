@@ -1,0 +1,25 @@
+{# Bilimbi Workforce.Web.SettingsLive; every control uses Base UI. #}
+{%- import "components.html" as ui -%}
+{%- import "forms.html" as forms -%}
+{%- import "feedback.html" as feedback -%}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="workforce-settings-page", variant="form") %}
+{% call ui::header(subtitle="Choose which employee statuses count as working staff.") %}Workforce Settings{% endcall %}
+{% if has_company %}
+{% call forms::form(id="workforce-company-form", event="select_company", change=true, class="mt-5") %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% call ui::card(id="workforce-statuses", title="Working employee statuses", description="Employees in these statuses are visible to People capabilities and as supervisors.", class="mt-5") %}
+{% call forms::form(id="workforce-settings-form", event="save_statuses", actions=actions) %}
+{% for field in statuses %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+{% endcall %}
+{% endcall %}
+{% if has_counts %}
+{% call ui::card(id="workforce-employment-records", title="Employment records", description=summary, inner_class="p-0", class="mt-5") %}{{ counts }}{% endcall %}
+{% endif %}
+{% else %}
+{{ empty }}
+{% endif %}
+{% endcall %}
+</div>

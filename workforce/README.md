@@ -10,9 +10,7 @@ through this module's facade; none of them reads its table. This README is
 the owner contract; the Bilimbi source it ports is
 [`workforce/docs/README.md`](https://github.com/BelimbingApp/b-dom-people/blob/main/workforce/docs/README.md).
 
-Slices PS0 (the scaffold) and PW1 (employment records and self-service) are
-in. PW2 adds the settings page `/people/workforce/settings` and the
-`people/workforce.directory` port the People connector reads.
+The settings page is `/people/workforce/settings`. The People connector reads company identities and bounded employee and position pages through `people/workforce.directory`.
 
 ## Public API
 
@@ -352,3 +350,72 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 `employment_links_on(client, scope, company, affiliation_ids)` matches at most `LOOKUP_LIMIT` positive Core affiliation ids to `(affiliation_id, employment_id)` pairs, at any employment status. The company must be live and reachable. It returns a current `ReadResult` and exposes no employment facts. Skills reminders use it with Core User's proven company accounts to find recipient employment references without requiring employment-page permissions. It grants no authority to act on those employees.
 
 `prove_self_or_direct_report` is the object-safe subject check for an Artifacts owner callback. The owner first checks its own capability and supplies the live scope Artifacts re-proved. The caller holds the company lock across the file operation and the self employment lock for self-service. Workforce resolves the working statuses through Settings, then checks the linked employment and subject on the callback transaction. It avoids taking the caller's locks again on a second connection. The method proves identity and relationship only; it grants no application permission and exposes no employment facts.
+
+## Workforce settings page
+
+Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser includes only companies you may manage. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
+
+Save requires at least one of Pending, Probation, Active, Inactive and Terminated. The write checks permission again inside its mutation transaction and holds the writable company lock before saving through Base Settings. Success says “Working statuses saved.”; an empty selection says “Choose at least one employee status.” A revoked grant or archived company refuses the next save.
+
+Readers who also hold `people.workforce.employment.view` see employment totals, working staff totals and the five status counts in a FlexTable. The table supports column selection, reordering and compact rows; there is no sort, search or paging in Bilimbi's section. It shows zero counts too. Legacy claiming and exception lists do not apply to Bilibi's fresh schema.
+
+## Connector directory port
+
+The provider is `people/workforce.directory`. Call it through Base Ports with the caller's sealed scope and connection or transaction. **The connector declares only `base/ports`; it never depends on this crate or reads People tables.** The same tenant and live-company proofs as the Workforce read facade apply on every call. These public directory reads need no additional Workforce capability, as in Bilimbi; private employment facts and settings writes keep their own grants. Core still masks contacts the reader may not see.
+
+### Company identity
+
+Request:
+
+```json
+{"kind":"company","company_id":1}
+```
+
+The answer contains `freshness: "current"` and `company`, with the existing `Company` fields: `reference`, `platform_company_id`, `workforce_company_id`, `name` and `code`. Native company axes currently both name the Core company. Keep both axes when validating a connection. A reference is `{ "source_id": "people/native", "type": "company", "stable_id": "1" }`.
+
+### Employee pages
+
+Start a pass with:
+
+```json
+{"kind":"employees","company_id":1,"page_size":250,"cursor":null}
+```
+
+The answer contains:
+
+| Field | Meaning |
+| --- | --- |
+| `employees` | At most `page_size` working employee summaries in ascending employment ID order |
+| `next_cursor` | Opaque string for the next page, or `null` only when the pass is complete |
+| `high_water_id` | The company's highest employment ID visible when the first page began; fixed for the pass |
+| `watermark` | RFC 3339 UTC observation time minted on the first page; fixed for the pass |
+| `snapshot` | `true`: enumerate the working directory on every pass, including a connector changes pass |
+| `freshness` | `"current"` for the native directory |
+
+Each employee has `reference`, `company_reference`, both company axes, `employee_number`, `display_name`, nullable `email` and nullable `supervisor_reference`. All stable IDs are immutable employment IDs as text. The supervisor reference is present only for a working supervisor in the same company. Names and contacts are read through their Core owners on the caller's client; a reader without Core's affiliation-list grant receives a null email.
+
+Continue by passing `next_cursor` unchanged with the same company and page size. The default is 250, and the allowed range is 1–1,000. The cursor binds the tenant, company, page size, working statuses, last emitted ID, high-water ID and watermark. Renumbering an employee cannot move it across the cursor. IDs above the high-water mark wait for the next pass. A change to working-status configuration invalidates an unfinished pass, so the connector must restart it.
+
+`snapshot: true` means a full enumeration, not an MVCC snapshot across calls: names, contacts, status and membership are read live. Apply results and deactivate unseen employees only after all pages succeeded. Never treat an unavailable, refused or interrupted pass as an empty directory. The watermark is an observation token, not an incremental change cursor; a new pass starts with `cursor: null`.
+
+The same scan is available to People callers through `employee_page(scope, company, &EmployeeScan)` and `employee_page_on(client, scope, company, &EmployeeScan)`, returning a current `ReadResult<EmployeePage>`. Both use bounded SQL with one lookahead row rather than loading the whole workforce.
+
+### Position pages
+
+Request:
+
+```json
+{"kind":"positions","company_id":1,"as_of":"2026-10-24","page_size":50,"cursor":null}
+```
+
+Workforce passes the scan through `people/organisation.positions` on the caller's client. The default size is 50; the allowed range is 1–100. The answer has the existing `PositionPage` fields (`positions`, `next_cursor`, `high_water_id`), plus `freshness: "current"`, `snapshot: true` and the per-pass `watermark`. Position and assignment fields are the same as in the Positions contract above. The outer cursor preserves the observation time and binds tenant, company, day and page size while carrying Organisation's opaque keyset cursor. Continue with the same request bounds until `next_cursor` is null.
+
+Without Organisation, the answer is `freshness: "unavailable"`, `reason: "organisation_unavailable"`, `positions: []`, `next_cursor: null`, `high_water_id: null`, `snapshot: false` and the observation `watermark`. Stop the whole connector pass without applying anything. When Workforce itself is absent, Base Ports answers `PortError::Unavailable` before any provider is called.
+
+### Refusals
+
+Unknown kinds or fields, malformed values, out-of-range page sizes and invalid or mismatched cursors are `PortError::Refused(Error::Invalid)`. Missing, archived, deleted, cross-tenant or unreachable companies are `NotFound` or `Forbidden`, according to the company owner's proof. No request field can replace the caller's scope or select a different actor. A database failure remains a failure; it never becomes an empty successful page.
+
+## PW2 proof
+
+The PW2 block at the end of `fixtures/walkthrough/src/lib.rs` exercises this port on the fixture database: both company axes, one-row employee pages, stable watermarks, bounded continuation, mismatched cursors, Core contact permissions, and the Organisation pass-through. Open the settings page as the fixture administrator to exercise company selection, status saves, empty-selection refusal and the counts table.

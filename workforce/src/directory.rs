@@ -5,7 +5,7 @@
 //! and the affiliation's work email through the Affiliation owner's read,
 //! which honours its field restrictions and needs `admin.affiliation.list`.
 use crate::{Result, WorkforceError};
-use bilibi_affiliation::{AffiliationService, Search};
+use bilibi_affiliation::Search;
 use bilibi_database::Error;
 use bilibi_party_ids::OrganisationId;
 use bilibi_principal_directory::{PrincipalDirectory, PrincipalKind, PrincipalRef, Query};
@@ -41,7 +41,6 @@ pub(crate) async fn resolve(
     client: &(impl GenericClient + Sync),
     scope: &Scope,
     directory: &PrincipalDirectory,
-    affiliations: &AffiliationService,
     company_id: i64,
     person_ids: &[i64],
     affiliation_ids: &[i64],
@@ -75,18 +74,18 @@ pub(crate) async fn resolve(
         let organisation_id = OrganisationId::new(company_id)?;
         let mut page = 1;
         loop {
-            let found = affiliations
-                .search(
-                    scope,
-                    &Search {
-                        organisation_id: Some(organisation_id),
-                        include_unlinked: true,
-                        page,
-                        page_size: 100,
-                        ..Search::default()
-                    },
-                )
-                .await?;
+            let found = bilibi_affiliation::identity::search(
+                client,
+                scope,
+                &Search {
+                    organisation_id: Some(organisation_id),
+                    include_unlinked: true,
+                    page,
+                    page_size: 100,
+                    ..Search::default()
+                },
+            )
+            .await?;
             let count = found.entries.len() as i64;
             for affiliation in found.entries {
                 let id = affiliation.id.get();
