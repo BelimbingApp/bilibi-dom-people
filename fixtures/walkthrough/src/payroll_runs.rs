@@ -344,7 +344,9 @@ pub(super) async fn run(url: &str) -> Result<()> {
     let html = send(&mut *page, &manager, json!({"type":"confirm_action"})).await?;
     prove(
         "revoked grant refuses pending lock",
-        html.contains("You cannot change this company&#x27;s payroll runs.")
+        html.replace("&#39;", "'")
+            .replace("&#x27;", "'")
+            .contains("You cannot change this company's payroll runs.")
             && must(payroll.run_output(&manager, 1, run).await)?
                 .run
                 .locked_at
@@ -464,7 +466,10 @@ pub(super) async fn run(url: &str) -> Result<()> {
     prove(
         "read-only controls withheld and forged write refused",
         html.contains("Read-only payroll access")
-            && html.contains("You cannot change this company&#x27;s payroll runs.")
+            && html
+                .replace("&#39;", "'")
+                .replace("&#x27;", "'")
+                .contains("You cannot change this company's payroll runs.")
             && !html.contains("data-event=\"generate_report\""),
     )?;
     // Leave the third run uncalculated for the browser's full workflow.
