@@ -16,7 +16,7 @@
 <div class="space-y-4">
 {% call ui::card(id="payroll-runs") %}
 {% call ui::section_heading(id="frozen-runs", title="Runs") %}{% endcall %}
-<p class="mt-2 text-sm text-ink-muted">Create and permanently lock setup in {% call ui::action_link(href=setup_url) %}Payroll setup{% endcall %} before calculating.</p>
+<p class="mt-2 text-sm text-ink-muted">Create and permanently lock setup in {% call ui::action_link(id="runs-setup-link", icon="", title="Payroll setup", href=setup_url) %}Payroll setup{% endcall %} before calculating.</p>
 {{ chooser }}{{ runs }}
 {% endcall %}
 {% if selected %}

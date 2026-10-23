@@ -4140,3 +4140,9 @@ mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
 }
+
+// Payroll Runs page (PY5): contribution, confirmation, decision and document proof.
+mod payroll_runs;
+pub async fn payroll_runs(url: &str) -> Result<()> {
+    payroll_runs::run(url).await
+}
