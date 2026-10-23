@@ -590,6 +590,42 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
         .await
         .map_err(|_| Error::Internal)?;
 
+    // Give the read-only account a company affiliation, without an employment
+    // or write grants. An unlinked account deliberately sees the unavailable state.
+    let persons = services.get::<bilibi_person::PersonService>(bilibi_person::SERVICE)?;
+    let person = persons
+        .create(
+            &admin,
+            &bilibi_person::PersonInput {
+                name: "PM2 Viewer".into(),
+                kind: bilibi_person::PersonKind::Human,
+                email: None,
+                phone: None,
+            },
+        )
+        .await?;
+    let affiliations =
+        services.get::<bilibi_affiliation::AffiliationService>(bilibi_affiliation::SERVICE)?;
+    let viewer_affiliation = affiliations
+        .create(
+            &admin,
+            &bilibi_affiliation::AffiliationInput {
+                person_id: person.id,
+                organisation_id: bilibi_affiliation::OrganisationId::new(1)
+                    .map_err(|_| Error::Invalid)?,
+                title: None,
+                work_email: None,
+                work_phone: None,
+                dates: bilibi_affiliation::EffectiveDates::new(None, None)
+                    .map_err(|_| Error::Invalid)?,
+            },
+        )
+        .await?;
+    users
+        .link_affiliation(&admin, 2, viewer_affiliation.id)
+        .await
+        .map_err(|_| Error::Internal)?;
+
     // Keep a view-only account available for the browser proof as well.
     grants.set_direct(&admin, 2, pm::VIEW, Some(true)).await?;
     let viewer = auth
