@@ -651,6 +651,12 @@ impl Assessments {
             field.id,
             self.company.id.unwrap_or_default()
         );
+        if field.name.starts_with("assessment[") {
+            field.id.push('-');
+            field
+                .id
+                .extend(self.request_key.chars().filter(char::is_ascii_alphanumeric));
+        }
         field
     }
     fn assessment_form(&self) -> Result<Html> {
@@ -701,8 +707,12 @@ impl Assessments {
                 )
                 .value(employee)
                 .id(format!(
-                    "assessment-employee-company-{}",
-                    self.company.id.unwrap_or_default()
+                    "assessment-employee-company-{}-{}",
+                    self.company.id.unwrap_or_default(),
+                    self.request_key
+                        .chars()
+                        .filter(char::is_ascii_alphanumeric)
+                        .collect::<String>()
                 )),
                 select(
                     "assessment[skill_id]",
@@ -714,8 +724,12 @@ impl Assessments {
                 )
                 .value(skill)
                 .id(format!(
-                    "assessment-skill-company-{}",
-                    self.company.id.unwrap_or_default()
+                    "assessment-skill-company-{}-{}",
+                    self.company.id.unwrap_or_default(),
+                    self.request_key
+                        .chars()
+                        .filter(char::is_ascii_alphanumeric)
+                        .collect::<String>()
                 )),
                 f("assessed_level", "Assessed level")
                     .kind(InputKind::Number)
@@ -729,12 +743,15 @@ impl Assessments {
                         .unwrap_or_else(|| today().to_string()),
                 ),
                 f("evidence", "Evidence")
+                    .wrapper_class("mb-0 sm:col-span-2")
                     .kind(InputKind::Textarea)
                     .required()
                     .attr("maxlength", "4000"),
                 f("method", "Method").attr("maxlength", "80"),
                 f("valid_until", "Valid until").kind(InputKind::Date),
-                f("notes", "Notes").attr("maxlength", "2000"),
+                f("notes", "Notes")
+                    .wrapper_class("mb-0 sm:col-span-2")
+                    .attr("maxlength", "2000"),
             ],
             if corrected.is_some() {
                 "Submit correction"
@@ -774,7 +791,8 @@ impl Assessments {
                         .collect(),
                 )
                 .value(get("skill_id")),
-                field("request[reason]", "Reason")
+                self.company_field(field("request[reason]", "Reason"))
+                    .wrapper_class("mb-0 sm:col-span-2")
                     .value(get("reason"))
                     .attr("maxlength", "1000")
                     .required(),
