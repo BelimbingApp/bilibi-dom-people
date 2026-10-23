@@ -26,9 +26,7 @@ inventory::submit! { Module {
     id: MODULE, layer: Layer::Domains,
     dependencies: &["base/artifacts", "base/authz", "base/database", "base/events", "base/menu", "base/ui", "base/datetime", "base/module_registry", "base/party_ids", "base/settings", "base/tenancy", "core/company", bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE, bilibi_people_attendance::MODULE, bilibi_people_leave::MODULE, bilibi_people_claims::MODULE],
     migrations: &[("people-payroll-001-foundation", include_str!("../migrations/001-foundation.sql")), ("people-payroll-002-attendance-allowance-mappings", include_str!("../migrations/002-attendance-allowance-mappings.sql")), ("people-payroll-003-outputs", include_str!("../migrations/003-outputs.sql"))],
-    services: &[Service { id: crate::web::RUN_PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Runs::new(
-        s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
-    ))))) }, Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
+    services: &[Service { id: SERVICE, factory: |s| Ok(Arc::new(Payroll {
         db: s.get::<Db>("base/database.pool")?.as_ref().clone(),
         mutations: s.get::<MutationBoundary>("base/database.mutations")?,
         settings: s.get("base/settings.store")?,
@@ -38,7 +36,9 @@ inventory::submit! { Module {
         attendance: s.get(bilibi_people_attendance::SERVICE)?,
         events: s.get(bilibi_events::SERVICE)?,
         artifacts: s.get("base/artifacts.store")?,
-    })) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
+    })) }, Service { id: crate::web::RUN_PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Runs::new(
+        s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
+    ))))) }, Service { id: crate::web::PAGES, factory: |s| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
         s.get::<Db>("base/database.pool")?.as_ref().clone(), s.get(SERVICE)?
     ))))) }, Service { id: crate::download::SERVICE, factory: |s| Ok(Arc::new(
         bilibi_ui::download::DownloadService::<bilibi_tenancy::Scope, bilibi_database::Error>(
