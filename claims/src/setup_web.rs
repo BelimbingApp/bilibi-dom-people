@@ -1166,7 +1166,7 @@ fn ids(payload: &Value, key: &str) -> std::result::Result<Vec<i64>, ()> {
         return Ok(vec![]);
     };
     let values: Vec<&Value> = match value {
-        Value::Array(values) if values.len() <= crate::MEMBER_LIMIT => values.iter().collect(),
+        Value::Array(values) if values.len() <= crate::MEMBER_LIMIT + 1 => values.iter().collect(),
         Value::String(_) => vec![value],
         _ => return Err(()),
     };
