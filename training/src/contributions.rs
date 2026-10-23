@@ -16,13 +16,15 @@ pub const COURSES_MANAGE: &str = "people.training.courses.manage";
 pub const SESSIONS_VIEW: &str = "people.training.sessions.view";
 /// Adds events and sessions, and picks among the active courses for them.
 pub const SESSIONS_MANAGE: &str = "people.training.sessions.manage";
+/// Opens the records workspace without granting company-wide attendance access.
+pub const RECORDS_WORKSPACE_VIEW: &str = "people.training.records.workspace.view";
 /// Reads attendance revisions and private evidence.
 pub const RECORDS_VIEW: &str = "people.training.records.view";
 pub const RECORDS_MANAGE: &str = "people.training.records.manage";
 pub const EVIDENCE_MANAGE: &str = "people.training.evidence.manage";
 pub const RETENTION_MANAGE: &str = "people.training.retention.manage";
 /// Every Training capability currently implemented.
-pub const CAPABILITIES: [&str; 29] = [
+pub const CAPABILITIES: [&str; 30] = [
     crate::LEARNING_VIEW,
     crate::PASSPORT_MY_VIEW,
     crate::PASSPORT_TEAM_VIEW,
@@ -32,6 +34,7 @@ pub const CAPABILITIES: [&str; 29] = [
     COURSES_MANAGE,
     SESSIONS_VIEW,
     SESSIONS_MANAGE,
+    RECORDS_WORKSPACE_VIEW,
     RECORDS_VIEW,
     RECORDS_MANAGE,
     EVIDENCE_MANAGE,
@@ -97,6 +100,12 @@ inventory::submit! {
                 training: services.get(SERVICE)?,
             })))),
         }, Service {
+            id: crate::web_catalog::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_catalog::Pages(services.get(SERVICE)?))))),
+        }, Service {
+            id: crate::web_records::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_records::Pages(services.get(SERVICE)?))))),
+        }, Service {
             id: crate::web_learning::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
         }],
@@ -112,7 +121,7 @@ inventory::submit! {
         capabilities: &[
             C::tenant(COURSES_VIEW), C::tenant(COURSES_MANAGE),
             C::tenant(SESSIONS_VIEW), C::tenant(SESSIONS_MANAGE),
-            C::tenant(RECORDS_VIEW), C::tenant(RECORDS_MANAGE),
+            C::tenant(RECORDS_WORKSPACE_VIEW), C::tenant(RECORDS_VIEW), C::tenant(RECORDS_MANAGE),
             C::tenant(EVIDENCE_MANAGE), C::tenant(RETENTION_MANAGE),
         ],
         roles: &[],

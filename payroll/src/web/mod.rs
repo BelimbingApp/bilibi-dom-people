@@ -1,6 +1,8 @@
 //! Bilimbi Payroll.Web.SetupLive and AttendanceMappingsLive. Pages keep drafts
 //! and confirmation intent; the public Payroll facade owns every business write.
 mod attendance;
+mod runs;
+pub(crate) use runs::{Runs, PAGES as RUN_PAGES};
 mod setup;
 use crate::{
     AttendanceAllowances, Payroll, PayrollError, Setup, Sources, ATTENDANCE_MAPPINGS_MANAGE,

@@ -137,3 +137,15 @@ For the page proof, run `cargo run -p bilibi-people-walkthrough --bin payroll_pa
 For PY3, run the default walkthrough on a fresh database, then `BILIBI_PAYROLL_PROOF_OUT=/absolute/private/task-directory cargo run -p bilibi-people-walkthrough --bin payroll_documents`. It creates its own approved run and proves pagination inputs, deterministic reports, payslip selection, policy refusals, download headers, grant revocation, expiry and held cleanup recovery. The output directory receives PDFs and frozen calculation data for comparison with Bilimbi.
 
 PY1–PY3 contribute no page or menu leaf. Run pages follow in PY5. No Platform change is required.
+
+## Runs page
+
+Open `/people/payroll/runs`, choose a company, then choose a frozen run. The Runs menu is under People → Payroll. The page shows the frozen period, country, currency and lock state. Create new runs in Payroll setup.
+
+Before calculation, payroll operators can accept direct pay items, Leave or Claims mappings, and Attendance allowances through three separate forms. Each form requires an employment ID, a company-unique contribution key, date, exact decimal units and source evidence reference. Direct items come from the selected run's frozen setup. Attendance always earns at its mapped rate.
+
+Lock setup, Calculate permanently, and both final decisions require confirmation. The server retains the selected company, run, outcome and reason; confirmation cannot replace them with submitted IDs. Cancel leaves the run unchanged. Each write-shaped event checks the current permission before calling the facade, which checks again inside its transaction. An independent approver records a reason for approval or rejection.
+
+Contributions, frozen result lines, employee totals and documents use shared FlexTables with column selection, reordering and compact rows. Results retain all twelve decimal places and show the replay digest. Approved runs expose Generate report PDF and one payslip action per employee total. Document links use the existing authorized download route. Read-only access keeps the results and downloads visible and explains who can accept contributions and calculate.
+
+The Runs page proof is the `payroll-runs` binary in `fixtures/walkthrough`. On a fresh disposable database, set `BILIBI_PAYROLL_RUN_PROOF_OUT` to a private temporary directory and run `cargo run -p bilibi-people-walkthrough --bin payroll-runs`. It installs the Platform fixture and creates its employment through the Workforce facade, then exercises all three intake calls, replay conflicts, decimal errors, cancelled and altered confirmations, revoked permissions, self-approval refusal, independent approval and rejection, and report/payslip downloads. It leaves a third frozen run ready for browser interaction.
