@@ -196,11 +196,28 @@ async fn main() -> Result<()> {
             .await;
         // Restore even when a proof fails, leaving the browser records usable.
         grants.set_direct(&admin, 1, capability, Some(true)).await?;
-        let lower = outcome?.html.to_lowercase();
+        let body = outcome?;
+        let refusal = match *operation {
+            "employees" => "You cannot add an employment for this company.",
+            "employee" => "You no longer have permission to change this employee",
+            "settings" => "Working statuses could not be saved.",
+            "references" => "You cannot change this company",
+            "explorer" => "You no longer have permission to change this company",
+            "rules" | "shifts" | "locations" | "allowances" | "policies" | "setup" => {
+                "You no longer have permission to change this company"
+            }
+            "rosters" => "You no longer have permission to plan rosters for this company.",
+            "approvals" => {
+                "You no longer have permission to decide attendance requests for this company."
+            }
+            "requests" => {
+                "You no longer have permission to decide leave requests for this company."
+            }
+            "operations" => "This claim is no longer awaiting a decision.",
+            _ => return Err(Error::Invalid),
+        };
         prove(
-            lower.contains("permission")
-                || lower.contains("could not")
-                || lower.contains("may not"),
+            body.html.contains(refusal),
             &format!("{operation} revoked mid-page refuses without a fatal live error"),
         )?;
         let body = state
