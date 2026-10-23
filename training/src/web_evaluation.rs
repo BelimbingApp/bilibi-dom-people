@@ -160,7 +160,7 @@ impl Reviews {
                     ("version", "Criteria version"),
                     ("status", "Status"),
                     ("answer", "Answer"),
-                ],
+                ][usize::from(own)..],
             )?,
             tasks: vec![],
             enabled: false,
@@ -403,10 +403,14 @@ impl Reviews {
                 ..Alert::default()
             })?);
         } else {
-            let page = self.list.paginate(&self.tasks);
-            let rows = page
-                .entries
+            // load() clamps the ListState page after refreshing its current audience.
+            let counts =
+                PageCounts::new(self.list.page, self.list.page_size, self.tasks.len() as u64);
+            let rows = self
+                .tasks
                 .iter()
+                .skip(self.list.offset() as usize)
+                .take(self.list.page_size as usize)
                 .map(|task| {
                     let mut answer = Html::EMPTY;
                     if let Some(a) = &task.answer {
@@ -472,7 +476,7 @@ impl Reviews {
                 } else {
                     "effectiveness-pagination"
                 },
-                page.counts,
+                counts,
                 &[25, 50, 100, 300],
             );
             pagination.page_event = self.event_name("evaluation_page", "page");
