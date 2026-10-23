@@ -1,0 +1,10 @@
+{# Shared ConfirmDialog contract with the owner's instance banner inside. #}
+{% import "dialog.html" as dialog_ui %}
+{% import "components.html" as ui %}
+{% call dialog_ui::modal(id=dialog.id, title=dialog.consequence, cancel_event=dialog.cancel_event, width=bilibi_ui::ModalWidth::Compact, description=dialog.detail, role="alertdialog") %}
+{{ banner }}
+<div class="mt-3 flex flex-wrap justify-end gap-2">
+{% call ui::button(id="skills-confirm-cancel", button_type="button", event=dialog.cancel_event) %}Cancel{% endcall %}
+{% call ui::button(id="skills-confirm-confirm", button_type="button", variant=bilibi_ui::ButtonVariant::Danger, event=dialog.confirm_event, working=dialog.working) %}{{ dialog.confirm }}{% endcall %}
+</div>
+{% endcall %}
