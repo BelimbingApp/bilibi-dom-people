@@ -12,12 +12,19 @@ enum Command {
     Publish(Date),
     Retire(Date),
     Discard,
-    NewVersion,
-    MoveScale(i64),
     RemoveItem(i64),
     RemoveSelector(i64),
 }
 impl Command {
+    fn consequence(&self) -> &'static str {
+        match self {
+            Self::Publish(_) => "Publish this requirement profile version?",
+            Self::Retire(_) => "Retire this requirement profile version?",
+            Self::Discard => "Discard this draft, its requirements and targets?",
+            Self::RemoveItem(_) => "Remove this skill requirement from the draft?",
+            Self::RemoveSelector(_) => "Remove this target from the draft?",
+        }
+    }
     fn cap(&self) -> &'static str {
         match self {
             Self::Publish(_) | Self::Retire(_) => PROFILES_PUBLISH,
@@ -29,8 +36,6 @@ impl Command {
             Self::Publish(_) => "Publish",
             Self::Retire(_) => "Retire",
             Self::Discard => "Discard draft",
-            Self::NewVersion => "Draft a new version",
-            Self::MoveScale(_) => "Change scale",
             Self::RemoveItem(_) | Self::RemoveSelector(_) => "Remove",
         }
     }
@@ -199,6 +204,13 @@ impl ProfilePage {
         if !self.authorize(scope, cap).await {
             return Ok(true);
         }
+        if event != "confirm" {
+            self.pending = None;
+            if !self.selection_exists(event, p) {
+                self.flash.error(MISSING);
+                return Ok(false);
+            }
+        }
         let (Some(c), Some(id), Some(detail)) = (self.company.id, self.id, self.profile.as_ref())
         else {
             return Ok(false);
@@ -303,29 +315,31 @@ impl ProfilePage {
                 return Ok(false);
             }
             "new_version" => {
-                self.decision(Command::NewVersion, label);
-                return Ok(false);
+                self.new_version(scope, c, id).await;
             }
             "discard" => {
                 self.decision(Command::Discard, label);
                 return Ok(false);
             }
             "move_scale" => {
-                self.drafts.remember("skill-profile-scale-form", p);
-                if let Some(scale) = self
-                    .scales
-                    .iter()
-                    .find(|r| Some(r.id) == super::id(p, "scale_id") && r.status == "published")
-                {
-                    self.decision(
-                        Command::MoveScale(scale.id),
-                        format!(
-                            "{label} · {} ({}) v{}",
-                            scale.name, scale.code, scale.version
-                        ),
-                    );
-                }
-                return Ok(false);
+                let f = "skill-profile-scale-form";
+                self.drafts.remember(f, p);
+                self.drafts.result(
+                    f,
+                    &mut self.flash,
+                    s.update_profile(
+                        scope,
+                        c,
+                        id,
+                        &ProfileChanges {
+                            name: None,
+                            scale_id: super::id(p, "scale_id"),
+                        },
+                    )
+                    .await,
+                    "Scale changed.",
+                    "The requirement profile could not be changed.",
+                );
             }
             "publish" | "retire" => {
                 let (key, form) = if event == "publish" {
@@ -377,33 +391,6 @@ impl ProfilePage {
                                 self.redirect = Some(format!("/people/skills?company_id={c}"));
                             }
                         }
-                        Command::NewVersion => match s.new_profile_version(scope, c, id).await {
-                            Ok(new) => {
-                                self.id = Some(new.profile.profile.id);
-                                self.drafts = Drafts::default();
-                                self.flash.success("New draft version added.");
-                                if !new.missing_levels.is_empty() {
-                                    self.flash.error(&format!("The current scale version lacks required levels {}; the draft keeps its previous scale until those requirements change.",new.missing_levels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")));
-                                }
-                            }
-                            Err(e) => {
-                                self.respond::<()>(Err(e), "");
-                            }
-                        },
-                        Command::MoveScale(scale_id) => {
-                            let r = s
-                                .update_profile(
-                                    scope,
-                                    c,
-                                    id,
-                                    &ProfileChanges {
-                                        name: None,
-                                        scale_id: Some(scale_id),
-                                    },
-                                )
-                                .await;
-                            self.respond(r, "Scale changed.");
-                        }
                         Command::RemoveItem(item) => {
                             let r = s.remove_item(scope, c, id, item).await;
                             self.respond(r, "Requirement removed.");
@@ -418,6 +405,44 @@ impl ProfilePage {
             _ => {}
         }
         Ok(true)
+    }
+    fn selection_exists(&self, event: &str, p: &Value) -> bool {
+        match event {
+            "remove_item" | "move_item_up" | "move_item_down" => self
+                .profile
+                .as_ref()
+                .is_some_and(|p0| p0.items.iter().any(|r| Some(r.id) == super::id(p, "id"))),
+            "remove_selector" => self.profile.as_ref().is_some_and(|p0| {
+                p0.selectors
+                    .iter()
+                    .any(|r| Some(r.id) == super::id(p, "id"))
+            }),
+            "move_scale" => self
+                .scales
+                .iter()
+                .any(|r| Some(r.id) == super::id(p, "scale_id") && r.status == "published"),
+            _ => true,
+        }
+    }
+    async fn new_version(&mut self, scope: &Scope, company: i64, id: i64) {
+        match self
+            .core
+            .skills
+            .new_profile_version(scope, company, id)
+            .await
+        {
+            Ok(new) => {
+                self.id = Some(new.profile.profile.id);
+                self.drafts = Drafts::default();
+                self.flash.success("New draft version added.");
+                if !new.missing_levels.is_empty() {
+                    self.flash.error(&format!("The current scale version lacks required levels {}; the draft keeps its previous scale until those requirements change.",new.missing_levels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")));
+                }
+            }
+            Err(e) => {
+                self.respond::<()>(Err(e), "");
+            }
+        }
     }
     fn respond<T>(&mut self, result: crate::Result<T>, success: &str) -> bool {
         match result {
@@ -435,10 +460,19 @@ impl ProfilePage {
             }
             Err(e) => {
                 self.flash.error(&match e {
-                    SkillsError::Failed(_) | SkillsError::Invalid(_) => {
-                        "The requirement profile could not be changed.".into()
-                    }
-                    _ => message(&e),
+                    SkillsError::NoItems
+                    | SkillsError::NoSelectors
+                    | SkillsError::WeightsNot100
+                    | SkillsError::LevelNotOnScale
+                    | SkillsError::SkillUnavailable
+                    | SkillsError::ScaleUnavailable
+                    | SkillsError::PositionUnavailable
+                    | SkillsError::MixedSelectors
+                    | SkillsError::DuplicateSelector
+                    | SkillsError::NotAfterLatest
+                    | SkillsError::OverlappingProfile
+                    | SkillsError::InvalidDate => message(&e),
+                    _ => "The requirement profile could not be changed.".into(),
                 });
                 false
             }
@@ -468,7 +502,7 @@ impl ProfilePage {
     fn render(&self) -> Result<String> {
         use askama::Template;
         let mut body = Html::EMPTY;
-        let mut title = "Requirement profile";
+        let mut title = "";
         let mut subtitle = String::new();
         if let Some(p) = &self.profile {
             title = &p.profile.name;
@@ -548,7 +582,14 @@ impl ProfilePage {
             confirm: self
                 .pending
                 .as_ref()
-                .map(|p| confirmation(&self.company, p.command.verb(), &p.detail))
+                .map(|p| {
+                    confirmation(
+                        &self.company,
+                        p.command.consequence(),
+                        p.command.verb(),
+                        &p.detail,
+                    )
+                })
                 .transpose()?
                 .unwrap_or(Html::EMPTY),
             profile: self.profile.as_ref().map(|p| p.profile.id.to_string()),

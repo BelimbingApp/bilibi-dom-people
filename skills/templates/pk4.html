@@ -6,7 +6,7 @@
 <div data-shared-ui>
 {% call feedback::flash_group(messages=flash) %}{% endcall %}
 {% call ui::page(id=page_id) %}
-{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}
+{% if !title.is_empty() %}{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}{% endif %}
 {% if let Some(field) = company %}
 {% call forms::form(id="skills-company-form", event="select_company", change=true, class="mt-4") %}
 {% call forms::input(field=field) %}{% endcall %}

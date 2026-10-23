@@ -17,6 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 
 pub(crate) const PAGES: &str = "people/skills.catalog-profile-pages";
 const FORBIDDEN: &str = "You cannot change this company's skills.";
+const MISSING: &str = "That record is not available to you.";
 const PUBLISH_FORBIDDEN: &str = "You cannot publish or retire this company's profiles.";
 struct Core {
     db: Db,
@@ -72,10 +73,27 @@ impl Page<Scope, Error> for Pages {
                     input: bilibi_ui::page::LiveInput::Refresh,
                 })
                 .await?;
+            let title = if request.operation == "profile" {
+                match (
+                    params::positive_id(request.query.get("company_id").map(String::as_str)),
+                    params::positive_id(request.path.get("id").map(String::as_str)),
+                ) {
+                    (Some(company), Some(id)) => self
+                        .0
+                        .skills
+                        .get_profile(scope, company, id)
+                        .await
+                        .ok()
+                        .map(|p| p.profile.name),
+                    _ => None,
+                }
+            } else {
+                None
+            };
             Ok(PageBody {
                 html: body.html,
                 live: true,
-                title: None,
+                title,
             })
         })
     }
@@ -296,8 +314,17 @@ impl Drafts {
                     failure.to_owned()
                 } else if matches!(error, SkillsError::Unauthorized) {
                     FORBIDDEN.into()
-                } else {
+                } else if matches!(
+                    error,
+                    SkillsError::SkillUnavailable
+                        | SkillsError::LevelNotOnScale
+                        | SkillsError::PositionUnavailable
+                        | SkillsError::MixedSelectors
+                        | SkillsError::DuplicateSelector
+                ) {
                     message(&error)
+                } else {
+                    failure.to_owned()
                 };
                 flash.error(&text);
                 None
@@ -336,14 +363,15 @@ impl Drafts {
             }
         }
         let mut body = render(&summary)?;
-        for field in &fields {
-            body.push(&render(field)?);
-        }
+        body.push(&render(&Fields {
+            fields: &fields,
+            three_columns: matches!(id, "skill-form" | "skill-profile-item-form"),
+        })?);
         render(&Form {
             id,
             event,
             change: false,
-            class: "mt-4 grid gap-2 sm:grid-cols-2",
+            class: "mt-4",
             body,
             actions: render(&Button {
                 button_type: "submit",
@@ -456,11 +484,11 @@ struct Confirmation<'a> {
     dialog: ConfirmDialog<'a>,
     banner: &'a Html,
 }
-fn confirmation(company: &Company, verb: &str, detail: &str) -> Result<Html> {
+fn confirmation(company: &Company, consequence: &str, verb: &str, detail: &str) -> Result<Html> {
     render(&Confirmation {
         dialog: ConfirmDialog {
             id: "skills-catalog-confirm",
-            consequence: verb,
+            consequence,
             detail,
             confirm: verb,
             working: "Saving…",
@@ -469,4 +497,11 @@ fn confirmation(company: &Company, verb: &str, detail: &str) -> Result<Html> {
         },
         banner: &company.banner,
     })
+}
+
+#[derive(askama::Template)]
+#[template(path = "pk4_fields.html")]
+struct Fields<'a> {
+    fields: &'a [Field],
+    three_columns: bool,
 }

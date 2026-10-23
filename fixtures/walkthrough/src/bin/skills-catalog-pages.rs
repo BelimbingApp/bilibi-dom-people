@@ -248,6 +248,33 @@ async fn main() -> Result<()> {
         json!({"type":"scale_publish","id":scale.id.to_string()}),
     )
     .await?;
+    let replaced = event(
+        &mut catalog,
+        &manager,
+        json!({"type":"scale_publish","id":i64::MAX.to_string()}),
+    )
+    .await?;
+    check(
+        !replaced.html.contains("id=\"skills-catalog-confirm\"")
+            && replaced
+                .html
+                .contains("That record is not available to you."),
+        "invalid replacement selection clears the earlier confirmation",
+    )?;
+    event(&mut catalog, &manager, json!({"type":"confirm"})).await?;
+    check(
+        saved(skills.list_scales(&manager, 1).await)?
+            .iter()
+            .find(|s| s.id == scale.id)
+            .is_some_and(|s| s.status == "draft"),
+        "a cleared confirmation cannot publish the previous selection",
+    )?;
+    event(
+        &mut catalog,
+        &manager,
+        json!({"type":"scale_publish","id":scale.id.to_string()}),
+    )
+    .await?;
     let h = event(&mut catalog, &manager, json!({"type":"confirm"})).await?;
     check(
         h.html.contains("Scale published."),
@@ -325,8 +352,7 @@ async fn main() -> Result<()> {
         sql.is_err(),
         "PostgreSQL refuses editing published requirements",
     )?;
-    event(&mut page, &manager, json!({"type":"new_version"})).await?;
-    let h = event(&mut page, &manager, json!({"type":"confirm"})).await?;
+    let h = event(&mut page, &manager, json!({"type":"new_version"})).await?;
     check(
         h.path
             .as_deref()

@@ -21,6 +21,14 @@ struct Pending {
     detail: String,
 }
 impl Command {
+    fn consequence(&self) -> &'static str {
+        match self {
+            Self::Publish(_) => "Publish this proficiency scale?",
+            Self::Retire(_) => "Retire this proficiency scale?",
+            Self::Discard(_) => "Discard this scale draft and its levels?",
+            Self::DeleteLevel(..) => "Remove this level from the draft?",
+        }
+    }
     fn verb(&self) -> &'static str {
         match self {
             Self::Publish(_) => "Publish",
@@ -257,6 +265,13 @@ impl Catalog {
         if !self.authorize(scope).await {
             return Ok(true);
         }
+        if event != "confirm" {
+            self.pending = None;
+            if !self.selection_exists(event, p) {
+                self.flash.error(MISSING);
+                return Ok(false);
+            }
+        }
         let c = self.company.id.unwrap_or_default();
         let s = &self.core.skills;
         match event {
@@ -465,6 +480,35 @@ impl Catalog {
         }
         Ok(true)
     }
+    fn selection_exists(&self, event: &str, p: &Value) -> bool {
+        match event {
+            "set_category_active" => self.categories.iter().any(|r| Some(r.id) == id(p, "id")),
+            "set_skill_active" => self.skills.iter().any(|r| Some(r.id) == id(p, "id")),
+            "put_level" => self
+                .scales
+                .iter()
+                .any(|r| Some(r.id) == id(p, "level[scale_id]") && r.status == "draft"),
+            "scale_publish" | "scale_discard" => self
+                .scales
+                .iter()
+                .any(|r| Some(r.id) == id(p, "id") && r.status == "draft"),
+            "scale_retire" | "scale_new_version" => self
+                .scales
+                .iter()
+                .any(|r| Some(r.id) == id(p, "id") && r.status == "published"),
+            "delete_level" => text(p, "id")
+                .split_once(':')
+                .and_then(|(s, l)| Some((s.parse::<i64>().ok()?, l.parse::<i32>().ok()?)))
+                .is_some_and(|(scale, level)| {
+                    self.scales.iter().any(|s| {
+                        s.id == scale
+                            && s.status == "draft"
+                            && s.levels.iter().any(|l| l.level == level)
+                    })
+                }),
+            _ => true,
+        }
+    }
     fn scale_result<T>(&mut self, result: crate::Result<T>, success: &str) {
         match result {
             Ok(_) => self.flash.success(success),
@@ -525,7 +569,14 @@ impl Catalog {
             confirm: self
                 .pending
                 .as_ref()
-                .map(|p| confirmation(&self.company, p.command.verb(), &p.detail))
+                .map(|p| {
+                    confirmation(
+                        &self.company,
+                        p.command.consequence(),
+                        p.command.verb(),
+                        &p.detail,
+                    )
+                })
                 .transpose()?
                 .unwrap_or(Html::EMPTY),
             profile: None,
@@ -579,6 +630,7 @@ impl Catalog {
                             .required()
                             .attr("maxlength", "160"),
                         field("category[description]", "Category description")
+                            .wrapper_class("mb-0 sm:col-span-2")
                             .attr("maxlength", "2000"),
                     ],
                 "Add category",
@@ -781,13 +833,16 @@ impl Catalog {
                             .required()
                             .attr("maxlength", "160"),
                         field("skill[definition]", "Skill definition")
+                            .wrapper_class("mb-0 sm:col-span-2")
                             .required()
                             .attr("maxlength", "2000"),
                         field("skill[reassessment_months]", "Reassess every (months)")
                             .kind(InputKind::Number)
                             .attr("min", "1")
                             .attr("max", "120"),
-                        field("skill[evidence_guide]", "Evidence guide").attr("maxlength", "2000"),
+                        field("skill[evidence_guide]", "Evidence guide")
+                            .wrapper_class("mb-0 sm:col-span-2")
+                            .attr("maxlength", "2000"),
                         field("skill[critical]", "Critical skill")
                             .kind(InputKind::Checkbox)
                             .value("true"),
