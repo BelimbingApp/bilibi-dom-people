@@ -272,6 +272,7 @@ struct Learning {
     banner: Html,
     instance_notice: String,
     clock: Option<bilibi_datetime::DisplayContext>,
+    evaluations: crate::web_evaluation::Reviews,
 }
 impl Learning {
     fn new(training: Arc<Training>, task: Task, query: &HashMap<String, String>) -> DbResult<Self> {
@@ -306,6 +307,7 @@ impl Learning {
             banner: Html::EMPTY,
             instance_notice: String::new(),
             clock: None,
+            evaluations: crate::web_evaluation::Reviews::new(EvaluationKind::Evaluation, query)?,
         })
     }
     fn can(&self, cap: &str) -> bool {
@@ -361,9 +363,21 @@ impl Learning {
         let Some(company) = self.company else {
             self.modal = false;
             self.pending = None;
+            self.evaluations.load(&self.training, scope, None).await;
             self.error = Some("Choose an active company.".into());
             return Ok(());
         };
+        self.evaluations
+            .load(
+                &self.training,
+                scope,
+                if self.task == Task::My {
+                    Some(company)
+                } else {
+                    None
+                },
+            )
+            .await;
         // Bind the initial default once. Losing this company's reach must
         // refuse the old form, never retarget it to the next available company.
         self.list
@@ -578,6 +592,16 @@ impl Learning {
                 .is_some_and(|(k, _)| Some(k.name()) == payload.get("key").and_then(Value::as_str))
             {
                 self.flash = None;
+            }
+            return Ok(());
+        }
+        if self.task == Task::My && self.evaluations.handles(event) {
+            if let Some(message) = self
+                .evaluations
+                .event(&self.training, scope, payload)
+                .await?
+            {
+                self.flash = Some(message);
             }
             return Ok(());
         }
@@ -1194,6 +1218,7 @@ impl Learning {
             pagination,
             entry: self.entry_dialog()?,
             confirmation,
+            evaluations: self.evaluations.render()?,
         };
         view.render().map_err(|_| Error::Internal)
     }
@@ -1207,6 +1232,8 @@ impl LiveState<Scope, Error> for Learning {
                 LiveInput::Refresh => {}
                 LiveInput::Params(query) => {
                     self.list = ListState::parse(query, spec()?).map_err(|_| Error::Internal)?;
+                    self.evaluations =
+                        crate::web_evaluation::Reviews::new(EvaluationKind::Evaluation, query)?;
                     self.modal = false;
                     self.pending = None;
                     self.prior_id = None;
@@ -1214,9 +1241,11 @@ impl LiveState<Scope, Error> for Learning {
                 LiveInput::Event(payload) => self.event(req.scope, payload).await?,
             }
             self.load(req.scope).await?;
+            let mut query = self.list.to_params();
+            query.extend(self.evaluations.list.to_params());
             Ok(LiveBody {
                 html: self.render()?,
-                query: self.list.to_params(),
+                query,
                 rows: self.records.len(),
                 ..LiveBody::default()
             })
@@ -1275,6 +1304,7 @@ struct LearningView<'a> {
     pagination: Html,
     entry: Html,
     confirmation: Html,
+    evaluations: Html,
 }
 #[derive(Template)]
 #[template(path = "learning_fields.html")]

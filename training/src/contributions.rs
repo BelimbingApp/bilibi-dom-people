@@ -99,6 +99,12 @@ inventory::submit! {
         }, Service {
             id: crate::web_learning::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
+        }, Service {
+            id: crate::web_effectiveness::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_effectiveness::Pages(services.get(SERVICE)?))))),
+        }, Service {
+            id: crate::web_insights::PAGES,
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_insights::Pages(services.get(SERVICE)?))))),
         }],
     }
 }
