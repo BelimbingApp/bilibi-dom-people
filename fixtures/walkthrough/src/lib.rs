@@ -4140,3 +4140,9 @@ mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
 }
+
+// PC4: the registered Claim policies page, broad membership arrays and reauthorization.
+mod claim_setup;
+pub async fn claim_setup(url: &str, action: &str) -> Result<()> {
+    claim_setup::run(url, action).await
+}

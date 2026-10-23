@@ -27,7 +27,12 @@ use std::{
 
 pub(crate) const SERVICE: &str = "people/claims.setup_pages";
 const FORBIDDEN: &str = "You no longer have permission to change this company's claim policies.";
-const TABLES: [(&str, &str, &[(&str, &str)]); 5] = [
+type TableSpec = (
+    &'static str,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+const TABLES: [TableSpec; 5] = [
     (
         "claim-currencies-table",
         "currencies_grid",
@@ -548,6 +553,7 @@ impl Setup {
         let mut field = Field::named(name)
             .id(field_id(form, name))
             .label(label)
+            .wrapper_class("mb-0")
             .kind(kind);
         if let Some(payload) = self.drafts.get(form) {
             field = field.value(text(payload, name));
@@ -620,7 +626,7 @@ impl Setup {
             ),
             _ => ("claim-policy-form", "create_policy", "Add policy"),
         };
-        let f = |name, label, kind| self.field(id, name, label, kind);
+        let f = |name: &str, label: &str, kind: InputKind| self.field(id, name, label, kind);
         let code_name = |namespace: &str| {
             vec![
                 f(&format!("{namespace}[code]"), "Code", InputKind::Text)
