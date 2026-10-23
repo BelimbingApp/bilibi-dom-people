@@ -518,16 +518,14 @@ impl ProfilePage {
                 && p.profile.status == "draft"
                 && self.scales.iter().any(|s| s.status == "published")
             {
-                body.push(
-                    &self.drafts.form(
-                        "skill-profile-scale-form",
-                        "move_scale",
-                        p.profile.id,
-                        vec![select("scale_id", "Scale", published_scales(&self.scales))
+                body.push(&self.drafts.form(
+                    "skill-profile-scale-form",
+                    "move_scale",
+                    p.profile.id,
+                    vec![select("scale_id", "Scale", published_scales(&self.scales))
                             .value(p.profile.scale_id.to_string())],
-                        "Change scale",
-                    )?,
-                );
+                    "Change scale",
+                )?);
             }
             body.push(&self.items_section(p)?);
             body.push(&self.targets_section(p)?);
@@ -566,30 +564,46 @@ impl ProfilePage {
             .iter()
             .map(|item| {
                 let mut r = row("skill-profile-item", item.id);
-                r.text("sequence", item.sequence.to_string());
-                r.text(
-                    "skill",
-                    self.skills
-                        .iter()
-                        .find(|s| s.id == item.skill_id)
-                        .map(|s| s.name.as_str())
-                        .unwrap_or_default(),
+                r.cells.insert(
+                    "sequence".into(),
+                    bilibi_ui::flex_table::Cell::text(item.sequence.to_string()),
                 );
-                r.text(
-                    "level",
-                    scale
-                        .and_then(|s| s.levels.iter().find(|l| l.level == item.required_level))
-                        .map(|l| format!("{} · {}", l.level, l.name))
-                        .unwrap_or_else(|| item.required_level.to_string()),
+                r.cells.insert(
+                    "skill".into(),
+                    bilibi_ui::flex_table::Cell::text(
+                        self.skills
+                            .iter()
+                            .find(|s| s.id == item.skill_id)
+                            .map(|s| s.name.as_str())
+                            .unwrap_or_default(),
+                    ),
                 );
-                r.text("criticality", &item.criticality);
-                r.text("weight", item.weight_percent.to_string());
-                r.text("mandatory", yes(item.mandatory));
+                r.cells.insert(
+                    "level".into(),
+                    bilibi_ui::flex_table::Cell::text(
+                        scale
+                            .and_then(|s| s.levels.iter().find(|l| l.level == item.required_level))
+                            .map(|l| format!("{} · {}", l.level, l.name))
+                            .unwrap_or_else(|| item.required_level.to_string()),
+                    ),
+                );
+                r.cells.insert(
+                    "criticality".into(),
+                    bilibi_ui::flex_table::Cell::text(&item.criticality),
+                );
+                r.cells.insert(
+                    "weight".into(),
+                    bilibi_ui::flex_table::Cell::text(item.weight_percent.to_string()),
+                );
+                r.cells.insert(
+                    "mandatory".into(),
+                    bilibi_ui::flex_table::Cell::text(yes(item.mandatory)),
+                );
                 if editable {
                     let mut controls = button("move_item_up", "Up", item.id)?;
                     controls.push(&button("move_item_down", "Down", item.id)?);
                     controls.push(&button("remove_item", "Remove", item.id)?);
-                    r.cell("actions", controls);
+                    r.slots.insert("actions".into(), controls);
                 }
                 Ok(r)
             })
@@ -610,12 +624,11 @@ impl ProfilePage {
             }],
         })?);
         if let Some(scale) = scale.filter(|_| editable) {
-            h.push(
-                &self.drafts.form(
-                    "skill-profile-item-form",
-                    "put_item",
-                    p.profile.id,
-                    vec![
+            h.push(&self.drafts.form(
+                "skill-profile-item-form",
+                "put_item",
+                p.profile.id,
+                vec![
                         select(
                             "item[skill_id]",
                             "Skill",
@@ -651,9 +664,8 @@ impl ProfilePage {
                             .kind(InputKind::Checkbox)
                             .value("true"),
                     ],
-                    "Save requirement",
-                )?,
-            );
+                "Save requirement",
+            )?);
         }
         section("skill-profile-items-section", "Skill requirements", h)
     }
@@ -664,9 +676,15 @@ impl ProfilePage {
             .iter()
             .map(|target| {
                 let mut r = row("skill-profile-selector", target.id);
-                r.text("target", self.target_label(target));
+                r.cells.insert(
+                    "target".into(),
+                    bilibi_ui::flex_table::Cell::text(self.target_label(target)),
+                );
                 if editable {
-                    r.cell("actions", button("remove_selector", "Remove", target.id)?);
+                    r.slots.insert(
+                        "actions".into(),
+                        button("remove_selector", "Remove", target.id)?,
+                    );
                 }
                 Ok(r)
             })
@@ -716,17 +734,15 @@ impl ProfilePage {
                 )?);
             }
             if p.profile.status == "published" {
-                h.push(
-                    &self.drafts.form(
-                        "skill-profile-retire-form",
-                        "retire",
-                        p.profile.id,
-                        vec![field("effective_to", "Last effective day")
+                h.push(&self.drafts.form(
+                    "skill-profile-retire-form",
+                    "retire",
+                    p.profile.id,
+                    vec![field("effective_to", "Last effective day")
                             .kind(InputKind::Date)
                             .required()],
-                        "Retire",
-                    )?,
-                );
+                    "Retire",
+                )?);
             }
         }
         if self.can_manage {

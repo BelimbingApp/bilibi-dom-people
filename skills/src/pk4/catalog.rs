@@ -117,7 +117,12 @@ impl Catalog {
         })
     }
     async fn load(&mut self, scope: &Scope, changed: bool) -> Result<()> {
+        let previous = self.company.id;
         self.company.load(&self.core, scope, true).await?;
+        if previous != self.company.id {
+            self.drafts = Drafts::default();
+            self.pending = None;
+        }
         self.available = false;
         self.can_manage = false;
         self.categories.clear();
@@ -495,10 +500,12 @@ impl Catalog {
                 .id("skills-unavailable"),
             )?;
         } else {
-            body.push(&self.categories_section()?);
-            body.push(&self.scales_section()?);
-            body.push(&self.skills_section()?);
-            body.push(&self.profiles_section()?);
+            body = render(&CatalogLayout {
+                categories: self.categories_section()?,
+                scales: self.scales_section()?,
+                skills: self.skills_section()?,
+                profiles: self.profiles_section()?,
+            })?;
         }
         View {
             flash: self.flash.map(),
@@ -534,12 +541,17 @@ impl Catalog {
             .iter()
             .map(|c| {
                 let mut r = row("skill-category", c.id);
-                r.text("name", &c.name);
-                r.text("code", &c.code);
-                r.text("status", if c.active { "Active" } else { "Inactive" });
+                r.cells
+                    .insert("name".into(), bilibi_ui::flex_table::Cell::text(&c.name));
+                r.cells
+                    .insert("code".into(), bilibi_ui::flex_table::Cell::text(&c.code));
+                r.cells.insert(
+                    "status".into(),
+                    bilibi_ui::flex_table::Cell::text(if c.active { "Active" } else { "Inactive" }),
+                );
                 if self.can_manage {
-                    r.cell(
-                        "actions",
+                    r.slots.insert(
+                        "actions".into(),
                         button(
                             "set_category_active",
                             if c.active { "Deactivate" } else { "Reactivate" },
@@ -557,12 +569,11 @@ impl Catalog {
             "No skill categories have been added for this company.",
         )?;
         if self.can_manage {
-            h.push(
-                &self.drafts.form(
-                    "skill-category-form",
-                    "create_category",
-                    self.company.id.unwrap_or_default(),
-                    vec![
+            h.push(&self.drafts.form(
+                "skill-category-form",
+                "create_category",
+                self.company.id.unwrap_or_default(),
+                vec![
                         field("category[code]", "Category code")
                             .required()
                             .attr("maxlength", "80"),
@@ -572,9 +583,8 @@ impl Catalog {
                         field("category[description]", "Category description")
                             .attr("maxlength", "2000"),
                     ],
-                    "Add category",
-                )?,
-            );
+                "Add category",
+            )?);
         }
         section("skill-categories-section", "Categories", h)
     }
@@ -584,10 +594,18 @@ impl Catalog {
             .iter()
             .map(|s| {
                 let mut r = row("skill-scale", s.id);
-                r.text("name", &s.name);
-                r.text("code", &s.code);
-                r.text("version", s.version.to_string());
-                r.text("status", &s.status);
+                r.cells
+                    .insert("name".into(), bilibi_ui::flex_table::Cell::text(&s.name));
+                r.cells
+                    .insert("code".into(), bilibi_ui::flex_table::Cell::text(&s.code));
+                r.cells.insert(
+                    "version".into(),
+                    bilibi_ui::flex_table::Cell::text(s.version.to_string()),
+                );
+                r.cells.insert(
+                    "status".into(),
+                    bilibi_ui::flex_table::Cell::text(&s.status),
+                );
                 let mut controls = Html::EMPTY;
                 if self.can_manage {
                     for (event, label) in match s.status.as_str() {
@@ -601,7 +619,7 @@ impl Catalog {
                         controls.push(&button(event, label, s.id)?);
                     }
                 }
-                r.cell("actions", controls);
+                r.slots.insert("actions".into(), controls);
                 Ok(r)
             })
             .collect::<Result<Vec<_>>>()?;
@@ -617,13 +635,23 @@ impl Catalog {
                 .iter()
                 .map(|l| {
                     let mut r = row(&format!("skill-scale-{}-level", s.id), l.level);
-                    r.text("level", l.level.to_string());
-                    r.text("name", &l.name);
-                    r.text("anchor", &l.anchor);
-                    r.text("authority", &l.authority);
+                    r.cells.insert(
+                        "level".into(),
+                        bilibi_ui::flex_table::Cell::text(l.level.to_string()),
+                    );
+                    r.cells
+                        .insert("name".into(), bilibi_ui::flex_table::Cell::text(&l.name));
+                    r.cells.insert(
+                        "anchor".into(),
+                        bilibi_ui::flex_table::Cell::text(&l.anchor),
+                    );
+                    r.cells.insert(
+                        "authority".into(),
+                        bilibi_ui::flex_table::Cell::text(&l.authority),
+                    );
                     if self.can_manage && s.status == "draft" {
-                        r.cell(
-                            "actions",
+                        r.slots.insert(
+                            "actions".into(),
                             button("delete_level", "Remove", format!("{}:{}", s.id, l.level))?,
                         );
                     }
@@ -637,12 +665,11 @@ impl Catalog {
                 "No levels have been added.",
             )?;
             if self.can_manage && s.status == "draft" {
-                levels.push(
-                    &self.drafts.form(
-                        &format!("skill-level-form-{}", s.id),
-                        "put_level",
-                        self.company.id.unwrap_or_default(),
-                        vec![
+                levels.push(&self.drafts.form(
+                    &format!("skill-level-form-{}", s.id),
+                    "put_level",
+                    self.company.id.unwrap_or_default(),
+                    vec![
                             hidden("level[scale_id]", s.id),
                             field("level[level]", "Level number")
                                 .kind(InputKind::Number)
@@ -660,9 +687,8 @@ impl Catalog {
                                 .required()
                                 .attr("maxlength", "2000"),
                         ],
-                        "Save level",
-                    )?,
-                );
+                    "Save level",
+                )?);
             }
             h.push(&section(
                 &format!("skill-scale-{}-levels", s.id),
@@ -671,12 +697,11 @@ impl Catalog {
             )?);
         }
         if self.can_manage {
-            h.push(
-                &self.drafts.form(
-                    "skill-scale-form",
-                    "create_scale",
-                    self.company.id.unwrap_or_default(),
-                    vec![
+            h.push(&self.drafts.form(
+                "skill-scale-form",
+                "create_scale",
+                self.company.id.unwrap_or_default(),
+                vec![
                         field("scale[code]", "Scale code")
                             .required()
                             .attr("maxlength", "80"),
@@ -684,9 +709,8 @@ impl Catalog {
                             .required()
                             .attr("maxlength", "160"),
                     ],
-                    "Add scale",
-                )?,
-            );
+                "Add scale",
+            )?);
         }
         section("skill-scales-section", "Proficiency scales", h)
     }
@@ -696,21 +720,31 @@ impl Catalog {
             .iter()
             .map(|s| {
                 let mut r = row("skill", s.id);
-                r.text("name", &s.name);
-                r.text("code", &s.code);
-                r.text(
-                    "category",
-                    self.categories
-                        .iter()
-                        .find(|c| c.id == s.category_id)
-                        .map(|c| c.name.as_str())
-                        .unwrap_or_default(),
+                r.cells
+                    .insert("name".into(), bilibi_ui::flex_table::Cell::text(&s.name));
+                r.cells
+                    .insert("code".into(), bilibi_ui::flex_table::Cell::text(&s.code));
+                r.cells.insert(
+                    "category".into(),
+                    bilibi_ui::flex_table::Cell::text(
+                        self.categories
+                            .iter()
+                            .find(|c| c.id == s.category_id)
+                            .map(|c| c.name.as_str())
+                            .unwrap_or_default(),
+                    ),
                 );
-                r.text("critical", yes(s.critical));
-                r.text("status", if s.active { "Active" } else { "Inactive" });
+                r.cells.insert(
+                    "critical".into(),
+                    bilibi_ui::flex_table::Cell::text(yes(s.critical)),
+                );
+                r.cells.insert(
+                    "status".into(),
+                    bilibi_ui::flex_table::Cell::text(if s.active { "Active" } else { "Inactive" }),
+                );
                 if self.can_manage {
-                    r.cell(
-                        "actions",
+                    r.slots.insert(
+                        "actions".into(),
                         button(
                             "set_skill_active",
                             if s.active { "Deactivate" } else { "Reactivate" },
@@ -736,12 +770,11 @@ impl Catalog {
             .skills_table
             .render("Skills", rows, "skills-empty", empty)?;
         if self.can_manage && !options.is_empty() {
-            h.push(
-                &self.drafts.form(
-                    "skill-form",
-                    "create_skill",
-                    self.company.id.unwrap_or_default(),
-                    vec![
+            h.push(&self.drafts.form(
+                "skill-form",
+                "create_skill",
+                self.company.id.unwrap_or_default(),
+                vec![
                         select("skill[category_id]", "Skill category", options),
                         field("skill[code]", "Skill code")
                             .required()
@@ -761,9 +794,8 @@ impl Catalog {
                             .kind(InputKind::Checkbox)
                             .value("true"),
                     ],
-                    "Add skill",
-                )?,
-            );
+                "Add skill",
+            )?);
         }
         section("skills-section", "Skills", h)
     }
@@ -774,8 +806,8 @@ impl Catalog {
             .iter()
             .map(|p| {
                 let mut r = row("skill-profile", p.id);
-                r.cell(
-                    "name",
+                r.slots.insert(
+                    "name".into(),
                     render(&RecordLink {
                         workspace: self.framed,
                         kind: crate::MODULE,
@@ -785,22 +817,34 @@ impl Catalog {
                         body: Html::text(&p.name),
                     })?,
                 );
-                r.text("code", &p.code);
-                r.text("version", p.version.to_string());
-                r.text("status", &p.status);
-                r.text("scale", scale_label(&self.scales, p.scale_id));
-                r.text(
-                    "effective",
-                    p.effective_from
-                        .map(|d| {
-                            format!(
-                                "{d} – {}",
-                                p.effective_to
-                                    .map(|d| d.to_string())
-                                    .unwrap_or("open".into())
-                            )
-                        })
-                        .unwrap_or("—".into()),
+                r.cells
+                    .insert("code".into(), bilibi_ui::flex_table::Cell::text(&p.code));
+                r.cells.insert(
+                    "version".into(),
+                    bilibi_ui::flex_table::Cell::text(p.version.to_string()),
+                );
+                r.cells.insert(
+                    "status".into(),
+                    bilibi_ui::flex_table::Cell::text(&p.status),
+                );
+                r.cells.insert(
+                    "scale".into(),
+                    bilibi_ui::flex_table::Cell::text(scale_label(&self.scales, p.scale_id)),
+                );
+                r.cells.insert(
+                    "effective".into(),
+                    bilibi_ui::flex_table::Cell::text(
+                        p.effective_from
+                            .map(|d| {
+                                format!(
+                                    "{d} – {}",
+                                    p.effective_to
+                                        .map(|d| d.to_string())
+                                        .unwrap_or("open".into())
+                                )
+                            })
+                            .unwrap_or("—".into()),
+                    ),
                 );
                 Ok(r)
             })
@@ -813,12 +857,11 @@ impl Catalog {
         )?;
         let options = published_scales(&self.scales);
         if self.can_manage && !options.is_empty() {
-            h.push(
-                &self.drafts.form(
-                    "skill-profile-form",
-                    "create_profile",
-                    c,
-                    vec![
+            h.push(&self.drafts.form(
+                "skill-profile-form",
+                "create_profile",
+                c,
+                vec![
                         field("profile[code]", "Profile code")
                             .required()
                             .attr("maxlength", "80"),
@@ -827,9 +870,8 @@ impl Catalog {
                             .attr("maxlength", "160"),
                         select("profile[scale_id]", "Profile scale", options),
                     ],
-                    "Add profile",
-                )?,
-            );
+                "Add profile",
+            )?);
         }
         section("skill-profiles-section", "Requirement profiles", h)
     }
@@ -859,4 +901,13 @@ impl LiveState<Scope, Error> for Catalog {
             })
         })
     }
+}
+
+#[derive(askama::Template)]
+#[template(path = "pk4_catalog_layout.html")]
+struct CatalogLayout {
+    categories: Html,
+    scales: Html,
+    skills: Html,
+    profiles: Html,
 }

@@ -329,3 +329,20 @@ BILIBI_ENV=development DATABASE_URL=… cargo run -p bilibi-people-walkthrough -
 The executable mounts the real page services and calls their events against the database. It checks independent approval, server-held confirmation targets, cancellation, history, invalid policy values, revoked policy access and reminder-ledger permissions. It leaves proposed and in-progress work for browser checks.
 
 Open both routes as the fixture manager. Use the administrator to approve the manager's proposal, and the staff account to progress its owned work. The `skill-pages` modes `revoke-policy`, `revoke-actions` and `restore` change the manager's grants for a second-session check. The `request` mode creates a pending reassessment; `archive-company-three` archives Company 003 for a stale-confirmation check. These commands belong only to the disposable fixture. Switching company clears a pending confirmation and replaces that company's form fields, so a typed draft cannot carry into another company's settings or proposal.
+
+## Catalog and requirement profile pages
+
+Open **People → Development → Skills** to manage a company's categories, skills, proficiency scales and requirement profiles. Choose an active company first. Each list, including scale levels and profile targets, has the shared table controls for columns and row height. These Bilimbi lists have no search, sorting or pagination.
+
+Add a category and skill, then create a scale and save at least two levels numbered from zero. Publish the scale before adding a profile. Open the profile to save weighted skill requirements and choose either the whole company or positions. Requirement weights must total 100 before publication. Published versions are read-only; **Draft a new version** copies requirements and targets. The facade adopts the current version of that scale when its levels fit, and the page reports any missing levels.
+
+The catalog requires `people.skills.catalog.view`. Forms and draft changes require `people.skills.catalog.manage`; profile publication and retirement require `people.skills.profiles.publish`. Every submitted action and confirmation checks permissions again. Confirmations retain their company, record and dates on the server. Switching company clears pending confirmations and form drafts. Refused forms retain their values and show field errors. Discarding a profile draft returns to the catalog with its success message.
+
+Run the disposable page proof before opening the app:
+
+```sh
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skills-catalog-pages -- prepare
+BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin skills-catalog-pages -- prove
+```
+
+Use an empty database for `prepare`. The proof exercises the mounted live pages, field errors, scale and profile publication, weight refusal, revoked permissions between opening and confirming, server-held confirmation dates, version navigation, draft discard and PostgreSQL's published-requirement guard. The same fixture's `revoke-manage`, `restore-manage`, `revoke-publish` and `restore-publish` commands support browser checks in a second session. These commands belong only to the disposable walkthrough.
