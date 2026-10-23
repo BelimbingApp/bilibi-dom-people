@@ -1447,6 +1447,7 @@ impl State {
                 "performance-detail".into()
             },
             body,
+            inner_class: "p-5 sm:p-6",
             ..Card::default()
         })
     }
@@ -1494,6 +1495,12 @@ impl State {
                 "Your reviewer must approve and communicate targets before they appear here.",
                 false,
             )?);
+            let mut body = render(&Card {
+                id: "my-performance-target-card",
+                body,
+                inner_class: "p-5 sm:p-6",
+                ..Card::default()
+            })?;
             if m.reviews.rows.is_empty() {
                 body.push(&render(
                     &EmptyState::missing(
@@ -1743,6 +1750,7 @@ impl State {
             },
             flash: self.flash(),
             tabs,
+            content_class: if self.my { "mt-5 space-y-5" } else { "" },
             content: self.content()?,
             confirmation,
         }
@@ -1785,6 +1793,7 @@ struct View<'a> {
     variant: bilibi_ui::PageVariant,
     flash: FlashMap<'a>,
     tabs: Html,
+    content_class: &'a str,
     content: Html,
     confirmation: Html,
 }

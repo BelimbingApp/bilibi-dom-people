@@ -4,6 +4,6 @@
   {% call feedback::flash_group(messages=flash) %}{% endcall %}
   {% call ui::header() %}{{ title }}{% endcall %}
   {{ tabs }}
-  {{ content }}
+  <div class="{{ content_class }}">{{ content }}</div>
   {{ confirmation }}
 {% endcall %}
