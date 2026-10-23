@@ -645,11 +645,25 @@ impl Catalog {
                 let mut row = FlexRow::new(c.id.to_string())
                     .slot("course", name)
                     .cell("code", Cell::text(&c.code))
-                    .slot("description", description)
                     .cell(
                         "status",
                         Cell::text(if c.active { "Active" } else { "Inactive" }),
                     );
+                row = if self.columns.mode() == bilibi_ui::RowMode::Compact {
+                    row.cell(
+                        "description",
+                        Cell::text(
+                            c.description
+                                .as_deref()
+                                .unwrap_or("")
+                                .split_whitespace()
+                                .collect::<Vec<_>>()
+                                .join(" "),
+                        ),
+                    )
+                } else {
+                    row.slot("description", description)
+                };
                 row.dom_id = Some(format!("course-{}", c.id));
                 if self.can_manage {
                     row = row.slot(
