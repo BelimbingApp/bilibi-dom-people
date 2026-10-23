@@ -781,7 +781,11 @@ impl Assessments {
                         .map(|p| (p.name.clone(), p.id.to_string()))
                         .collect(),
                 )
-                .value(get("employee_id")),
+                .value(get("employee_id"))
+                .id(format!(
+                    "request-employee-company-{}",
+                    self.company.id.unwrap_or_default()
+                )),
                 select(
                     "request[skill_id]",
                     "Skill",
@@ -790,7 +794,11 @@ impl Assessments {
                         .map(|s| (s.name.clone(), s.id.to_string()))
                         .collect(),
                 )
-                .value(get("skill_id")),
+                .value(get("skill_id"))
+                .id(format!(
+                    "request-skill-company-{}",
+                    self.company.id.unwrap_or_default()
+                )),
                 self.company_field(field("request[reason]", "Reason"))
                     .wrapper_class("mb-0 sm:col-span-2")
                     .value(get("reason"))
@@ -1085,8 +1093,9 @@ impl Assessments {
                 .iter()
                 .map(|v| {
                     let s = &v.score;
-                    row("gap", s.id)
-                        .slot("employee", Html::text(&v.employee_name))
+                    let mut gap = row("gap", s.id);
+                    gap.dom_id = Some(format!("gap-{}-{}", s.employee_id, s.skill_id));
+                    gap.slot("employee", Html::text(&v.employee_name))
                         .slot(
                             "skill",
                             Html::text(v.skill_name.as_deref().unwrap_or_default()),
