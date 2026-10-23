@@ -235,8 +235,8 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
         .await
         .map_err(|_| Error::Internal)?;
     prove(next["watermark"] == page["watermark"] && next["high_water_id"] == page["high_water_id"] && next["next_cursor"].is_null()
-        && next["employees"][0]["reference"]["stable_id"] == second.id.to_string()
-        && next["employees"][0]["supervisor_reference"]["stable_id"] == first.id.to_string(), "renumbering and new rows cannot move the immutable keyset; watermark and supervisor survive")?;
+        && next["employees"][0]["reference"]["stable_id"].as_str().and_then(|s| s.parse::<i64>().ok()) == Some(second.id)
+        && next["employees"][0]["supervisor_reference"]["stable_id"].as_str().and_then(|s| s.parse::<i64>().ok()) == Some(first.id), "renumbering and new rows cannot move the immutable keyset; watermark and supervisor survive")?;
     prove(
         next["employees"][0]["email"] == "pw2-2@example.test",
         "Core supplies the work email",
@@ -375,7 +375,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
     let body = event(
         &mut *state,
         &manager,
-        json!({"type":"counts_grid","action":"zoom","value":"80"}),
+        json!({"type":"counts_grid","op":"zoom_preset","preset":"compact"}),
     )
     .await?;
     prove(

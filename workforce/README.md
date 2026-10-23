@@ -353,7 +353,7 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 
 ## Workforce settings page
 
-Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser includes only companies you may manage. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
+Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser includes only unarchived companies you may manage. Core’s current capability-free company directory supplies an archived flag, so this includes pending and suspended companies too; matching Bilimbi’s active-only filter needs Core to expose the company status through that directory. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
 
 Save requires at least one of Pending, Probation, Active, Inactive and Terminated. The write checks permission again inside its mutation transaction and holds the writable company lock before saving through Base Settings. Success says “Working statuses saved.”; an empty selection says “Choose at least one employee status.” A revoked grant or archived company refuses the next save.
 
@@ -414,7 +414,7 @@ Without Organisation, the answer is `freshness: "unavailable"`, `reason: "organi
 
 ### Refusals
 
-Unknown kinds or fields, malformed values, out-of-range page sizes and invalid or mismatched cursors are `PortError::Refused(Error::Invalid)`. Missing, archived, deleted, cross-tenant or unreachable companies are `NotFound` or `Forbidden`, according to the company owner's proof. No request field can replace the caller's scope or select a different actor. A database failure remains a failure; it never becomes an empty successful page.
+Unknown kinds or fields, malformed values, out-of-range page sizes and invalid or mismatched cursors are `PortError::Refused(Error::Invalid)`. Missing, archived, deleted, cross-tenant companies are `NotFound` or `Forbidden`, according to the company owner's proof. No request field can replace the caller's scope or select a different actor. A database failure remains a failure; it never becomes an empty successful page.
 
 ## PW2 proof
 
