@@ -959,8 +959,11 @@ pub async fn run(url: &str) -> Result<()> {
     )
     .await?;
 
+    // PT6: catalog page events and browser records, after other slices' grant proofs.
+    training_catalog_pages::run(&services, &admin, &manager, &viewer).await?;
+
     println!(
-        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Training catalog pages follow in PT6. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
+        "Run bilibi-web against this database and sign in as manager@example.test (password {}): People > Settings > People references is available; Courses and Sessions & calendar are available. staff@example.test is linked to Sam Staff's affiliation with Company 001 for the Learning pages.",
         bilibi_walkthrough_fixture::PASSWORD
     );
     Ok(())
@@ -4139,6 +4142,54 @@ pub async fn progression_pages(url: &str, command: &str) -> Result<()> {
 mod payroll_documents;
 pub async fn payroll_documents(url: &str) -> Result<()> {
     payroll_documents::run(url).await
+}
+
+// PT6: catalog page interaction proof, using real services and disposable records.
+mod training_catalog_pages;
+
+/// Run only the Training catalog and its pages on a disposable database.
+/// Other slices' date-sensitive proofs must not gate a catalog page check.
+pub async fn training_catalog_pages(url: &str) -> Result<()> {
+    bilibi_base::link();
+    bilibi_core::link();
+    bilibi_domains::link();
+    bilibi_extensions::link();
+    let db = pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    bilibi_database::migrate(&db, &modules).await?;
+    bilibi_walkthrough_fixture::install(&db).await?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db.clone()))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
+    services
+        .get::<Grants>("base/authz.grants")?
+        .reconcile()
+        .await?;
+    let client = db.get().await?;
+    let auth = services.get::<Authentication>("base/tenancy.authentication")?;
+    let admin = auth
+        .authenticate(&**client, TENANT, ADMIN, "walkthrough".into())
+        .await?;
+    let manager = auth
+        .authenticate(&**client, TENANT, MANAGER, "walkthrough".into())
+        .await?;
+    let viewer = auth
+        .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
+        .await?;
+    training::run(&services, &client, &admin, &manager, &viewer).await?;
+    training_catalog_pages::run(&services, &admin, &manager, &viewer).await
+}
+
+// Payroll Runs page (PY5): contribution, confirmation, decision and document proof.
+mod payroll_runs;
+pub async fn payroll_runs(url: &str) -> Result<()> {
+    payroll_runs::run(url).await
 }
 
 // PW2: standalone settings and directory-port proof, independent of other slices.

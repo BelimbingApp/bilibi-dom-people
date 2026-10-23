@@ -1,0 +1,16 @@
+{# Mirrors Bilimbi Training.Web.RecordsLive and PassportLive. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id="people-training-records", class="space-y-4") %}
+{% call ui::header() %}Training records{% endcall %}
+{{ tabs }}
+{{ toolbar }}
+{% if !error.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Error) %}{{ error }}{% endcall %}{% endif %}
+{% if !warning.is_empty() %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Warning) %}{{ warning }}{% endcall %}{% endif %}
+{{ body }}
+{{ retention }}
+{{ confirmation }}
+{% endcall %}
+</div>

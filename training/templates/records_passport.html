@@ -1,0 +1,10 @@
+{% import "components.html" as ui %}
+<section id="training-passport" class="space-y-3">
+{% call ui::section_heading(title=employee) %}{% endcall %}
+<p>Latest attendance revisions. Evidence remains attached to the revision on which it was recorded.</p>
+{{ table }}
+{{ pagination }}
+{{ generate }}
+{% if !can_generate %}<p>Document generation requires current workforce data and passport generation access. Ask an operator to check your access or connection.</p>{% endif %}
+{{ document }}
+</section>

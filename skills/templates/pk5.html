@@ -1,0 +1,17 @@
+{# Bilimbi Skills.Web.AssessmentsLive and Skills.Web.MySkillsLive; shared primitives. #}
+{% import "components.html" as ui %}
+{% import "forms.html" as forms %}
+{% import "feedback.html" as feedback %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call ui::page(id=page_id) %}
+{% call ui::header(subtitle=subtitle) %}{{ title }}{% endcall %}
+{% if has_company %}
+{% call forms::form(id=company_form, event="select_company", change=true, class="mt-4") %}
+{% call forms::input(field=company) %}{% endcall %}
+{% endcall %}
+{% endif %}
+{{ body }}
+{{ confirm }}
+{% endcall %}
+</div>
