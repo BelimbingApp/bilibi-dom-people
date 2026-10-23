@@ -1,0 +1,5 @@
+{# Form fields mirror the catalog/profile grids; feedback stays above the grid. #}
+{% import "forms.html" as forms %}
+<div class="grid gap-2 {% if three_columns %}sm:grid-cols-3{% else %}sm:grid-cols-2{% endif %}">
+{% for field in fields %}{% call forms::input(field=field) %}{% endcall %}{% endfor %}
+</div>
