@@ -450,7 +450,11 @@ impl RunState {
     }
     fn field(&self, event: &str, namespace: &str, key: &str, label: &str) -> Field {
         let mut field = Field::in_form(namespace, key)
-            .id(format!("{event}_{key}"))
+            .id(if matches!(event, "intake" | "decide") {
+                format!("{namespace}_{key}")
+            } else {
+                format!("{event}_{key}")
+            })
             .label(label)
             .wrapper_class("mb-0");
         if let Some(draft) = self.drafts.get(event) {
@@ -481,7 +485,11 @@ impl RunState {
         if let Some(draft) = self.drafts.get(event) {
             let mut summary = ErrorSummary::new(format!("{id}-errors"));
             for error in &draft.errors {
-                let field_id = format!("{event}_{}", error.field);
+                let field_id = fields
+                    .iter()
+                    .find(|f| f.name.ends_with(&format!("[{}]", error.field)))
+                    .map(|f| f.id.clone())
+                    .unwrap_or_else(|| format!("{event}_{}", error.field));
                 let label = fields
                     .iter()
                     .find(|f| f.id == field_id)
