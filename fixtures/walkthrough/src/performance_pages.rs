@@ -603,7 +603,8 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
                 phone: None,
             },
         )
-        .await?;
+        .await
+        .map_err(|_| Error::Internal)?;
     let affiliations =
         services.get::<bilibi_affiliation::AffiliationService>(bilibi_affiliation::SERVICE)?;
     let viewer_affiliation = affiliations
