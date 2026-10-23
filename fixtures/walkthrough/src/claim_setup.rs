@@ -73,6 +73,37 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
             .map_err(|_| Error::Invalid)?;
         return Ok(());
     }
+    if action == "archived" {
+        let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
+        let count = async || -> Result<i64> {
+            Ok(client
+                .query_one(
+                    "SELECT count(*) FROM people_claim_catalog_groups WHERE company_id = 2",
+                    &[],
+                )
+                .await?
+                .get(0))
+        };
+        let before = count().await?;
+        let result = claims
+            .create_category(
+                &manager,
+                2,
+                &NewCategory {
+                    code: "pc4_archived_refused".into(),
+                    name: "Refused archived company category".into(),
+                },
+            )
+            .await;
+        require(
+            matches!(result, Err(ClaimsError::CompanyArchived)),
+            "an archived company refuses a facade write with CompanyArchived",
+        )?;
+        return require(
+            count().await? == before,
+            "the refused archived-company write creates no category",
+        );
+    }
     if action != "proof" {
         return Err(Error::Invalid);
     }
