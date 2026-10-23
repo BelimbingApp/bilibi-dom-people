@@ -73,49 +73,10 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
             .map_err(|_| Error::Invalid)?;
         return Ok(());
     }
-    let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
-    if action == "readonly" {
-        let before = saved(claims.categories(&manager, 2).await)?.len();
-        let pages = services.get::<PageService<Scope, Error>>("people/claims.setup_pages")?;
-        let query = HashMap::from([("company_id".into(), "2".into())]);
-        let mut page = pages
-            .0
-            .mount(PageRequest {
-                operation: "setup",
-                scope: Some(&manager),
-                path: &HashMap::new(),
-                query: &query,
-                body: &[],
-                framed: false,
-            })
-            .await?
-            .ok_or(Error::Internal)?;
-        let body = page
-            .update(LiveRequest {
-                scope: &manager,
-                credential: "pc4-proof",
-                input: LiveInput::Refresh,
-            })
-            .await?;
-        require(
-            body.html.contains("claim-setup-archived")
-                && body.html.contains("claim-policies-table")
-                && !body.html.contains("data-event=\"create_category\"")
-                && !body.html.contains("data-event=\"save_assignment_members\""),
-            "authorized archived setup remains readable with write controls withheld",
-        )?;
-        let body = event(page.as_mut(), &manager, json!({"type":"create_category", "category[code]":"pc4_archived_refused", "category[name]":"Refused archived category"})).await?;
-        require(
-            body.html.contains("This company is archived and read-only")
-                && body.query.get("company_id").map(String::as_str) == Some("2")
-                && saved(claims.categories(&manager, 2).await)?.len() == before,
-            "a forged stale write keeps the selected company and refuses without mutation",
-        )?;
-        return Ok(());
-    }
     if action != "proof" {
         return Err(Error::Invalid);
     }
+    let claims = services.get::<Claims>(bilibi_people_claims::SERVICE)?;
     let company = 2;
     let stamp = jiff::Timestamp::now().as_second();
     let category = saved(

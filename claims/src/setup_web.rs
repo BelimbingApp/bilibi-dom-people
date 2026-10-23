@@ -186,11 +186,6 @@ impl Setup {
             flash: None,
         })
     }
-    fn archived(&self) -> bool {
-        self.companies
-            .iter()
-            .any(|company| Some(company.id) == self.company && company.archived)
-    }
     fn clear_records(&mut self) {
         self.currencies.clear();
         self.categories.clear();
@@ -227,17 +222,6 @@ impl Setup {
             Err(_) => vec![],
         };
         let chosen = &self.list.filters["company_id"];
-        if let Some(id) = params::positive_id(Some(chosen)) {
-            if !self.companies.iter().any(|company| company.id == id) {
-                // Core's chooser omits archived companies. Keep an already-selected
-                // historical company readable only after proving capability and reach now.
-                match authorization::authorize_company(&**client, scope, id, MANAGE).await {
-                    Ok(company) if company.archived => self.companies.push(company),
-                    Err(WorkforceError::Failed(error)) => return Err(error),
-                    _ => {}
-                }
-            }
-        }
         let company = if chosen.is_empty() {
             self.companies.first()
         } else {
@@ -262,9 +246,7 @@ impl Setup {
                 self.types = self.claims.claim_types(scope, company).await?;
                 self.assignments = self.claims.assignments(scope, company).await?;
                 self.policies = self.claims.policies(scope, company).await?;
-                if !self.archived() {
-                    self.employees = self.claims.assignable_employees(scope, company).await?;
-                }
+                self.employees = self.claims.assignable_employees(scope, company).await?;
                 Ok::<_, ClaimsError>(())
             }
             .await;
@@ -633,9 +615,6 @@ impl Setup {
         })
     }
     fn add_form(&self, section: usize) -> Result<Html> {
-        if self.archived() {
-            return Ok(Html::EMPTY);
-        }
         let (id, event, label) = match section {
             0 => (
                 "claim-currencies-form",
@@ -919,9 +898,7 @@ impl Setup {
                 .assignments
                 .iter()
                 .map(|a| {
-                    let members = if self.archived()
-                        || self.columns[3].mode() == bilibi_ui::RowMode::Compact
-                    {
+                    let members = if self.columns[3].mode() == bilibi_ui::RowMode::Compact {
                         Html::text(&format!(
                             "{} types · {} employees",
                             a.claim_type_ids.len(),
@@ -938,7 +915,6 @@ impl Setup {
                         .slot("members", members);
                     row.dom_id = Some(format!("claim-assignment-{}", a.id));
                     if a.effective_to.is_none()
-                        && !self.archived()
                         && self.columns[3].mode() != bilibi_ui::RowMode::Compact
                     {
                         row.actions = self.end_form(a.id, EndKind::Assignment)?;
@@ -968,7 +944,6 @@ impl Setup {
                     }
                     row.dom_id = Some(format!("claim-policy-{}", p.id));
                     if p.effective_to.is_none()
-                        && !self.archived()
                         && self.columns[4].mode() != bilibi_ui::RowMode::Compact
                     {
                         row.actions = self.end_form(p.id, EndKind::Policy)?;
@@ -990,7 +965,7 @@ impl Setup {
         table.zoom = columns.zoom;
         table.suggestions = columns.flex_suggestions();
         table.add_query = &columns.add_query;
-        table.actions = section != 0 && !self.archived();
+        table.actions = section != 0;
         table.empty = Some(TableEmpty::State(
             EmptyState::missing(empty, "").id(empty_id),
         ));
@@ -1007,7 +982,6 @@ impl Setup {
                     .id("claim-setup-company-select")
                     .label("Company")
                     .kind(InputKind::Select)
-                    .prompt("Choose a company")
                     .value(self.company.map_or_else(String::new, |id| id.to_string()))
                     .options(
                         self.companies
@@ -1068,16 +1042,6 @@ impl Setup {
             flash: self.flash(),
             company,
             available: self.company.is_some(),
-            readonly: if self.archived() {
-                render(&bilibi_ui::Alert {
-                    id: "claim-setup-archived",
-                    kind: StatusKind::Info,
-                    body: Html::text("This company is archived and read-only"),
-                    ..Default::default()
-                })?
-            } else {
-                Html::EMPTY
-            },
             sections,
             confirmation,
             empty: render(
@@ -1126,7 +1090,6 @@ struct View<'a> {
     flash: FlashMap<'a>,
     company: Html,
     available: bool,
-    readonly: Html,
     sections: Vec<Section>,
     empty: Html,
     confirmation: Html,
