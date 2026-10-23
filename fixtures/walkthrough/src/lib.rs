@@ -4146,3 +4146,42 @@ pub async fn payroll_documents(url: &str) -> Result<()> {
 
 // PT6: catalog page interaction proof, using real services and disposable records.
 mod training_catalog_pages;
+
+/// Run only the Training catalog and its pages on a disposable database.
+/// Other slices' date-sensitive proofs must not gate a catalog page check.
+pub async fn training_catalog_pages(url: &str) -> Result<()> {
+    bilibi_base::link();
+    bilibi_core::link();
+    bilibi_domains::link();
+    bilibi_extensions::link();
+    let db = pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    bilibi_database::migrate(&db, &modules).await?;
+    bilibi_walkthrough_fixture::install(&db).await?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db.clone()))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
+    services
+        .get::<Grants>("base/authz.grants")?
+        .reconcile()
+        .await?;
+    let client = db.get().await?;
+    let auth = services.get::<Authentication>("base/tenancy.authentication")?;
+    let admin = auth
+        .authenticate(&**client, TENANT, ADMIN, "walkthrough".into())
+        .await?;
+    let manager = auth
+        .authenticate(&**client, TENANT, MANAGER, "walkthrough".into())
+        .await?;
+    let viewer = auth
+        .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
+        .await?;
+    training::run(&services, &client, &admin, &manager, &viewer).await?;
+    training_catalog_pages::run(&services, &admin, &manager, &viewer).await
+}
