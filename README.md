@@ -8,23 +8,21 @@ UI parity from Bilimbi's
 optional, independently versioned repository that an adopter mounts into a
 Bilibi checkout; it does not build on its own.
 
-| Module | Descriptor ID | Crate | Owns |
-| --- | --- | --- | --- |
-| [`settings/`](settings/README.md) | `people/settings` | `bilibi-people-settings` | the People navigation outline: the `people` menu root and the seven groups (`my_work`, `team`, `time_and_expenses`, `development`, `payroll`, `reports`, `settings`) every other module hangs its leaves on |
-| [`workforce/`](workforce/README.md) | `people/workforce` | `bilibi-people-workforce` | the read seam every People module builds on (a company's native identity, its working employees, one employee, employees by id, direct reports, each a `ReadResult`, named through Core Person and Affiliation), the employment record (`people_workforce_employments`: person, affiliation, number, type, the five statuses, dates, supervisor, department), the company setting `people.workforce.working_statuses`, and the `Authorization` helpers (`authorize`, `authorize_company`, `selectable_companies`, `allowed`) over Core Company and Base Authz |
-
-The other eleven People modules of Bilimbi (`reference_data`,
-`employee_workspace`, `organisation`, `attendance`, `leave`, `claims`,
-`skills`, `training`, `performance`, `progression`, `payroll`) land beside
-these as sibling module folders, in later slices of the port, each
-depending on `people/settings` and `people/workforce`. Bilibi has no Core
-Employee: People Workforce owns the employment record, which references the
-Core Person and that person's affiliation with the employer company, and
-the Employees pages gain the employment form Bilimbi kept in Core.
-
-With these two modules mounted the sidebar shows no People entry yet: the
-root and its groups are containers, and Base Menu hides a container without
-a visible child until a module contributes a leaf.
+| Module | Contract |
+| --- | --- |
+| [`settings/`](settings/README.md) | People navigation outline |
+| [`workforce/`](workforce/README.md) | Employment records and workforce boundary |
+| [`reference_data/`](reference_data/README.md) | Company People reference data |
+| [`employee_workspace/`](employee_workspace/README.md) | Employee directory and workbench |
+| [`organisation/`](organisation/README.md) | Positions and employee assignments |
+| [`attendance/`](attendance/README.md) | Time, attendance and rosters |
+| [`leave/`](leave/README.md) | Leave policies, balances and requests |
+| [`claims/`](claims/README.md) | Employee claims and reimbursements |
+| [`skills/`](skills/README.md) | Skills catalog and assessments |
+| [`training/`](training/README.md) | Courses, sessions and learning |
+| [`performance/`](performance/README.md) | Performance targets and reviews |
+| [`progression/`](progression/README.md) | Progression policies and standing |
+| [`payroll/`](payroll/README.md) | Pay definitions and payroll runs |
 
 ## Mount
 
@@ -74,10 +72,9 @@ APP_ORIGIN=http://localhost:3000 cargo run -p bilibi-web -- run
 ```
 
 Sign in at <http://localhost:3000> as `manager@example.test` (password
-`bilibi-dev`): the sidebar shows no People entry, because the People root
-has groups but no leaf yet. The Workforce setting appears under
-Administration › System › Settings for an account holding
-`people.workforce.settings.manage`.
+`bilibi-dev`): the People menu contains the mounted modules' pages. The
+Workforce setting appears under Administration › System › Settings for an
+account holding `people.workforce.settings.manage`.
 
 ## Checks
 
