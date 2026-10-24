@@ -202,3 +202,7 @@ For the PL4 browser checks, run `cargo run -p bilibi-people-walkthrough --bin le
 
 
 Platform limitation: Workforce's company summary exposes only `archived`, so the chooser uses the Platform's unarchived-company contract. Bilimbi filters `status == "active"`; pending and suspended companies cannot yet be distinguished through this public read. Restoring that exact filter needs Core's organisation read to expose the full status through Workforce.
+
+## Queued policy writes
+
+Policy and catalog writes recheck `people.leave.policies.manage` after the company lock through the private `begin_policy` helper. Self-service requests and approval decisions retain their own permission checks. The `people-sweep-a` walkthrough command queues a leave-type creation behind the lock and revokes its grant before releasing it.

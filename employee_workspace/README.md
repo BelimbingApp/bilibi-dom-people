@@ -65,3 +65,7 @@ Mount this repository at `apps/domains/people` in Bilibi, discover modules, and 
 ## Where to go next
 
 See [Workforce](../workforce/README.md) for employment creation and directory ownership, and [Reference Data](../reference_data/README.md) for the company's employment-type choices.
+
+## Queued writes
+
+Profile, portal-access, change-request and review writes check their permission again after Workforce locks the employee and company. Saved-view writes recheck after the company lock too. A permission revoked while a write waits cannot authorize the queued write. The `people-sweep-a` walkthrough command proves this with a queued profile write.

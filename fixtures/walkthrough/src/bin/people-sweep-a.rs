@@ -156,6 +156,10 @@ async fn main() -> Result<()> {
     for (_, _, key, _) in cases {
         grants.set_direct(&admin, 1, key, Some(true)).await?;
     }
+    if std::env::args().nth(1).as_deref() == Some("queued-grant") {
+        drop(client);
+        return revoke_queued_settings(&db, &services, &admin, &manager).await;
+    }
     let query = HashMap::from([("company_id".into(), "1".into())]);
     let mut path = query.clone();
     path.insert("id".into(), "1".into());
@@ -184,6 +188,20 @@ async fn main() -> Result<()> {
             !initial.html.is_empty(),
             &format!("{operation} mounts with live records"),
         )?;
+        if *operation == "employees" {
+            let open = json!({"type":"open_add"});
+            let body = state
+                .update(LiveRequest {
+                    scope: &manager,
+                    credential: "PV1 proof",
+                    input: LiveInput::Event(&open),
+                })
+                .await?;
+            prove(
+                body.html.contains("employment-person-picker"),
+                "employment dialog opens before its grant is revoked",
+            )?;
+        }
         grants
             .set_direct(&admin, 1, capability, Some(false))
             .await?;
@@ -275,6 +293,8 @@ async fn main() -> Result<()> {
         "overlapping leave slots refuse on the employee half-day index",
     )?;
     drop(client);
+    revoke_queued_settings(&db, &services, &admin, &manager).await?;
+    queued_owner_writes(&db, &services, &admin, &manager).await?;
     archive_queued_write(&db, &services, &admin).await?;
     println!("PV1 sweep A complete; use the same database for Chrome captures.");
     Ok(())
@@ -291,6 +311,64 @@ async fn wait_for_blocked(db: &bilibi_database::Db, count: i64) -> Result<()> {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }).await.map_err(|_| Error::Internal)?
+}
+
+async fn revoke_queued_settings(
+    db: &bilibi_database::Db,
+    services: &Services,
+    admin: &Scope,
+    manager: &Scope,
+) -> Result<()> {
+    use bilibi_people_workforce::{Workforce, WorkforceError, SETTINGS_MANAGE};
+    let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
+    let previous = workforce
+        .working_statuses(admin, 1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .value
+        .ok_or(Error::Internal)?;
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    let mutations = services.get::<bilibi_database::MutationBoundary>("base/database.mutations")?;
+    let mut client = db.get().await?;
+    let mut tx = mutations
+        .begin(
+            &mut client,
+            admin.mutation_context("walkthrough.pv1.queued_settings"),
+        )
+        .await?;
+    bilibi_company::organisation::require_writable(tx.sql(), admin, 1, true)
+        .await
+        .map_err(|_| Error::Internal)?;
+    grants
+        .set_direct_in(&mut tx, admin, 1, SETTINGS_MANAGE, Some(false))
+        .await?;
+    let writer = workforce.clone();
+    let scope = manager.clone();
+    let write = tokio::spawn(async move {
+        writer
+            .put_working_statuses(&scope, 1, &["terminated".into()])
+            .await
+    });
+    if let Err(error) = wait_for_blocked(db, 1).await {
+        write.abort();
+        tx.rollback().await?;
+        return Err(error);
+    }
+    tx.commit().await?;
+    let outcome = write.await.map_err(|_| Error::Internal)?;
+    // Restore before reporting a missing guard so Chrome still has its setup.
+    grants
+        .set_direct(admin, 1, SETTINGS_MANAGE, Some(true))
+        .await?;
+    workforce
+        .put_working_statuses(admin, 1, &previous)
+        .await
+        .map_err(|_| Error::Internal)?;
+    println!("PV1 queued settings outcome: {outcome:?}");
+    prove(
+        matches!(outcome, Err(WorkforceError::Unauthorized)),
+        "settings write waiting on the company lock observes a committed grant revocation",
+    )
 }
 
 async fn archive_queued_write(
@@ -353,4 +431,127 @@ async fn archive_queued_write(
         ),
         "People write queued before archival refuses after obtaining the company lock",
     )
+}
+
+async fn queued_refusal(
+    db: &bilibi_database::Db,
+    services: &Services,
+    admin: &Scope,
+    capability: &'static str,
+    write: impl std::future::Future<Output = bool> + Send + 'static,
+) -> Result<()> {
+    let grants = services.get::<Grants>("base/authz.grants")?;
+    grants.set_direct(admin, 1, capability, Some(true)).await?;
+    let mutations = services.get::<bilibi_database::MutationBoundary>("base/database.mutations")?;
+    let mut client = db.get().await?;
+    let mut tx = mutations
+        .begin(
+            &mut client,
+            admin.mutation_context("walkthrough.pv1.queued_owner"),
+        )
+        .await?;
+    bilibi_company::organisation::require_writable(tx.sql(), admin, 1, true)
+        .await
+        .map_err(|_| Error::Internal)?;
+    grants
+        .set_direct_in(&mut tx, admin, 1, capability, Some(false))
+        .await?;
+    let task = tokio::spawn(write);
+    if let Err(error) = wait_for_blocked(db, 1).await {
+        task.abort();
+        tx.rollback().await?;
+        return Err(error);
+    }
+    tx.commit().await?;
+    let refused = task.await.map_err(|_| Error::Internal)?;
+    grants.set_direct(admin, 1, capability, Some(true)).await?;
+    prove(
+        refused,
+        &format!("queued {capability} write observes the committed revocation"),
+    )
+}
+
+async fn queued_owner_writes(
+    db: &bilibi_database::Db,
+    services: &Services,
+    admin: &Scope,
+    manager: &Scope,
+) -> Result<()> {
+    let references = services.get::<bilibi_people_reference_data::ReferenceData>(
+        bilibi_people_reference_data::SERVICE,
+    )?;
+    let scope = manager.clone();
+    queued_refusal(
+        db,
+        services,
+        admin,
+        bilibi_people_reference_data::MANAGE,
+        async move {
+            matches!(
+                references
+                    .create_entry(
+                        &scope,
+                        1,
+                        &bilibi_people_reference_data::NewEntry {
+                            kind: "employment_type".into(),
+                            code: "pv1-queued".into(),
+                            label: "Queued reference must refuse".into(),
+                            active: true,
+                        }
+                    )
+                    .await,
+                Err(bilibi_people_workforce::WorkforceError::Unauthorized)
+            )
+        },
+    )
+    .await?;
+    let leave = services.get::<bilibi_people_leave::Leave>(bilibi_people_leave::SERVICE)?;
+    let scope = manager.clone();
+    queued_refusal(
+        db,
+        services,
+        admin,
+        bilibi_people_leave::POLICIES_MANAGE,
+        async move {
+            matches!(
+                leave
+                    .create_type(
+                        &scope,
+                        1,
+                        &bilibi_people_leave::NewLeaveType::new(
+                            "pv1-queued",
+                            "Queued type must refuse",
+                            "day"
+                        )
+                    )
+                    .await,
+                Err(bilibi_people_leave::LeaveError::Unauthorized)
+            )
+        },
+    )
+    .await?;
+    let workspace = services.get::<bilibi_people_employee_workspace::EmployeeWorkspace>(
+        bilibi_people_employee_workspace::SERVICE,
+    )?;
+    let profile = workspace
+        .work_profile_record(admin, 1, 1)
+        .await
+        .map_err(|_| Error::Internal)?
+        .value;
+    let scope = manager.clone();
+    queued_refusal(
+        db,
+        services,
+        admin,
+        bilibi_people_employee_workspace::MANAGE,
+        async move {
+            matches!(
+                workspace.put_work_profile(&scope, 1, 1, &profile).await,
+                Err(bilibi_people_employee_workspace::WorkspaceError::Workforce(
+                    bilibi_people_workforce::WorkforceError::Unauthorized
+                ))
+            )
+        },
+    )
+    .await
 }

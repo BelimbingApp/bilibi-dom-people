@@ -94,3 +94,7 @@ an alias, and an alias under another kind or company.
 ### Employment-type choices port
 
 `people/reference_data.employment_types` accepts exactly `{"company_id": 1}` and answers an array of active employment-type choices, each `{"code": "…", "label": "…"}`, ordered by label and id. The provider calls `ReferenceData::list_on` on the caller's connection and scope. This is the same capability-free company configuration read as `list`; a missing or foreign company is `NotFound`. Workforce uses it for the employment dialog without a dependency cycle. `list_on` also lets a caller read company reference configuration within its existing transaction.
+
+## Queued writes
+
+Entry, alias and calendar-exception writes check `people.references.manage` again after obtaining the writable company lock. A grant revoked while a write waits therefore refuses that write. The `people-sweep-a` walkthrough command queues an entry write behind the lock to prove this refusal.
