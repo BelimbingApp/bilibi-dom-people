@@ -925,12 +925,13 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
                 &AssessmentInput {
                     skill_id: other_skill.id,
                     assessed_level: 2,
-                    // This is a standing read at the real UTC clock, unlike the
-                    // explicit as-of coverage checks above.
+                    // Standing reads the real UTC clock; keep this score past its validity date.
                     valid_until: Some(
                         jiff::Timestamp::now()
                             .to_zoned(jiff::tz::TimeZone::UTC)
-                            .date(),
+                            .date()
+                            .yesterday()
+                            .map_err(|_| Error::Internal)?,
                     ),
                     request_key: "pk2-exceeds".into(),
                     ..base.clone()
@@ -944,11 +945,11 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         exceeds.result_band == "exceeds" && exceeds.gap == 0,
     )?;
     check(
-        "standing treats the inclusive due day as overdue, not expired",
+        "standing reports a score past its validity date as expired",
         saved(skills.standing(&staff, company).await)?
             .scores
             .iter()
-            .any(|s| s.score.assessment_id == exceeds.id && s.state == "overdue"),
+            .any(|s| s.score.assessment_id == exceeds.id && s.state == "expired"),
     )?;
     // Revoked grants and unlinked accounts are checked against this same Scope.
     grants
