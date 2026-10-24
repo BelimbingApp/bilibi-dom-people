@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
         ("leave event update", "people_leave_request_events", "tenant_id=1 AND company_id=1", "UPDATE people_leave_request_events SET id=id WHERE id=$1", "P0001"),
         ("claim event delete", "people_claim_request_events", "tenant_id=1 AND company_id=1", "DELETE FROM people_claim_request_events WHERE id=$1", "P0001"),
         ("published scale update", "people_skill_scales", "company_id=1 AND status='published'", "UPDATE people_skill_scales SET name=name WHERE id=$1", "P0001"),
-        ("published profile update", "people_skill_profiles", "company_id=1 AND status='published'", "UPDATE people_skill_profiles SET name=name WHERE id=$1", "P0001"),
+        ("published profile history update", "people_skill_profiles", "company_id=1 AND status IN ('published','retired')", "UPDATE people_skill_profiles SET name=name WHERE id=$1", "P0001"),
         ("overlapping substantive assignments", "people_position_placements", "kind='substantive' AND position_id IN (SELECT id FROM people_positions WHERE company_id=1)", "INSERT INTO people_position_placements(position_id,employee_id,kind,effective_from,effective_to) SELECT position_id,employee_id,kind,effective_from,effective_to FROM people_position_placements WHERE id=$1", "23P01"),
     ] {
         // Identifiers and predicates are compile-time fixture literals above.
