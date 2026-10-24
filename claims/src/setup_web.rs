@@ -635,11 +635,11 @@ impl Setup {
             vec![
                 f(&format!("{namespace}[code]"), "Code", InputKind::Text)
                     .required()
-                    .attr("aria-label", format!("{context} code"))
+                    .attr("aria-label", &format!("{context} code"))
                     .attr("maxlength", "60"),
                 f(&format!("{namespace}[name]"), "Name", InputKind::Text)
                     .required()
-                    .attr("aria-label", format!("{context} name"))
+                    .attr("aria-label", &format!("{context} name"))
                     .attr("maxlength", "120"),
             ]
         };
