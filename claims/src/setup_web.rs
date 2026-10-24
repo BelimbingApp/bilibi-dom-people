@@ -678,7 +678,7 @@ impl Setup {
                     .options(
                         crate::RECEIPT_REQUIREMENTS
                             .iter()
-                            .map(|r| Choice::new(receipt_label(r), *r))
+                            .map(|r| Choice::new(format!("Receipt: {}", receipt_label(r)), *r))
                             .collect(),
                     ),
                 );
