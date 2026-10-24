@@ -769,9 +769,18 @@ impl State {
                 .attr("max", "366"),
             ];
         }
+        let (code_label, name_label) = match self.area {
+            Area::Shifts => ("Shift code", "Shift name"),
+            Area::Locations => ("Location code", "Location name"),
+            _ => ("Code", "Name"),
+        };
         let mut fields = vec![
-            field("code", "Code", InputKind::Text, String::new()).attr("maxlength", "40"),
-            field("name", "Name", InputKind::Text, String::new()).attr("maxlength", "120"),
+            field("code", "Code", InputKind::Text, String::new())
+                .attr("aria-label", code_label)
+                .attr("maxlength", "40"),
+            field("name", "Name", InputKind::Text, String::new())
+                .attr("aria-label", name_label)
+                .attr("maxlength", "120"),
         ];
         match self.area {
             Area::Shifts => fields.extend([
@@ -796,6 +805,7 @@ impl State {
                     InputKind::Number,
                     String::new(),
                 )
+                .attr("aria-label", "Radius in meters")
                 .attr("min", "1")
                 .attr("max", "100000"),
             ]),

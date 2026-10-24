@@ -25,3 +25,11 @@ With Finance mounted, the same executor delivers the three real version 1 approv
 Start `bilibi-web run` against the resulting database for browser checks. Sign in with the Platform walkthrough accounts and password documented in the Platform's fixture. Screenshots, downloaded bytes and logs belong outside the repository. The walkthrough does not replace the mounted `scripts/domain-ci.sh` gate or browser interaction checks.
 
 Individual page proofs that install their own Platform fixture need a separate empty database; see each binary's source comment. In particular, `payroll-runs`, `payroll_pages`, `performance-pages`, `training-effectiveness-pages`, and `leave-pages` must not be chained onto this populated database.
+
+## Browser accounts
+
+Run `cargo run -p bilibi-people-walkthrough --bin browser-accounts` after installing the default People walkthrough on a disposable database. It gives `manager@example.test` every People permission and `viewer@example.test` the permissions to read records, with People writes and self-service explicitly denied. The reader can reach all companies in the fixture's tenant. Both accounts keep their existing records and employment links.
+
+Sign in with the Platform walkthrough password. Check each People page as the manager, then as the viewer. Pages that require a write permission should refuse the viewer; record pages should hide their write controls. Use each account in light and dark themes at desktop and phone widths. Screenshots and interaction logs belong outside this repository.
+
+To try Add employment, run `cargo run -p bilibi-people-walkthrough --bin browser-accounts -- candidate`. It also creates a human Person named Browser employee and an affiliation with Company 001 through Core's services. Select that person in the dialog and finish the employment there. Each run with `candidate` creates a new person.
