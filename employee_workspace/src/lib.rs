@@ -212,6 +212,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let current = store::profile_record(tx.sql(), scope, company_id, employee_id).await?;
         if current.version != version {
             return Err(WorkspaceError::Stale);
@@ -255,6 +256,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let current = store::access_record(tx.sql(), scope, company_id, employee_id).await?;
         if current.version != version {
             return Err(WorkspaceError::Stale);
@@ -297,6 +299,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let result = store::put_profile(&mut tx, scope, company_id, employee_id, profile).await?;
         tx.commit().await?;
         Ok(result)
@@ -321,6 +324,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let result = store::put_access(&mut tx, scope, company_id, employee_id, access).await?;
         tx.commit().await?;
         Ok(result)
@@ -346,6 +350,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, MANAGE).await?;
         let result =
             store::insert_request(&mut tx, scope, company_id, employee_id, request).await?;
         tx.commit().await?;
@@ -376,6 +381,7 @@ impl EmployeeWorkspace {
         self.workforce
             .lock_employee(&tx, scope, company_id, employee_id)
             .await?;
+        authorization::authorize(tx.sql(), scope, company_id, REVIEW).await?;
         let result =
             store::review_request(&mut tx, scope, company_id, employee_id, request_id, status)
                 .await?;
@@ -404,6 +410,7 @@ impl EmployeeWorkspace {
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         let view = store::validate_view(view)?;
         bilibi_company::organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         let result = store::insert_view(&mut tx, scope, company_id, view).await?;
         tx.commit().await?;
         Ok(result)
@@ -419,6 +426,7 @@ impl EmployeeWorkspace {
             .await?;
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         bilibi_company::organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         store::delete_view(&mut tx, scope, company_id, view_id).await?;
         tx.commit().await?;
         Ok(())

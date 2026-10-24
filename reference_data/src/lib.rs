@@ -267,5 +267,7 @@ async fn writable(
             WriteError::Archived => WorkforceError::CompanyArchived,
             WriteError::Access(error) => error.into(),
             _ => WorkforceError::Unauthorized,
-        })
+        })?;
+    authorization::authorize(sql, scope, company_id, MANAGE).await?;
+    Ok(())
 }

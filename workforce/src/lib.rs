@@ -408,8 +408,10 @@ impl Workforce {
                 scope.mutation_context("people.workforce.put_working_statuses"),
             )
             .await?;
-        authorization::authorize(tx.sql(), scope, company_id, SETTINGS_MANAGE).await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        // A grant may have been revoked while this write waited for the
+        // company lock. Judge it on the transaction after that wait.
+        authorization::authorize(tx.sql(), scope, company_id, SETTINGS_MANAGE).await?;
         self.settings
             .put(
                 &mut tx,
@@ -813,6 +815,7 @@ impl Workforce {
         // The proof locked the company writable in the global order; this is
         // the explicit company lock every People write holds.
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         let statuses = self
             .working_statuses_of(tx.sql(), scope, company_id)
             .await?;
@@ -867,8 +870,8 @@ impl Workforce {
                 scope.mutation_context("people.workforce.update_employment"),
             )
             .await?;
-        authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         let tenant = scope.tenant();
         let current = employments::lock(tx.sql(), tenant, company_id, employee_id)
             .await?

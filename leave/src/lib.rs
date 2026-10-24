@@ -430,7 +430,7 @@ impl Leave {
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         let company = self.current_company(scope, company_id).await?;
         let mut tx = self
-            .begin(&mut client, scope, company_id, "people.leave.put_rules")
+            .begin_policy(&mut client, scope, company_id, "people.leave.put_rules")
             .await?;
         let tenant = scope.tenant();
         types::lock_all(tx.sql(), tenant, company_id).await?;
@@ -490,7 +490,7 @@ impl Leave {
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         self.current_company(scope, company_id).await?;
         let mut tx = self
-            .begin(
+            .begin_policy(
                 &mut client,
                 scope,
                 company_id,
@@ -548,7 +548,7 @@ impl Leave {
         self.current_company(scope, company_id).await?;
         let valid = types::validate(new).map_err(LeaveError::Invalid)?;
         let mut tx = self
-            .begin(&mut client, scope, company_id, "people.leave.create_type")
+            .begin_policy(&mut client, scope, company_id, "people.leave.create_type")
             .await?;
         if types::code_taken(tx.sql(), company_id, &valid.code).await? {
             return Err(LeaveError::Invalid(vec![FieldError::new(
@@ -579,7 +579,7 @@ impl Leave {
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         self.current_company(scope, company_id).await?;
         let mut tx = self
-            .begin(
+            .begin_policy(
                 &mut client,
                 scope,
                 company_id,
@@ -629,7 +629,7 @@ impl Leave {
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         self.current_company(scope, company_id).await?;
         let mut tx = self
-            .begin(&mut client, scope, company_id, "people.leave.add_policy")
+            .begin_policy(&mut client, scope, company_id, "people.leave.add_policy")
             .await?;
         let tenant = scope.tenant();
         let leave_type = types::lock_active(tx.sql(), tenant, company_id, type_id)
@@ -717,7 +717,7 @@ impl Leave {
             .map_err(|not_current| LeaveError::NotCurrent(not_current.0))?;
         let employee_ids = employee_ids(&employees)?;
         let mut tx = self
-            .begin(
+            .begin_policy(
                 &mut client,
                 scope,
                 company_id,
@@ -806,7 +806,7 @@ impl Leave {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
         let mut tx = self
-            .begin(&mut client, scope, company_id, "people.leave.record_entry")
+            .begin_policy(&mut client, scope, company_id, "people.leave.record_entry")
             .await?;
         let entry = self
             .record_entry_in(&mut tx, scope, company_id, employee_id, new)
@@ -876,6 +876,20 @@ impl Leave {
     }
 
     // ── Private ───────────────────────────────────────────────────────────
+
+    // Policy writes share their post-lock authorization; self-service and
+    // decisions keep their own capability checks after `begin` returns.
+    async fn begin_policy<'a>(
+        &self,
+        client: &'a mut tokio_postgres::Client,
+        scope: &Scope,
+        company_id: i64,
+        action: &str,
+    ) -> Result<MutationTransaction<'a>> {
+        let tx = self.begin(client, scope, company_id, action).await?;
+        authorization::authorize(tx.sql(), scope, company_id, POLICIES_MANAGE).await?;
+        Ok(tx)
+    }
 
     /// Begins the write's mutation transaction and holds the company's
     /// writable lock: an archived company is `CompanyArchived`, and a
