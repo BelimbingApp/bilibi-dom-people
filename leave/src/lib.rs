@@ -42,7 +42,7 @@ pub use contributions::{
 };
 pub use requests::{Decision, NewRequest, PendingRequest, Request, SelfSummary};
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_party_ids::OrganisationId;
 use bilibi_people_workforce::{authorization, Company, Employee, Workforce, WorkforceError};
@@ -906,7 +906,7 @@ impl Leave {
             .begin(client, scope.mutation_context(action))
             .await?;
         entries::serialize(tx.sql(), scope, company_id).await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         Ok(tx)
     }
 

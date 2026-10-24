@@ -201,12 +201,12 @@ impl Detail {
             self.pending_review = None;
         }
         self.departments = if self.can_department {
-            match bilibi_company::departments::list(
+            match bilibi_company::list_departments(
                 &**client,
                 scope,
                 company,
-                bilibi_company::departments::DepartmentSort::Name,
-                bilibi_company::reference_types::Direction::Asc,
+                bilibi_company::DepartmentSort::Name,
+                bilibi_company::SortDirection::Asc,
             )
             .await
             {

@@ -51,7 +51,7 @@ pub use workflow::{REQUEST_APPROVED, REQUEST_REIMBURSED};
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{APPROVE, CAPABILITIES, CURRENCIES_KEY, MANAGE, REIMBURSE, SUBMIT};
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_party_ids::OrganisationId;
 use bilibi_people_workforce::{authorization, Workforce, WorkforceError};
@@ -1002,8 +1002,8 @@ async fn company(
     client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
-) -> Result<organisation::Identity> {
-    organisation::identity(client, scope, company_id)
+) -> Result<bilibi_company::Identity> {
+    bilibi_company::identity(client, scope, company_id)
         .await?
         .ok_or(ClaimsError::NotFound)
 }
@@ -1012,7 +1012,7 @@ async fn company(
 /// archived company is `CompanyArchived`, and the lock serializes the
 /// company's writes.
 async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
-    organisation::require_writable(client, scope, company_id, true)
+    bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())
         .map_err(|error| match error {

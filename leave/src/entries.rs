@@ -1,7 +1,7 @@
 //! Bilimbi Leave.record_entry/4, shared by the facade and reviewed writes.
 use crate::{
-    authorization, ledger, organisation, types, validate_entry, Company, Decimal, Employee, Error,
-    Leave, LeaveError, LeaveType, LedgerEntry, MutationTransaction, NewEntry, Result, Rules, Scope,
+    authorization, ledger, types, validate_entry, Company, Decimal, Employee, Error, Leave,
+    LeaveError, LeaveType, LedgerEntry, MutationTransaction, NewEntry, Result, Rules, Scope,
     POLICIES_MANAGE,
 };
 use bilibi_tenancy::ReadClient;
@@ -48,7 +48,7 @@ impl Leave {
         new: &NewEntry,
     ) -> Result<EntryFacts> {
         authorization::authorize(client, scope, company_id, POLICIES_MANAGE).await?;
-        organisation::require_writable(client, scope, company_id, false).await?;
+        bilibi_company::require_writable(client, scope, company_id, false).await?;
         let company = self.current_company(scope, company_id).await?;
         let employee = self
             .current_employee(scope, company_id, employee_id)
@@ -138,7 +138,7 @@ impl Leave {
         new: &NewEntry,
     ) -> Result<RecordedEntry> {
         serialize(tx.sql(), scope, company_id).await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let facts = self
             .entry_facts(tx.sql(), scope, company_id, employee_id, new)
             .await?;
