@@ -1,5 +1,6 @@
 //! PV3: real People approvals for the Finance FY1 composition walkthrough.
 //! Mirrors Bilimbi's Payroll and Claims facade workflows; no Finance dependency.
+use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates, OrganisationId};
 use bilibi_authz::grants::Grants;
 use bilibi_database::pool;
 use bilibi_module_registry::Services;
@@ -10,7 +11,8 @@ use bilibi_people_organisation::{NewAssignment, NewPosition, NewVersion, Organis
 use bilibi_people_payroll::{NewClassification, NewContribution, NewItem, NewPeriod, Payroll};
 use bilibi_people_reference_data::{NewEntry, ReferenceData};
 use bilibi_people_workforce::{NewEmployment, Workforce};
-use bilibi_tenancy::Authentication;
+use bilibi_person::{PersonInput, PersonKind, PersonService};
+use bilibi_tenancy::{Authentication, Scope};
 use jiff::civil::date;
 use std::sync::Arc;
 
@@ -50,6 +52,18 @@ async fn main() -> Outcome<()> {
         }
     }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
+    if std::env::args().nth(2).as_deref() == Some("directory") {
+        let employees = workforce.employees(&admin, 1).await?.require_current()?;
+        let supervisor = employees
+            .iter()
+            .find(|e| e.employee_number == "PV3-001")
+            .ok_or("create the composition source records first")?
+            .reference
+            .stable_id
+            .parse()?;
+        companion(&services, &workforce, &admin, supervisor).await?;
+        return Ok(());
+    }
     services
         .get::<ReferenceData>(bilibi_people_reference_data::SERVICE)?
         .create_entry(
@@ -58,6 +72,7 @@ async fn main() -> Outcome<()> {
             &NewEntry::new("employment_type", "pv3_type", "Composition proof type"),
         )
         .await?;
+    companion(&services, &workforce, &admin, employee.id).await?;
     let employee = workforce
         .create_employment(
             &admin,
@@ -244,5 +259,61 @@ async fn main() -> Outcome<()> {
         }
     }
     println!("PV3: employment, exact payroll approval, three claim approvals and reimbursement committed through People facades");
+    Ok(())
+}
+
+async fn companion(
+    services: &Services,
+    workforce: &Workforce,
+    admin: &Scope,
+    supervisor: i64,
+) -> Outcome<()> {
+    let employees = workforce.employees(admin, 1).await?.require_current()?;
+    if employees.iter().any(|e| e.employee_number == "PV3-002") {
+        return Ok(());
+    }
+    let person = services
+        .get::<PersonService>(bilibi_person::SERVICE)?
+        .create(
+            admin,
+            &PersonInput {
+                name: "Composition employee".into(),
+                kind: PersonKind::Human,
+                email: None,
+                phone: None,
+            },
+        )
+        .await?;
+    let affiliation = services
+        .get::<AffiliationService>(bilibi_affiliation::SERVICE)?
+        .create(
+            admin,
+            &AffiliationInput {
+                person_id: person.id,
+                organisation_id: OrganisationId::new(1)?,
+                title: None,
+                work_email: None,
+                work_phone: None,
+                dates: EffectiveDates::new(None, None)?,
+            },
+        )
+        .await?;
+    workforce
+        .create_employment(
+            admin,
+            1,
+            &NewEmployment {
+                supervisor_employment_id: Some(supervisor),
+                ..NewEmployment::new(
+                    person.id.get(),
+                    affiliation.id.get(),
+                    "PV3-002",
+                    "pv3_type",
+                    "active",
+                )
+            },
+        )
+        .await?;
+    println!("PV3: second working employee and supervisor link created through Core and Workforce");
     Ok(())
 }
