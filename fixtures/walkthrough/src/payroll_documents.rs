@@ -108,6 +108,11 @@ pub async fn run(url: &str) -> Result<()> {
         .await?;
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
     let grants = services.get::<Grants>("base/authz.grants")?;
+    // Calculation proofs temporarily use this account as an independent
+    // operator. Establish both document denials this proof is checking.
+    for key in [MANAGE, VIEW] {
+        grants.set_direct(&admin, VIEWER, key, Some(false)).await?;
+    }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let employees = workforce
         .employees(&manager, COMPANY)
