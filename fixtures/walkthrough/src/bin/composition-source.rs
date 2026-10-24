@@ -72,7 +72,6 @@ async fn main() -> Outcome<()> {
             &NewEntry::new("employment_type", "pv3_type", "Composition proof type"),
         )
         .await?;
-    companion(&services, &workforce, &admin, employee.id).await?;
     let employee = workforce
         .create_employment(
             &admin,
@@ -80,6 +79,7 @@ async fn main() -> Outcome<()> {
             &NewEmployment::new(1, 1, "PV3-001", "pv3_type", "active"),
         )
         .await?;
+    companion(&services, &workforce, &admin, employee.id).await?;
     let organisation = services.get::<Organisation>(bilibi_people_organisation::SERVICE)?;
     let position = organisation
         .create_position(&manager, 1, &NewPosition::new("PV3-position"))
