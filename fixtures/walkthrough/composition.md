@@ -15,7 +15,9 @@ python3 scripts/discover-modules.py
 cargo run -p bilibi-people-walkthrough --bin composition-source -- MYR
 ```
 
-`MYR` is the current Finance walkthrough's book currency, not a product default. The fixture creates an employment, approves `FY1-run` independently with `12.345678 × 1.234567`, approves three claims of `80.00`, and reimburses the last claim. All writes use the owning People facades. Its dates match Finance's 2026 walkthrough fiscal year. Use this command once per disposable database.
+`MYR` is the current Finance walkthrough's book currency, not a product default. The fixture creates two working employees with a supervisor link and a versioned substantive position. It approves `FY1-run` independently with `12.345678 × 1.234567`, approves three claims of `80.00`, and reimburses the last claim. All writes use the owning facades. Its dates match Finance's 2026 walkthrough fiscal year. Use this command once per disposable database.
+
+The connector's native sweep requires at least two employees in the selected company. If you already created the earlier one-employee composition fixture, `composition-source MYR directory` adds only the missing second employee through Core and Workforce, without repeating the approvals. It returns unchanged when that employee is already present.
 
 ## Check each composition
 
@@ -48,7 +50,9 @@ Require `status` to show the pinned Platform commit and each mounted Domain comm
 
 ## Run the gates
 
-Run the Platform's `scripts/domain-ci.sh` on a separate empty database for People alone, the connector alone, People with the connector, and People with Finance. Each run must pass discovery, committed CSS, pinning, format, Clippy, the locked release build, migration, production seeds and `GET /`. Set a private `DOMAIN_CI_PORT` for the boot check.
+Run the Platform's `scripts/domain-ci.sh` on a separate empty database for People alone, the connector alone, People with the connector, and People with Finance. Keep its gate list unchanged: discovery, committed CSS, pinning, format, Clippy, build, migration, production seeds and `GET /`. Set a private `DOMAIN_CI_PORT` for the boot check.
+
+The script's default profile builds the whole workspace in release mode. `DOMAIN_CI_BUILD=check` uses the official pull-request profile and boots the debug app instead. You can use that profile for additional composed gates after the Domain release gates pass; still restore the pin and build the release web binary for every composition above.
 
 Open the mounted pages and their absent-source states in Chrome using the same disposable records. Preserve logs and screenshots outside the repositories. Check both repositories' forge CI jobs, including the connector's two topologies.
 
