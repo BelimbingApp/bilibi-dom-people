@@ -825,6 +825,7 @@ impl Policies {
                     requests.backdate_days,
                 )
                 .kind(InputKind::Number)
+                .attr("aria-label", "Requests may start up to days before today")
                 .required()
                 .attr("min", "0")
                 .attr("max", "366"),
@@ -899,9 +900,11 @@ impl Policies {
                 vec![
                     self.field("create_type", "type[code]", "leave-type-code", "Code", "")
                         .required()
+                        .attr("aria-label", "Leave type code")
                         .attr("maxlength", "40"),
                     self.field("create_type", "type[name]", "leave-type-name", "Name", "")
                         .required()
+                        .attr("aria-label", "Leave type name")
                         .attr("maxlength", "120"),
                     self.field(
                         "create_type",
@@ -911,6 +914,7 @@ impl Policies {
                         "day",
                     )
                     .kind(InputKind::Select)
+                    .attr("aria-label", "Leave type unit")
                     .options(choices(&[("Days", "day"), ("Hours", "hour")])),
                     Field::in_form("type", "paid")
                         .id("leave-type-paid")
