@@ -67,5 +67,40 @@ async fn main() -> Result<()> {
     println!(
         "Browser records and employment links are kept; use the Platform walkthrough password."
     );
+    if std::env::args().nth(1).as_deref() == Some("candidate") {
+        let person = services
+            .get::<bilibi_person::PersonService>(bilibi_person::SERVICE)?
+            .create(
+                &admin,
+                &bilibi_person::PersonInput {
+                    name: "Browser employee".into(),
+                    kind: bilibi_person::PersonKind::Human,
+                    email: None,
+                    phone: None,
+                },
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
+        let affiliation = services
+            .get::<bilibi_affiliation::AffiliationService>(bilibi_affiliation::SERVICE)?
+            .create(
+                &admin,
+                &bilibi_affiliation::AffiliationInput {
+                    person_id: person.id,
+                    organisation_id: bilibi_party_ids::OrganisationId::new(1)
+                        .map_err(|_| Error::Invalid)?,
+                    title: None,
+                    work_email: None,
+                    work_phone: None,
+                    dates: bilibi_affiliation::EffectiveDates::new(None, None)
+                        .map_err(|_| Error::Invalid)?,
+                },
+            )
+            .await?;
+        println!(
+            "Add employment candidate: Browser employee; person {}; affiliation {} at Company 001",
+            person.id, affiliation.id
+        );
+    }
     Ok(())
 }
