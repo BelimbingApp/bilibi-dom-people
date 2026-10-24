@@ -1,7 +1,7 @@
 //! PU1 browser accounts on an already installed disposable People walkthrough.
 //! Mirrors Bilimbi's manager and viewer permission states, through Base Authz.
 use bilibi_authz::grants::Grants;
-use bilibi_database::{Error, Result, pool};
+use bilibi_database::{pool, Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_tenancy::Authentication;
 use std::sync::Arc;
@@ -49,7 +49,12 @@ async fn main() -> Result<()> {
     for key in grants.vocabulary().capabilities.keys() {
         if key.starts_with("people.") {
             grants.set_direct(&admin, 1, key, Some(true)).await?;
-            let read = key.ends_with(".view") && !key.ends_with(".self.view");
+            let self_service = key.ends_with(".self.view")
+                || matches!(
+                    *key,
+                    "people.training.learning.view" | "people.training.passport.my.view"
+                );
+            let read = key.ends_with(".view") && !self_service;
             grants.set_direct(&admin, 2, key, Some(read)).await?;
         }
     }
