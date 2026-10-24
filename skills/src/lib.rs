@@ -64,7 +64,7 @@ pub use contributions::{
 pub use policy::{Policy, PolicyChanges, POLICY_KEYS};
 pub use reminder_types::*;
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_people_workforce::{authorization, NotCurrent, Workforce, WorkforceError};
 use bilibi_settings::Settings;
@@ -1515,7 +1515,7 @@ impl Skills {
                 scope.mutation_context(format!("people.skills.{action}")),
             )
             .await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         // A grant may have been revoked while this write waited for the
         // company lock. Authorize again on the transaction before mutating.
         authorization::authorize(tx.sql(), scope, company_id, capability).await?;

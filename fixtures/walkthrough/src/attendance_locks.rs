@@ -1,7 +1,6 @@
 //! Running-database proof: a clock or rules write waiting on the company
 //! lock must observe a rule change or capability revocation ahead of it.
 use super::{COMPANY, MANAGER, STAFF};
-use bilibi_company::organisation;
 use bilibi_database::{Db, Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_attendance::RULES_MANAGE;
@@ -53,7 +52,7 @@ pub(super) async fn run(
             admin.mutation_context("walkthrough.attendance.location_rule"),
         )
         .await?;
-    organisation::require_writable(tx.sql(), admin, COMPANY, true)
+    bilibi_company::require_writable(tx.sql(), admin, COMPANY, true)
         .await
         .map_err(|_| Error::Internal)?;
     let holder = tx
@@ -120,7 +119,7 @@ pub(super) async fn run(
             admin.mutation_context("walkthrough.attendance.revoke"),
         )
         .await?;
-    organisation::require_writable(tx.sql(), admin, COMPANY, true)
+    bilibi_company::require_writable(tx.sql(), admin, COMPANY, true)
         .await
         .map_err(|_| Error::Internal)?;
     grants

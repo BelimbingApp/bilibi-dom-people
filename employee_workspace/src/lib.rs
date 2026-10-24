@@ -409,7 +409,7 @@ impl EmployeeWorkspace {
             .await?;
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         let view = store::validate_view(view)?;
-        bilibi_company::organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         let result = store::insert_view(&mut tx, scope, company_id, view).await?;
         tx.commit().await?;
@@ -425,7 +425,7 @@ impl EmployeeWorkspace {
             )
             .await?;
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
-        bilibi_company::organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         authorization::authorize(tx.sql(), scope, company_id, VIEW).await?;
         store::delete_view(&mut tx, scope, company_id, view_id).await?;
         tx.commit().await?;

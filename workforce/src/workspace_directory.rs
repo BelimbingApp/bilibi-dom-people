@@ -4,7 +4,6 @@ use crate::{
     authorization, employments, live_company, Employee, ReadResult, Result, Workforce,
     WorkforceError, EMPLOYEE_STATUSES,
 };
-use bilibi_company::organisation;
 use bilibi_database::{Error, MutationTransaction};
 use bilibi_tenancy::Scope;
 use serde::{Deserialize, Serialize};
@@ -83,7 +82,7 @@ impl Workforce {
         company_id: i64,
         employee_id: i64,
     ) -> Result<()> {
-        organisation::require_writable(tx.sql(), scope, company_id, false).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, false).await?;
         let employee = employments::find(tx.sql(), scope.tenant(), company_id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?
@@ -104,7 +103,7 @@ impl Workforce {
                 return Err(WorkforceError::AffiliationMismatch);
             }
         }
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?;

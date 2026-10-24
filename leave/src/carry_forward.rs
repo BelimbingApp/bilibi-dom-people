@@ -61,7 +61,7 @@ impl Leave {
                     .begin(&mut client, "people.leave.carry_forward")
                     .await?;
                 crate::entries::serialize(tx.sql(), scope, company_id).await?;
-                crate::organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+                bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
                 tx
             }
             None => {

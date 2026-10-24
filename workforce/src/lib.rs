@@ -61,7 +61,7 @@ pub use positions::{
 pub use read_result::{Freshness, NotCurrent, ReadResult};
 
 use bilibi_affiliation::AffiliationService;
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary};
 use bilibi_party_ids::{AffiliationId, OrganisationId, PersonId};
 use bilibi_person::PersonKind;
@@ -409,7 +409,7 @@ impl Workforce {
                 scope.mutation_context("people.workforce.put_working_statuses"),
             )
             .await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         // A grant may have been revoked while this write waited for the
         // company lock. Judge it on the transaction after that wait.
         authorization::authorize(tx.sql(), scope, company_id, SETTINGS_MANAGE).await?;
@@ -786,7 +786,7 @@ impl Workforce {
             .await?;
         // Classify an archived company before the proof locks anything: the
         // proof answers every refusal as Forbidden.
-        organisation::require_writable(tx.sql(), scope, company_id, false).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, false).await?;
         let tenant = scope.tenant();
         let company = OrganisationId::new(company_id)?;
         {
@@ -803,19 +803,16 @@ impl Workforce {
             if identity.organisation() != company || identity.person().get() != new.person_id {
                 return Err(WorkforceError::AffiliationMismatch);
             }
-            let person = bilibi_person::identity::lock_for_account_binding(
-                &tx,
-                scope,
-                PersonId::new(new.person_id)?,
-            )
-            .await?;
+            let person =
+                bilibi_person::lock_for_account_binding(&tx, scope, PersonId::new(new.person_id)?)
+                    .await?;
             if person.kind() != PersonKind::Human {
                 return Err(WorkforceError::NotHuman);
             }
         }
         // The proof locked the company writable in the global order; this is
         // the explicit company lock every People write holds.
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         let statuses = self
             .working_statuses_of(tx.sql(), scope, company_id)
@@ -871,7 +868,7 @@ impl Workforce {
                 scope.mutation_context("people.workforce.update_employment"),
             )
             .await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         authorization::authorize(tx.sql(), scope, company_id, EMPLOYMENT_MANAGE).await?;
         let tenant = scope.tenant();
         let current = employments::lock(tx.sql(), tenant, company_id, employee_id)
