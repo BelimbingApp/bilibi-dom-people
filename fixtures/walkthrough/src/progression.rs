@@ -727,7 +727,7 @@ pub async fn run(url: &str) -> Result<()> {
     let company = match companies
         .create_company(
             &admin,
-            &bilibi_company::organisation::NewCompany {
+            &bilibi_company::NewCompany {
                 name: "PG1 archive proof".into(),
                 code: Some("pg1-archive".into()),
                 ..Default::default()
@@ -735,7 +735,7 @@ pub async fn run(url: &str) -> Result<()> {
         )
         .await?
     {
-        bilibi_company::organisation::CreateOutcome::Created(company) => company,
+        bilibi_company::CreateOutcome::Created(company) => company,
         other => {
             eprintln!("PG1 company refused: {other:?}");
             return Err(Error::Internal);

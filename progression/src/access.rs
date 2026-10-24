@@ -1,6 +1,5 @@
 //! Bilimbi Progression authorization, report reach and owner projections.
 use crate::{Progression, ProgressionError as E, Result, Write};
-use bilibi_company::organisation;
 use bilibi_people_workforce::authorization;
 use bilibi_tenancy::Scope;
 use tokio_postgres::{Client, GenericClient};
@@ -45,7 +44,7 @@ impl Progression {
                 scope.mutation_context(format!("people.progression.{action}")),
             )
             .await?;
-        organisation::require_writable(tx.sql(), scope, company, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company, true).await?;
         self.authorize(tx.sql(), scope, company, capability).await?;
         Ok(Write {
             tx,

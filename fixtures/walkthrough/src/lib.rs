@@ -998,7 +998,7 @@ async fn pw1(
     staff_employment: &Employment,
     contractor_employment: &Employment,
 ) -> Result<()> {
-    use bilibi_company::{departments, reference_types, CompanyService};
+    use bilibi_company::CompanyService;
     use bilibi_people_workforce::{EmploymentChange, PositionScan};
 
     let workforce = services.get::<Workforce>(SERVICE)?;
@@ -1058,7 +1058,7 @@ async fn pw1(
     let department = match companies
         .create_department_type(
             admin,
-            &reference_types::NewType {
+            &bilibi_company::NewType {
                 code: "PEOPLE-WALK".into(),
                 name: "Walkthrough operations".into(),
                 category: Some("operational".into()),
@@ -1068,13 +1068,13 @@ async fn pw1(
         )
         .await?
     {
-        reference_types::Outcome::Saved(department_type) => {
+        bilibi_company::TypeOutcome::Saved(department_type) => {
             match companies
                 .create_department(admin, COMPANY, department_type.id, "active")
                 .await
             {
-                Ok(departments::Outcome::Saved(department)) => Some(department),
-                Ok(departments::Outcome::Refused(errors)) => {
+                Ok(bilibi_company::DepartmentOutcome::Saved(department)) => Some(department),
+                Ok(bilibi_company::DepartmentOutcome::Refused(errors)) => {
                     println!("admin adds the Walkthrough operations department to Company 001: refused ({errors:?})");
                     None
                 }
@@ -1084,7 +1084,7 @@ async fn pw1(
                 }
             }
         }
-        reference_types::Outcome::Refused(errors) => {
+        bilibi_company::TypeOutcome::Refused(errors) => {
             println!("admin creates the department type PEOPLE-WALK: refused ({errors:?})");
             None
         }

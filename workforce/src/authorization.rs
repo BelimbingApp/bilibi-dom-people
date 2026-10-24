@@ -15,7 +15,7 @@
 //! acts through `bilibi_authz::SystemScope`, a different type, so a system
 //! scope cannot reach these helpers at all, which is Bilimbi's "system scope
 //! refused". The capability is evaluated now, by Base Authz, and the company
-//! axis by Core Company's `organisation::authorize_target` with that same
+//! axis by Core Company's `bilibi_company::authorize_target` with that same
 //! actor: the actor's own company, or any other company of the tenant with
 //! `admin.company.tenant-wide.manage`.
 //!
@@ -27,7 +27,7 @@
 //! that holds the employment row's lock, so a self-service write cannot
 //! commit for an employee the account no longer belongs to.
 use crate::{CompanySummary, Result, Workforce, WorkforceError};
-use bilibi_company::organisation::{self, Directory};
+use bilibi_company::Directory;
 use bilibi_database::{Error, MutationTransaction};
 use bilibi_party_ids::OrganisationId;
 use bilibi_tenancy::{OrganisationDirectory, ProofClient, Scope};
@@ -46,7 +46,7 @@ pub async fn authorize(
     company_id: i64,
     capability: &str,
 ) -> Result<i64> {
-    organisation::authorize_target(client, scope, company_id, capability)
+    bilibi_company::authorize_target(client, scope, company_id, capability)
         .await
         .map_err(refusal)
 }
@@ -123,7 +123,7 @@ pub(crate) async fn summary(
     scope: &Scope,
     company_id: i64,
 ) -> Result<Option<CompanySummary>> {
-    let Some(identity) = organisation::identity(client, scope, company_id).await? else {
+    let Some(identity) = bilibi_company::identity(client, scope, company_id).await? else {
         return Ok(None);
     };
     let Some(named) = Directory
@@ -213,7 +213,7 @@ impl Workforce {
         company_id: i64,
         employee_id: i64,
     ) -> Result<()> {
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?;
@@ -230,7 +230,7 @@ impl Workforce {
         company_id: i64,
         employee_id: i64,
     ) -> Result<()> {
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?;
@@ -289,7 +289,7 @@ impl Workforce {
     ) -> Result<SelfEmployee> {
         authorize(tx.sql(), scope, company_id, capability).await?;
         let me = self.self_employee_on(tx.sql(), scope, company_id).await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, me.employee_id)
             .await?
             .ok_or(WorkforceError::NotLinked)?;
@@ -318,7 +318,7 @@ impl Workforce {
         capability: &str,
     ) -> Result<bool> {
         authorize(tx.sql(), scope, company_id, capability).await?;
-        organisation::require_writable(tx.sql(), scope, company_id, true).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let employee = crate::employments::lock(tx.sql(), scope.tenant(), company_id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?;
