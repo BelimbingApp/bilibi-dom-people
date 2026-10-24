@@ -838,6 +838,7 @@ impl Catalog {
                             .attr("maxlength", "2000"),
                         field("skill[reassessment_months]", "Reassess every (months)")
                             .kind(InputKind::Number)
+                            .attr("aria-label", "Reassess every months")
                             .attr("min", "1")
                             .attr("max", "120"),
                         field("skill[evidence_guide]", "Evidence guide")
