@@ -631,13 +631,15 @@ impl Setup {
             _ => ("claim-policy-form", "create_policy", "Add policy"),
         };
         let f = |name: &str, label: &str, kind: InputKind| self.field(id, name, label, kind);
-        let code_name = |namespace: &str| {
+        let code_name = |namespace: &str, context: &str| {
             vec![
                 f(&format!("{namespace}[code]"), "Code", InputKind::Text)
                     .required()
+                    .attr("aria-label", format!("{context} code"))
                     .attr("maxlength", "60"),
                 f(&format!("{namespace}[name]"), "Name", InputKind::Text)
                     .required()
+                    .attr("aria-label", format!("{context} name"))
                     .attr("maxlength", "120"),
             ]
         };
@@ -650,7 +652,7 @@ impl Setup {
                 }
                 field
             }],
-            1 => code_name("category"),
+            1 => code_name("category", "Category"),
             2 => {
                 if self.categories.is_empty() {
                     return Ok(Html::text("Add a category before adding claim types."));
@@ -666,7 +668,7 @@ impl Setup {
                         .map(|c| Choice::new(&c.name, c.id.to_string()))
                         .collect(),
                 )];
-                fields.extend(code_name("claim_type"));
+                fields.extend(code_name("claim_type", "Claim type"));
                 fields.push(
                     f(
                         "claim_type[receipt_requirement]",
@@ -696,7 +698,7 @@ impl Setup {
                 fields
             }
             3 => {
-                let mut fields = code_name("assignment");
+                let mut fields = code_name("assignment", "Assignment");
                 fields.push(
                     f(
                         "assignment[effective_from]",
@@ -743,6 +745,14 @@ impl Setup {
                 ] {
                     fields.push(
                         f(&format!("policy[{key}]"), label, InputKind::Text)
+                            .attr(
+                                "aria-label",
+                                if key == "receipt_threshold" {
+                                    "Receipt threshold"
+                                } else {
+                                    label
+                                },
+                            )
                             .attr("inputmode", "decimal"),
                     );
                 }
