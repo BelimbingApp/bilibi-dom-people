@@ -6,6 +6,7 @@ use bilibi_module_registry::Services;
 use bilibi_people_claims::{
     Approval, Claims, NewCategory, NewClaimType, NewPolicy, NewRequest, Reimbursement,
 };
+use bilibi_people_organisation::{NewAssignment, NewPosition, NewVersion, Organisation};
 use bilibi_people_payroll::{NewClassification, NewContribution, NewItem, NewPeriod, Payroll};
 use bilibi_people_reference_data::{NewEntry, ReferenceData};
 use bilibi_people_workforce::{NewEmployment, Workforce};
@@ -62,6 +63,36 @@ async fn main() -> Outcome<()> {
             &admin,
             1,
             &NewEmployment::new(1, 1, "PV3-001", "pv3_type", "active"),
+        )
+        .await?;
+    let organisation = services.get::<Organisation>(bilibi_people_organisation::SERVICE)?;
+    let position = organisation
+        .create_position(&manager, 1, &NewPosition::new("PV3-position"))
+        .await?;
+    organisation
+        .record_version(
+            &manager,
+            1,
+            position.id,
+            &NewVersion {
+                version: 1,
+                title: "Composition position".into(),
+                effective_from: date(2026, 1, 1),
+                effective_to: None,
+            },
+        )
+        .await?;
+    organisation
+        .assign(
+            &manager,
+            1,
+            position.id,
+            &NewAssignment {
+                employee_id: employee.id,
+                kind: "substantive".into(),
+                effective_from: date(2026, 1, 1),
+                effective_to: None,
+            },
         )
         .await?;
     let payroll = services.get::<Payroll>(bilibi_people_payroll::SERVICE)?;
