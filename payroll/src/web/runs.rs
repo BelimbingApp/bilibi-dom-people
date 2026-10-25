@@ -143,11 +143,12 @@ impl RunState {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let c = self.core.db.get().await?;
-        self.companies = match authorization::selectable_companies(&**c, scope, VIEW).await {
-            Ok(companies) => companies.into_iter().filter(|c| !c.archived).collect(),
-            Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),
-            Err(_) => vec![],
-        };
+        self.companies =
+            match authorization::company_choices(&**c, scope, VIEW, self.company_id).await {
+                Ok(companies) => companies,
+                Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),
+                Err(_) => vec![],
+            };
         drop(c);
         if self.company_id.is_none() {
             self.company_id = self.companies.first().map(|c| c.id);

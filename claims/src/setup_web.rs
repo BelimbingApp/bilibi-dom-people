@@ -216,7 +216,14 @@ impl Setup {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let client = self.claims.db.get().await?;
-        self.companies = match authorization::selectable_companies(&**client, scope, MANAGE).await {
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            MANAGE,
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
+        {
             Ok(rows) => rows,
             Err(WorkforceError::Failed(e)) => return Err(e),
             Err(_) => vec![],

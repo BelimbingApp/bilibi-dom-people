@@ -110,9 +110,10 @@ impl SettingsPage {
     }
     async fn load(&mut self, scope: &Scope, choose_default: bool) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = authorization::selectable_companies(&**client, scope, SETTINGS_MANAGE)
-            .await
-            .map_err(failed)?;
+        self.companies =
+            authorization::company_choices(&**client, scope, SETTINGS_MANAGE, self.company_id)
+                .await
+                .map_err(failed)?;
         // The facade rents its own connection for the reads below.
         drop(client);
         if choose_default && !self.companies.iter().any(|c| Some(c.id) == self.company_id) {

@@ -338,12 +338,14 @@ impl Learning {
     }
     async fn load(&mut self, scope: &Scope) -> DbResult<()> {
         let client = self.training.db.get().await?;
-        self.companies = authorization::selectable_companies(&**client, scope, self.task.cap())
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|c| !c.archived)
-            .collect();
+        self.companies = authorization::company_choices(
+            &**client,
+            scope,
+            self.task.cap(),
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
+        .unwrap_or_default();
         let selected = self
             .list
             .filters

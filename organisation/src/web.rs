@@ -189,20 +189,18 @@ impl Explorer {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = match authorization::selectable_companies(&**client, scope, VIEW).await {
-            Ok(rows) => rows.into_iter().filter(|c| !c.archived).collect(),
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            VIEW,
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
+        {
+            Ok(rows) => rows,
             Err(WorkforceError::Failed(e)) => return Err(e),
             Err(_) => vec![],
         };
-        // Workforce summaries expose archival state only. Keep Bilimbi's
-        // active-only picker with a tenant-scoped status projection, after
-        // the owner has authorised every candidate company and named it.
-        let candidates: Vec<i64> = self.companies.iter().map(|c| c.id).collect();
-        let active: Vec<i64> = client.query(
-            "SELECT id FROM companies WHERE tenant_id=$1 AND id=ANY($2) AND status='active' AND deleted_at IS NULL",
-            &[&scope.tenant(), &candidates],
-        ).await?.iter().map(|r| r.get(0)).collect();
-        self.companies.retain(|c| active.contains(&c.id));
         let requested = &self.list.filters["company_id"];
         self.company = if requested.is_empty() {
             self.companies.first().cloned()

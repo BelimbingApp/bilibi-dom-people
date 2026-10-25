@@ -81,14 +81,20 @@ impl Approvals {
     }
     pub(super) async fn load(&mut self, scope: &Scope, rows_changed: bool) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies =
-            match authorization::selectable_companies(&**client, scope, REQUESTS_APPROVE).await {
-                Ok(companies) => companies.into_iter().filter(|c| !c.archived).collect(),
-                Err(error) => {
-                    refusal(error.into())?;
-                    vec![]
-                }
-            };
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            REQUESTS_APPROVE,
+            self.company_id,
+        )
+        .await
+        {
+            Ok(companies) => companies,
+            Err(error) => {
+                refusal(error.into())?;
+                vec![]
+            }
+        };
         // Choose the first active company only at mount. Losing an existing
         // company's reach must withdraw its records, never switch a confirmation.
         if self.company_id.is_none() {

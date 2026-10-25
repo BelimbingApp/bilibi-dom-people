@@ -212,8 +212,10 @@ impl State {
     async fn load(&mut self, scope: &Scope, changed: bool) -> Result<()> {
         let c = self.core.db.get().await?;
         self.companies =
-            match authorization::selectable_companies(&**c, scope, self.area.capability()).await {
-                Ok(values) => values.into_iter().filter(|v| !v.archived).collect(),
+            match authorization::company_choices(&**c, scope, self.area.capability(), self.company)
+                .await
+            {
+                Ok(values) => values,
                 Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),
                 _ => vec![],
             };

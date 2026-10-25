@@ -235,7 +235,13 @@ impl Operations {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = match authorization::selectable_companies(&**client, scope, APPROVE).await
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            APPROVE,
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
         {
             Ok(rows) => rows,
             Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),

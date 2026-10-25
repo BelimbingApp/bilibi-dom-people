@@ -130,7 +130,7 @@ Freeze setup asks for confirmation before preserving a period and currency. Lock
 
 The Payroll runs link is shared with the run page delivered by PY5. Page writes declare a `Pending::Every` allowance until their operation contracts are reviewed.
 
-Company choices use Workforce's authorized selectable companies and exclude archived companies. Workforce's public summary currently exposes only the archived flag. Matching Bilimbi's active-only company filter also needs the full company status from its owner; the pages do not query Core's table or require an extra administration grant to infer it.
+Company choices use Workforce's `authorization::company_choices`: active companies plus the already-selected pending or suspended company when still authorized; archived companies are never offered. Core supplies the lifecycle status through Workforce's summary; the pages never query Core's company table. Existing read and write rules still apply to the selected company's records.
 
 For the page proof, run `cargo run -p bilibi-people-walkthrough --bin payroll_pages` against a fresh disposable database. It installs the Platform fixture and exercises the mounted page services with real database writes: each add form, exact decimals, field errors, both source mappings, a future attendance rule, overlap refusals, freeze cancellation and forged parameters, company switching, revoked permission before locking, and a read-only viewer. The resulting accounts can then be used for browser checks.
 

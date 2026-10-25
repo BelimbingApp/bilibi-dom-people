@@ -45,7 +45,7 @@ records; the schema is private.
 Every read exposes only a live company of the scope's tenant: a missing,
 deleted, archived, cross-tenant or malformed company id is `NotFound`, and
 they are indistinguishable. (Core Company's capability-free reads tell
-whether a company is archived, so a pending or suspended company is
+whether a company is archived and its status, so a pending or suspended company is
 visible here, as its accounts are not frozen either.) The working-staff
 reads need no capability, as Bilimbi's do: they reveal only the employees
 in the company's working statuses, and only the facts below.
@@ -93,8 +93,9 @@ so a system scope cannot reach these helpers at all.
 | Function | Does |
 | --- | --- |
 | `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `organisation::authorize_target`: the actor's own company, or any company of the tenant with `admin.company.tenant-wide.manage`). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
-| `authorize_company(..)` | The same, returning the `CompanySummary` (id, name, code, archived) for a page that renders it |
+| `authorize_company(..)` | The same, returning the `CompanySummary` (id, name, code, status, archived) for a page that renders it |
 | `selectable_companies(client, scope, capability)` | The unarchived companies the actor may target with the capability, by name (Bilimbi `list_selectable_companies/2`): none without the capability, the own company, or the whole tenant with the tenant-wide reach |
+| `company_choices(client, scope, capability, selected)` | Active companies for a People company chooser, plus the already-selected pending or suspended company if Core still authorizes it. Archived companies are never offered, even when selected or deep-linked. Keep the selection from server state or the addressed record, never a write form. Record discovery keeps using `selectable_companies` so existing records remain reachable |
 | `allowed(..)` | Whether `authorize` would succeed, for deciding which controls a page renders; never authority for an operation |
 
 A page rechecks its route capability before acting and a `can_*` only
@@ -353,7 +354,7 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 
 ## Workforce settings page
 
-Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser includes only unarchived companies you may manage. Core’s current capability-free company directory supplies an archived flag, so this includes pending and suspended companies too; matching Bilimbi’s active-only filter needs Core to expose the company status through that directory. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
+Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser offers active companies you may manage through `authorization::company_choices`. An already-selected pending or suspended company stays named and keeps its existing read and write rules; an archived company is never offered. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
 
 Save requires at least one of Pending, Probation, Active, Inactive and Terminated. The write checks permission again inside its mutation transaction and holds the writable company lock before saving through Base Settings. Success says “Working statuses saved.”; an empty selection says “Choose at least one employee status.” A revoked grant or archived company refuses the next save. Settings and employment writes recheck their permission after obtaining the company lock, including a write that waited while its grant was revoked.
 

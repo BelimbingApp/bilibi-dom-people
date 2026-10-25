@@ -242,7 +242,14 @@ impl Employees {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = match authorization::selectable_companies(&**client, scope, VIEW).await {
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            VIEW,
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
+        {
             Ok(companies) => companies,
             Err(WorkforceError::Failed(error)) => return Err(error),
             Err(_) => vec![],

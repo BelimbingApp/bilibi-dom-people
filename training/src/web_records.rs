@@ -297,13 +297,14 @@ impl Records {
         self.passport_employees.clear();
         self.passport = None;
         let client = self.training.db.get().await?;
-        self.companies =
-            authorization::selectable_companies(&**client, scope, self.task.capability())
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|c| !c.archived)
-                .collect();
+        self.companies = authorization::company_choices(
+            &**client,
+            scope,
+            self.task.capability(),
+            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
+        )
+        .await
+        .unwrap_or_default();
         let requested = self
             .list
             .filters

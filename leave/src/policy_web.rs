@@ -285,15 +285,18 @@ impl Policies {
     }
     async fn access(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies =
-            match authorization::selectable_companies(&**client, scope, POLICIES_MANAGE).await {
-                Ok(rows) => rows
-                    .into_iter()
-                    .filter(|company| !company.archived)
-                    .collect(),
-                Err(WorkforceError::Failed(error)) => return Err(error),
-                Err(_) => vec![],
-            };
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            POLICIES_MANAGE,
+            self.company_id,
+        )
+        .await
+        {
+            Ok(rows) => rows,
+            Err(WorkforceError::Failed(error)) => return Err(error),
+            Err(_) => vec![],
+        };
         if !self.initialized {
             if !self.companies.iter().any(|c| Some(c.id) == self.company_id) {
                 self.company_id = self.companies.first().map(|c| c.id);
