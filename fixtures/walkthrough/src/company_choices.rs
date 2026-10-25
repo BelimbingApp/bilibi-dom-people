@@ -74,7 +74,7 @@ async fn run(url: &str) -> Result<()> {
                 &NewEntry::new(
                     "employment_type",
                     "chooser",
-                    &format!("Existing {status} reference"),
+                    format!("Existing {status} reference"),
                 ),
             )
             .await
