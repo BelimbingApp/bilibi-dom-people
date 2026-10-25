@@ -120,7 +120,7 @@ async fn run(url: &str) -> Result<()> {
             authorization::company_choices(&**client, &manager, SETTINGS_MANAGE, Some(*id))
                 .await
                 .map_err(failed)?;
-        if !retained.iter().any(|c| c.id == *id && c.status == *status)
+        if retained.iter().any(|c| c.id == *id && c.status == *status) != (*status != "archived")
             || retained.iter().any(|c| c.status != "active" && c.id != *id)
         {
             return Err(Error::Internal);
@@ -154,7 +154,7 @@ async fn run(url: &str) -> Result<()> {
     {
         return Err(Error::Internal);
     }
-    println!("PASS: active-only choices, retained lifecycle context, denied capability and cross-tenant selection; manager@example.test ready for browser proof");
+    println!("PASS: active-only choices, retained pending and suspended selections, hidden archived selection, denied capability and cross-tenant selection; manager@example.test ready for browser proof");
     Ok(())
 }
 fn failed(error: bilibi_people_workforce::WorkforceError) -> Error {

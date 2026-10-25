@@ -332,7 +332,7 @@ Open both routes as the fixture manager. Use the administrator to approve the ma
 
 ## Catalog and requirement profile pages
 
-Open **People → Development → Skills** to manage a company's categories, skills, proficiency scales and requirement profiles. Choose a company first. The chooser uses Workforce's `authorization::company_choices`: active companies and the already-selected company while still authorized. Each list, including scale levels and profile targets, has the shared table controls for columns and row height. These Bilimbi lists have no search, sorting or pagination.
+Open **People → Development → Skills** to manage a company's categories, skills, proficiency scales and requirement profiles. Choose a company first. The chooser uses Workforce's `authorization::company_choices`: active companies and the already-selected pending or suspended company while still authorized; archived companies are never offered. Each list, including scale levels and profile targets, has the shared table controls for columns and row height. These Bilimbi lists have no search, sorting or pagination.
 
 Add a category and skill, then create a scale and save at least two levels numbered from zero. Publish the scale before adding a profile. Open the profile to save weighted skill requirements and choose either the whole company or positions. Requirement weights must total 100 before publication. Published versions are read-only; **Draft a new version** copies requirements and targets. The facade adopts the current version of that scale when its levels fit, and the page reports any missing levels.
 

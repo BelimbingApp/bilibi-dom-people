@@ -103,10 +103,11 @@ pub async fn selectable_companies(
 }
 
 /// Active companies for a People chooser, retaining its already-selected
-/// company after a lifecycle change. Selection is presentation, never authority:
-/// Core rechecks the capability and company reach before retaining that company.
-/// Record discovery uses [`selectable_companies`] instead, so pending and
-/// suspended companies do not hide existing records.
+/// pending or suspended company so the page does not jump. An archived company
+/// is never offered. Selection is presentation, never authority: Core rechecks
+/// the capability and company reach before retaining that company. Record
+/// discovery uses [`selectable_companies`] instead, so pending and suspended
+/// companies do not hide existing records.
 pub async fn company_choices(
     client: &(impl GenericClient + Sync),
     scope: &Scope,
@@ -117,11 +118,11 @@ pub async fn company_choices(
     companies.retain(|company| company.status == "active");
     if let Some(id) = selected.filter(|id| !companies.iter().any(|company| company.id == *id)) {
         match authorize_company(client, scope, id, capability).await {
-            Ok(company) => {
+            Ok(company) if !company.archived => {
                 companies.push(company);
                 companies.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
             }
-            Err(WorkforceError::Unauthorized | WorkforceError::NotFound) => {}
+            Ok(_) | Err(WorkforceError::Unauthorized | WorkforceError::NotFound) => {}
             Err(error) => return Err(error),
         }
     }
