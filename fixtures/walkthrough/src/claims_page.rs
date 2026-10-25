@@ -223,3 +223,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
     println!("PC3 browser proof: {action} complete");
     Ok(())
 }
+
+walkthrough_command!("claims-page", |url, argument| async move {
+    run(url, argument.unwrap_or("prepare")).await
+});

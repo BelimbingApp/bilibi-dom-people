@@ -1,9 +1,10 @@
 //! Running-database proof: a clock or rules write waiting on the company
 //! lock must observe a rule change or capability revocation ahead of it.
-use super::{COMPANY, MANAGER, RULES_MANAGE, STAFF};
+use super::{COMPANY, MANAGER, STAFF};
 use bilibi_company::organisation;
 use bilibi_database::{Db, Error, MutationBoundary, Result};
 use bilibi_module_registry::Services;
+use bilibi_people_attendance::RULES_MANAGE;
 use bilibi_people_attendance::{
     Attendance, AttendanceError, ClockInput, EventType, NewShiftTemplate, RuleChanges,
     LOCATION_REQUIRED_KEY,

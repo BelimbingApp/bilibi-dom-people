@@ -870,3 +870,22 @@ pub(crate) async fn run(
     println!("PT4 evaluation and effectiveness proof complete.");
     Ok(())
 }
+
+walkthrough_step!(
+    "training_evaluation",
+    after = ["training_learning_pages"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        // PT4: immutable evaluation, review access and disclosure-controlled snapshots.
+        crate::training_evaluation::run(
+            &ctx.services,
+            &client,
+            &ctx.admin,
+            &ctx.manager,
+            (ctx.manager_employment.id, ctx.staff_employment.id),
+        )
+        .await?;
+
+        Ok(())
+    }
+);

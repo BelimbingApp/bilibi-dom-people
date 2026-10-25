@@ -646,3 +646,7 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
     println!("PM2 page proof complete");
     Ok(())
 }
+
+walkthrough_command!("performance-pages", |url, _argument| async move {
+    run(url).await
+});

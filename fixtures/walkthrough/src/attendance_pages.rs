@@ -194,3 +194,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
     println!("PA5 browser fixture ready: company 1, week from {today}; manager and staff have two drafts and three pending requests. Manager can plan and decide; admin can independently decide the manager request; viewer has neither permission.");
     Ok(())
 }
+
+walkthrough_command!("attendance-pages", |url, _argument| async move {
+    run(url).await
+});

@@ -1,6 +1,7 @@
 //! PC5 browser records, created only through the Claims facade.
-use super::{COMPANY, MANAGER, STAFF, TENANT, VIEWER};
+use super::{ADMIN, COMPANY, MANAGER, STAFF, TENANT, VIEWER};
 use bilibi_authz::grants::Grants;
+use bilibi_database::pool;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_claims::{
@@ -10,6 +11,7 @@ use bilibi_people_claims::{
 use bilibi_tenancy::Authentication;
 use jiff::civil::date;
 use rust_decimal::Decimal;
+use std::sync::Arc;
 
 pub(super) async fn run(services: &Services) -> Result<()> {
     let auth = services.get::<Authentication>("base/tenancy.authentication")?;
@@ -218,3 +220,56 @@ pub(super) async fn run(services: &Services) -> Result<()> {
     );
     Ok(())
 }
+
+async fn command(url: &str, command: Option<&str>) -> Result<()> {
+    bilibi_base::link();
+    bilibi_core::link();
+    bilibi_domains::link();
+    bilibi_extensions::link();
+    let db = pool(url)?;
+    let client = db.get().await?;
+    let fixture: bool = client.query_one(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE tenant_id=1 AND id=1 AND email='manager@example.test') AND EXISTS(SELECT 1 FROM users WHERE tenant_id=1 AND id=4 AND email='admin@example.test')",
+        &[],
+    ).await?.get(0);
+    if !fixture {
+        return Err(Error::Invalid);
+    }
+    let modules = bilibi_module_registry::discover()?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    // The same explicit Dev mode as the default disposable walkthrough.
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
+    if let Some(command) = command {
+        let (capability, enabled) = match command {
+            "revoke-reimburse" => (bilibi_people_claims::REIMBURSE, false),
+            "restore-reimburse" => (bilibi_people_claims::REIMBURSE, true),
+            "revoke-approve" => (bilibi_people_claims::APPROVE, false),
+            "restore-approve" => (bilibi_people_claims::APPROVE, true),
+            _ => return Err(Error::Invalid),
+        };
+        let admin = services
+            .get::<Authentication>("base/tenancy.authentication")?
+            .authenticate(&**client, TENANT, ADMIN, "claim-operations-proof".into())
+            .await?;
+        services
+            .get::<Grants>("base/authz.grants")?
+            .set_direct(&admin, MANAGER, capability, Some(enabled))
+            .await?;
+        println!("PC5 manager grant {capability}: {enabled}");
+        Ok(())
+    } else {
+        drop(client);
+        run(&services).await
+    }
+}
+
+walkthrough_command!("claim-operations", |url, argument| async move {
+    command(url, argument).await
+});

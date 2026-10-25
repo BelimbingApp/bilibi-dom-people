@@ -26,6 +26,7 @@ bilibi-tenancy.workspace = true
 bilibi-user.workspace = true
 bilibi-walkthrough-fixture = { path = "../../../../../fixtures/walkthrough" }
 bilibi-web.workspace = true
+inventory.workspace = true
 jiff = "0.2.38"
 tokio.workspace = true
 tokio-postgres.workspace = true
@@ -43,7 +44,7 @@ rust_decimal.workspace = true
 # Reference data (slice PD1).
 bilibi-people-reference-data = { path = "../../reference_data" }
 
-# Skills (PK1): the catalog proof block at the end of lib.rs.
+# Skills (PK1): the catalog proof in src/skills_catalog.rs.
 bilibi-people-skills = { path = "../../skills" }
 
 # Reviewed Leave entry operation (slice PL5).

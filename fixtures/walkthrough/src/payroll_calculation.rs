@@ -961,3 +961,7 @@ async fn bounds_and_pages(
     )?;
     Ok(())
 }
+
+walkthrough_command!("payroll_calculation", |url, _argument| async move {
+    run(url).await
+});

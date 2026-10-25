@@ -837,3 +837,8 @@ pub async fn run(url: &str) -> Result<()> {
     println!("PG1 proof complete: {count} audited policy changes");
     Ok(())
 }
+
+walkthrough_command!(
+    "progression",
+    |url, _argument| async move { run(url).await }
+);

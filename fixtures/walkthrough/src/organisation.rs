@@ -918,3 +918,26 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     println!("manager's queued position write after grant revocation: refused (Access denied); no position created");
     Ok(())
 }
+
+walkthrough_step!("organisation", after = ["claims"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // ---- Organisation (PO1): positions, versions and assignments ----
+    crate::organisation::run(
+        &ctx.services,
+        &client,
+        crate::organisation::Cast {
+            admin: &ctx.admin,
+            manager: &ctx.manager,
+            viewer: &ctx.viewer,
+            company: crate::COMPANY,
+            other_company: crate::OTHER_COMPANY,
+            manager_user: crate::MANAGER,
+            manager_employment: ctx.manager_employment.id,
+            staff_employment: ctx.staff_employment.id,
+            contractor_employment: ctx.contractor_employment.id,
+        },
+    )
+    .await?;
+
+    Ok(())
+});

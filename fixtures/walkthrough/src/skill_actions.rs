@@ -862,3 +862,25 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     println!("PK3 walkthrough complete: requests, actions, independent approval, automatic closure, reach, revocation, unlink and database guards proved.");
     Ok(())
 }
+
+walkthrough_step!(
+    "skill_actions",
+    after = ["organisation_explorer"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        // PK3: independent reassessment and development-action proof block.
+        crate::skill_actions::run(
+            &ctx.services,
+            &client,
+            crate::skill_actions::Context {
+                admin: &ctx.admin,
+                manager: &ctx.manager,
+                viewer: &ctx.viewer,
+                manager_employee: ctx.manager_employment.id,
+                staff_employee: ctx.staff_employment.id,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+);

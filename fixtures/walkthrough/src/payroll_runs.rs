@@ -534,3 +534,8 @@ pub(super) async fn run(url: &str) -> Result<()> {
     println!("Browser run: /people/payroll/runs?company_id=1&run_id={} ; employee={employee}; item={}; date=2040-03-10",run_ids[2],item.id);
     Ok(())
 }
+
+walkthrough_command!(
+    "payroll-runs",
+    |url, _argument| async move { run(url).await }
+);

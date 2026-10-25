@@ -562,3 +562,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
     println!("PW2 browser fixture ready: admin@example.test, manager@example.test and viewer@example.test; password bilibi-dev.");
     Ok(())
 }
+
+walkthrough_command!("workforce-settings", |url, argument| async move {
+    run(url, argument.unwrap_or("setup")).await
+});

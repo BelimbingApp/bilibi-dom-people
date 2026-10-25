@@ -423,3 +423,23 @@ pub(crate) async fn run(
     );
     Ok(())
 }
+
+walkthrough_step!(
+    "participation",
+    after = ["employee_detail"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        // PT2: the appended participation/evidence proof block.
+        crate::participation::run(
+            &ctx.services,
+            &client,
+            &ctx.admin,
+            &ctx.manager,
+            &ctx.viewer,
+            (ctx.manager_employment.id, ctx.staff_employment.id),
+        )
+        .await?;
+
+        Ok(())
+    }
+);

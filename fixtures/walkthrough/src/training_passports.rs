@@ -1018,3 +1018,7 @@ async fn publication_unlink_race(
     )?;
     Ok(())
 }
+
+walkthrough_command!("training-passports", |url, argument| async move {
+    run(url, argument.unwrap_or("run")).await
+});

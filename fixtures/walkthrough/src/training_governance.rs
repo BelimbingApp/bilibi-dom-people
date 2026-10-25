@@ -668,3 +668,22 @@ pub async fn run(
     println!("PT3 governance proof complete.");
     Ok(())
 }
+
+walkthrough_step!(
+    "training_governance",
+    after = ["participation"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        // PT3: requests, team plans, immutable budgets and audience-filtered decisions.
+        crate::training_governance::run(
+            &ctx.services,
+            &client,
+            &ctx.admin,
+            &ctx.manager,
+            ctx.staff_employment.id,
+        )
+        .await?;
+
+        Ok(())
+    }
+);

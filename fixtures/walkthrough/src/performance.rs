@@ -841,3 +841,8 @@ pub(super) async fn run_with_pages(url: &str, pages: bool) -> Result<()> {
     }
     Ok(())
 }
+
+walkthrough_command!(
+    "performance",
+    |url, _argument| async move { run(url).await }
+);

@@ -285,3 +285,18 @@ pub(super) async fn run(
     users.logout(&login.token, &scope.csrf).await?;
     Ok(())
 }
+
+walkthrough_step!("entry_operation", after = ["leave"], |ctx| async move {
+    // Reviewed Leave entry operation (slice PL5): separate proof block.
+    crate::entry_operation::run(
+        &ctx.services,
+        &ctx.db,
+        &ctx.admin,
+        crate::COMPANY,
+        ctx.staff_employment.id,
+        ctx.contractor_employment.id,
+    )
+    .await?;
+
+    Ok(())
+});

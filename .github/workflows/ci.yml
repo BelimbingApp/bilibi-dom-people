@@ -110,6 +110,14 @@ jobs:
           cache-dependency-path: bilibi/apps/base/ui/assets/package-lock.json
       - run: npm ci --prefix apps/base/ui/assets --no-audit --no-fund
 
+      # rustfmt does not follow the fixture's generated module declarations.
+      - name: Check discovered walkthrough source formatting
+        run: >-
+          rustfmt --edition 2021 --check
+          apps/domains/people/fixtures/walkthrough/build.rs
+          apps/domains/people/fixtures/walkthrough/src/*.rs
+          apps/domains/people/fixtures/walkthrough/src/bin/*.rs
+
       # Discovery, committed CSS, Cargo.lock pinning, fmt, clippy -D warnings,
       # a debug build on a pull request or the locked release build on main,
       # migrate, seed-production, and GET /.

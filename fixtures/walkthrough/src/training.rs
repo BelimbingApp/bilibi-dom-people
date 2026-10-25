@@ -772,3 +772,18 @@ pub(crate) async fn run(
     }
     Ok(())
 }
+
+walkthrough_step!("training", after = ["claim_workflow"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // PT1: the Training catalog, under the ctx.manager's and ctx.viewer's scopes.
+    crate::training::run(
+        &ctx.services,
+        &client,
+        &ctx.admin,
+        &ctx.manager,
+        &ctx.viewer,
+    )
+    .await?;
+
+    Ok(())
+});
