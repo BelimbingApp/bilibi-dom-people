@@ -82,3 +82,9 @@ Run `cargo run -p bilibi-people-walkthrough --bin browser-accounts` after instal
 Sign in with the Platform walkthrough password. Check each People page as the manager, then as the viewer. Pages that require a write permission should refuse the viewer; record pages should hide their write controls. Use each account in light and dark themes at desktop and phone widths. Screenshots and interaction logs belong outside this repository.
 
 To try Add employment, run `cargo run -p bilibi-people-walkthrough --bin browser-accounts -- candidate`. It also creates a human Person named Browser employee and an affiliation with Company 001 through Core's services. Select that person in the dialog and finish the employment there. Each run with `candidate` creates a new person.
+
+## Company chooser lifecycle
+
+Run `cargo run -p bilibi-people-walkthrough -- company-choices` against a separate empty database. It creates active, pending, suspended and archived companies through Core, each with an existing People reference. It checks status propagation, active-only options, retention of the selected company, denied permissions and tenant isolation. The command prints each company's reference-page address.
+
+Start the app on that database and sign in as `manager@example.test` with the Platform walkthrough password. On People company choosers, only active companies appear as new choices. Open the printed pending and suspended reference addresses: the selected company and its existing reference remain visible. An archived selection keeps its company label while its records remain subject to their existing read-only and read rules. Switch to an active company and confirm the previous non-active company disappears from the choices.

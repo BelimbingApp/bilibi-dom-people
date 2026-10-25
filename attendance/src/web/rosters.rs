@@ -88,14 +88,20 @@ impl Rosters {
     }
     pub(super) async fn load(&mut self, scope: &Scope, changed: bool) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies =
-            match authorization::selectable_companies(&**client, scope, ROSTER_MANAGE).await {
-                Ok(companies) => companies.into_iter().filter(|c| !c.archived).collect(),
-                Err(error) => {
-                    refusal(error.into())?;
-                    vec![]
-                }
-            };
+        self.companies = match authorization::company_choices(
+            &**client,
+            scope,
+            ROSTER_MANAGE,
+            self.company_id(),
+        )
+        .await
+        {
+            Ok(companies) => companies,
+            Err(error) => {
+                refusal(error.into())?;
+                vec![]
+            }
+        };
         if self.company_id().is_none() {
             if let Some(company) = self.companies.first() {
                 self.list

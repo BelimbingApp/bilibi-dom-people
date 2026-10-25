@@ -77,14 +77,15 @@ impl Approvals {
     }
     pub(super) async fn load(&mut self, scope: &Scope, rows_changed: bool) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = match authorization::selectable_companies(
+        self.companies = match authorization::company_choices(
             &**client,
             scope,
             ADJUSTMENTS_APPROVE,
+            self.company_id,
         )
         .await
         {
-            Ok(companies) => companies.into_iter().filter(|c| !c.archived).collect(),
+            Ok(companies) => companies,
             Err(error) => {
                 refusal(error.into())?;
                 vec![]

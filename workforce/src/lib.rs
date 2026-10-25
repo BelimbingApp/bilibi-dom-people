@@ -353,6 +353,7 @@ pub struct CompanySummary {
     pub id: i64,
     pub name: String,
     pub code: String,
+    pub status: String,
     pub archived: bool,
 }
 

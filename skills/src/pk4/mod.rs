@@ -153,12 +153,9 @@ impl Company {
     }
     async fn load(&mut self, core: &Core, scope: &Scope, fallback: bool) -> Result<()> {
         let client = core.db.get().await?;
-        self.companies = authorization::selectable_companies(&**client, scope, CATALOG_VIEW)
+        self.companies = authorization::company_choices(&**client, scope, CATALOG_VIEW, self.id)
             .await
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|c| !c.archived)
-            .collect();
+            .unwrap_or_default();
         self.selected = self
             .companies
             .iter()

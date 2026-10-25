@@ -150,7 +150,7 @@ impl References {
     /// actor lost, or never had, withdraws the controls and the records.
     async fn refresh_access(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = authorization::selectable_companies(&**client, scope, MANAGE)
+        self.companies = authorization::company_choices(&**client, scope, MANAGE, self.company_id)
             .await
             .or_else(|error| refusal(error).map(|_| Vec::new()))?;
         self.company = match self.company_id {

@@ -102,6 +102,32 @@ pub async fn selectable_companies(
     Ok(companies)
 }
 
+/// Active companies for a People chooser, retaining its already-selected
+/// company after a lifecycle change. Selection is presentation, never authority:
+/// Core rechecks the capability and company reach before retaining that company.
+/// Record discovery uses [`selectable_companies`] instead, so pending and
+/// suspended companies do not hide existing records.
+pub async fn company_choices(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    capability: &str,
+    selected: Option<i64>,
+) -> Result<Vec<CompanySummary>> {
+    let mut companies = selectable_companies(client, scope, capability).await?;
+    companies.retain(|company| company.status == "active");
+    if let Some(id) = selected.filter(|id| !companies.iter().any(|company| company.id == *id)) {
+        match authorize_company(client, scope, id, capability).await {
+            Ok(company) => {
+                companies.push(company);
+                companies.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+            }
+            Err(WorkforceError::Unauthorized | WorkforceError::NotFound) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(companies)
+}
+
 /// Whether the actor currently holds the capability for the company, for
 /// deciding which controls to render. It is not authority for an operation:
 /// the operation calls [`authorize`] itself when it runs.
@@ -140,6 +166,7 @@ pub(crate) async fn summary(
         id: company_id,
         name: identity.display_name,
         code: identity.code,
+        status: named.status,
         archived: named.archived,
     }))
 }
