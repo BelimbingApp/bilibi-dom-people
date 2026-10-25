@@ -45,7 +45,7 @@ records; the schema is private.
 Every read exposes only a live company of the scope's tenant: a missing,
 deleted, archived, cross-tenant or malformed company id is `NotFound`, and
 they are indistinguishable. (Core Company's capability-free reads tell
-whether a company is archived, so a pending or suspended company is
+whether a company is archived and its status, so a pending or suspended company is
 visible here, as its accounts are not frozen either.) The working-staff
 reads need no capability, as Bilimbi's do: they reveal only the employees
 in the company's working statuses, and only the facts below.
@@ -95,7 +95,7 @@ so a system scope cannot reach these helpers at all.
 | `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `organisation::authorize_target`: the actor's own company, or any company of the tenant with `admin.company.tenant-wide.manage`). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
 | `authorize_company(..)` | The same, returning the `CompanySummary` (id, name, code, status, archived) for a page that renders it |
 | `selectable_companies(client, scope, capability)` | The unarchived companies the actor may target with the capability, by name (Bilimbi `list_selectable_companies/2`): none without the capability, the own company, or the whole tenant with the tenant-wide reach |
-| `company_choices(client, scope, capability, selected)` | Active companies for every People chooser, plus the already-selected pending or suspended company if Core still authorizes it. Archived companies are never offered, even when selected or deep-linked. Keep the selection from server state or the addressed record, never a write form. Record discovery keeps using `selectable_companies` so existing records remain reachable |
+| `company_choices(client, scope, capability, selected)` | Active companies for a People company chooser, plus the already-selected pending or suspended company if Core still authorizes it. Archived companies are never offered, even when selected or deep-linked. Keep the selection from server state or the addressed record, never a write form. Record discovery keeps using `selectable_companies` so existing records remain reachable |
 | `allowed(..)` | Whether `authorize` would succeed, for deciding which controls a page renders; never authority for an operation |
 
 A page rechecks its route capability before acting and a `can_*` only
