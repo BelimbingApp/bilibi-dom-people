@@ -211,4 +211,4 @@ the port above, never the other way round.
 
 The walkthrough adds 51 positions for pagination and a title that changes on 1 July 2026. Sign in as `manager@example.test`, open `/people/organisation`, and select 25 rows per page. Follow Next and Back, choose a company with no positions, and compare **As of** dates before and after the title change. Use **Assign**, cancel its confirmation, then confirm an acting assignment. End that assignment on a valid last day and confirm the change. `viewer@example.test` has view permission only and sees neither action.
 
-The active-company picker first obtains authorised summaries through Workforce. Those summaries expose archival state but no status. The page then reads only the candidate companies' active status with a tenant predicate; names still come from Core through Workforce.
+The company picker uses Workforce's `authorization::company_choices` for active companies and the already-selected company while still authorized. Core supplies both names and lifecycle status through Workforce; the page never queries Core's company table.

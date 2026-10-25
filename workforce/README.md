@@ -354,7 +354,7 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 
 ## Workforce settings page
 
-Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser includes only unarchived companies you may manage. Core’s current capability-free company directory supplies an archived flag, so this includes pending and suspended companies too; matching Bilimbi’s active-only filter needs Core to expose the company status through that directory. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
+Open `/people/workforce/settings` with `people.workforce.settings.manage` to choose a company and the employee statuses it treats as working staff. The company chooser offers active companies you may manage through `authorization::company_choices`. An already-selected company stays named after a lifecycle change, while its records keep their existing read and write rules. Its selection is kept in `company_id` in the address, so Back and reload restore it. The page has no menu leaf, matching Bilimbi.
 
 Save requires at least one of Pending, Probation, Active, Inactive and Terminated. The write checks permission again inside its mutation transaction and holds the writable company lock before saving through Base Settings. Success says “Working statuses saved.”; an empty selection says “Choose at least one employee status.” A revoked grant or archived company refuses the next save. Settings and employment writes recheck their permission after obtaining the company lock, including a write that waited while its grant was revoked.
 

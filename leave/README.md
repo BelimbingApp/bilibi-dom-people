@@ -189,7 +189,7 @@ Use a private loopback port you own. The development production seeds configure 
 
 ## Leave policies page
 
-Open People › Settings › Leave policies to set a company's leave year, request rules, types and entitlement versions. The company chooser includes unarchived companies you may manage; its selection stays in the address so reload and Back restore it. If the selected company becomes unavailable while the page is open, the chooser asks you to select an available company.
+Open People › Settings › Leave policies to set a company's leave year, request rules, types and entitlement versions. The company chooser offers active companies you may manage and retains the already-selected company while still authorized; its selection stays in the address so reload and Back restore it. If the selected company becomes unavailable while the page is open, the chooser asks you to select an available company.
 
 Add a leave type, then add its first policy version. Each version shows its effective dates, yearly entitlement and optional carry-forward cap. The type, policy-version and skipped-balance lists use the shared FlexTable and ListColumns for column selection, arrangement and compact rows. They keep Bilimbi's row order and do not add sorting or pagination.
 
@@ -201,7 +201,7 @@ Every write-shaped event checks the current policy-management permission and com
 For the PL4 browser checks, run `cargo run -p bilibi-people-walkthrough --bin leave-policy-scenarios -- deny` while the manager's page is open, then try its next action. Run the same command with `allow` to restore access. After installing the walkthrough, `skips` creates 201 types with earlier unclosed balances through Leave and carries the next year, so the page can show the cut-short notice. Run `skips` once per disposable database. These commands use `DATABASE_URL` and `BILIBI_ENV=development`, like the walkthrough above.
 
 
-Platform limitation: Workforce's company summary exposes only `archived`, so the chooser uses the Platform's unarchived-company contract. Bilimbi filters `status == "active"`; pending and suspended companies cannot yet be distinguished through this public read. Restoring that exact filter needs Core's organisation read to expose the full status through Workforce.
+Company choices use Workforce's `authorization::company_choices`, which reads the full lifecycle status from Core. Pending, suspended and archived companies are hidden unless already selected. Keeping a selection does not change the records' read and write rules.
 
 ## Queued policy writes
 
