@@ -67,3 +67,14 @@ pub(crate) async fn run(services: &Services, admin: &Scope, manager: &Scope) -> 
     println!("Organisation explorer: 51 additional positions, a dated title change, and viewer read-only access are ready for browser checks.");
     Ok(())
 }
+
+walkthrough_step!(
+    "organisation_explorer",
+    after = ["training_governance"],
+    |ctx| async move {
+        // PO2: paginated explorer records and a read-only browser account.
+        crate::organisation_explorer::run(&ctx.services, &ctx.admin, &ctx.manager).await?;
+
+        Ok(())
+    }
+);

@@ -742,3 +742,7 @@ result.as_ref().err().is_some_and(|e|e.code()==Some(&tokio_postgres::error::SqlS
     println!("PA2 roster, adjustment, self-clock and allowance workflows proved.");
     Ok(())
 }
+
+walkthrough_command!("attendance-workflows", |url, _argument| async move {
+    run(url).await
+});

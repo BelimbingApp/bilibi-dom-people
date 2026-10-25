@@ -839,3 +839,24 @@ pub(crate) async fn run(
     );
     Ok(())
 }
+
+walkthrough_step!("leave", after = [], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // Leave (slice PL1): its own block, in `leave.rs`.
+    crate::leave::run(
+        &ctx.services,
+        &client,
+        &ctx.admin,
+        &ctx.manager,
+        &ctx.viewer,
+        crate::MANAGER,
+        crate::COMPANY,
+        crate::OTHER_COMPANY,
+        ctx.manager_employment.id,
+        ctx.staff_employment.id,
+        ctx.contractor_employment.id,
+    )
+    .await?;
+
+    Ok(())
+});

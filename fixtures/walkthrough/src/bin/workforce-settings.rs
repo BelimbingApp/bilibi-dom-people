@@ -3,5 +3,5 @@
 async fn main() -> bilibi_database::Result<()> {
     let url = std::env::var("DATABASE_URL").map_err(|_| bilibi_database::Error::Invalid)?;
     let action = std::env::args().nth(1).unwrap_or_else(|| "setup".into());
-    bilibi_people_walkthrough::workforce_settings(&url, &action).await
+    bilibi_people_walkthrough::command("workforce-settings", &url, Some(&action)).await
 }

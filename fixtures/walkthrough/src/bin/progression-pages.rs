@@ -5,7 +5,7 @@ async fn main() -> bilibi_database::Result<()> {
     let url = std::env::var("DATABASE_URL").map_err(|_| Error::Invalid)?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "prepare".into());
     if command == "--performance-fixture" {
-        return bilibi_people_walkthrough::performance(&url).await;
+        return bilibi_people_walkthrough::command("performance", &url, None).await;
     }
     if command == "prepare" {
         let status =
@@ -21,5 +21,5 @@ async fn main() -> bilibi_database::Result<()> {
     bilibi_core::link();
     bilibi_domains::link();
     bilibi_extensions::link();
-    bilibi_people_walkthrough::progression_pages(&url, &command).await
+    bilibi_people_walkthrough::command("progression-pages", &url, Some(&command)).await
 }

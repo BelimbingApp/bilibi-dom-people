@@ -113,3 +113,8 @@ fn failed(error: bilibi_people_leave::LeaveError) -> Error {
     eprintln!("PL3 fixture: {error}");
     Error::Internal
 }
+
+walkthrough_command!(
+    "leave-pages",
+    |url, _argument| async move { run(url).await }
+);

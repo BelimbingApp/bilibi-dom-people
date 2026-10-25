@@ -970,3 +970,23 @@ pub(crate) async fn run(
     )?;
     Ok(())
 }
+
+walkthrough_step!(
+    "claim_workflow",
+    after = ["employee_workspace"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        // PC2: requests, decisions, hand-off, transactional events and refusals.
+        crate::claim_workflow::run(
+            &ctx.services,
+            &client,
+            &ctx.admin,
+            &ctx.manager,
+            &ctx.viewer,
+            (ctx.manager_employment.id, ctx.staff_employment.id),
+        )
+        .await?;
+
+        Ok(())
+    }
+);

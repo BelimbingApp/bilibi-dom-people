@@ -68,7 +68,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         action,
         "unlink-staff" | "relink-staff" | "archive-company-three"
     ) {
-        return crate::training_learning_control(url, action).await;
+        return crate::training_learning_pages::control(url, action).await;
     }
     bilibi_base::link();
     bilibi_core::link();
@@ -682,3 +682,7 @@ async fn setup(services: &Services, admin: &Scope, manager: &Scope) -> Result<()
     )?;
     Ok(())
 }
+
+walkthrough_command!("training-effectiveness-pages", |url, argument| async move {
+    run(url, argument.unwrap_or("setup")).await
+});

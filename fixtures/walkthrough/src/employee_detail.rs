@@ -443,3 +443,19 @@ pub(super) async fn run(
     println!("PE2 browser record: /people/employees/{employee}?company_id={COMPANY}");
     Ok(())
 }
+
+walkthrough_step!("employee_detail", after = ["training"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // PE2: independent detail-page proof block, defined at the end.
+    crate::employee_detail::run(
+        &ctx.services,
+        &client,
+        &ctx.admin,
+        &ctx.manager,
+        &ctx.viewer,
+        ctx.staff_employment.id,
+    )
+    .await?;
+
+    Ok(())
+});

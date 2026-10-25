@@ -759,3 +759,39 @@ pub(crate) async fn all_status_members(
     ))?;
     Ok(())
 }
+
+walkthrough_step!("claims", after = ["skills_catalog"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // Claims (slice PC1): currencies, catalog, policies and assignments, on
+    // the employments created above.
+    crate::claims::run(
+        &ctx.services,
+        &client,
+        crate::claims::Context {
+            admin: &ctx.admin,
+            manager: &ctx.manager,
+            viewer: &ctx.viewer,
+            contractor: &ctx.contractor,
+            staff_user: crate::STAFF,
+            tenant: crate::TENANT,
+            company: crate::COMPANY,
+            other_company: crate::OTHER_COMPANY,
+            manager_employment: ctx.manager_employment.id,
+            staff_employment: ctx.staff_employment.id,
+        },
+    )
+    .await?;
+
+    Ok(())
+});
+
+walkthrough_step!(
+    "claims_all_status",
+    after = ["leave_after_unlink"],
+    |ctx| async move {
+        // Claims assignment pickers include the pending employment PW1 created.
+        crate::claims::all_status_members(&ctx.services, &ctx.manager, crate::COMPANY).await?;
+
+        Ok(())
+    }
+);

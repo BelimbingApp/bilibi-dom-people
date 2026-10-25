@@ -826,3 +826,43 @@ pub(crate) async fn after_unlink(
         .await?;
     Ok(())
 }
+
+walkthrough_step!(
+    "leave_requests",
+    after = ["organisation"],
+    |ctx| async move {
+        // PL2: requests, reservations, decisions and ordered carry-forward.
+        let leave_staff_scope = crate::leave_requests::run(
+            &ctx.services,
+            &ctx.db,
+            &ctx.admin,
+            &ctx.manager,
+            &ctx.viewer,
+            crate::COMPANY,
+            ctx.manager_employment.id,
+        )
+        .await?;
+
+        ctx.scopes.insert("leave.staff", leave_staff_scope);
+        Ok(())
+    }
+);
+
+walkthrough_step!(
+    "leave_after_unlink",
+    after = ["workforce_records"],
+    |ctx| async move {
+        // PL2: an open page's old scope must not survive PW1's account unlink.
+        crate::leave_requests::after_unlink(
+            &ctx.services,
+            &ctx.admin,
+            ctx.scopes
+                .get("leave.staff")
+                .ok_or(bilibi_database::Error::Invalid)?,
+            crate::COMPANY,
+        )
+        .await?;
+
+        Ok(())
+    }
+);

@@ -2,6 +2,55 @@
 
 These executables create their own records and exercise the running modules on a disposable PostgreSQL 18 database. Never run them on an installation that holds real accounts or records.
 
+## Add a proof
+
+**Keep each slice's proof and its registration in its own `src/<slice>.rs` file.** For example, `src/skills_catalog.rs` owns the catalog proof and declares when it runs:
+
+```rust
+walkthrough_step!("skills_catalog", after = ["entry_operation"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    skills_catalog(
+        &ctx.services,
+        &client,
+        &ctx.admin,
+        &ctx.manager,
+        &ctx.viewer,
+        ctx.manager_employment.id,
+    )
+    .await?;
+    Ok(())
+});
+```
+
+`build.rs` discovers every top-level `src/*.rs` proof file, including new files. Each file registers its default steps with `walkthrough_step!` and any standalone commands with `walkthrough_command!`. Helper files need no registration. Generated module declarations stay in Cargo's build directory. **Do not add a `mod` declaration or a proof call to `lib.rs`, or a command branch to `main.rs`.** The existing manifest already includes every People module.
+
+The default run creates the shared Workforce records first. A step receives the database pool, installed services, signed-in accounts and those employments through `ctx`. Declare predecessor IDs in `after`; use `[]` when only the shared setup is needed. Independent steps run in alphabetical ID order. Duplicate IDs, missing predecessors and cycles refuse the run before database setup. The migrated steps retain their previous execution order because some proofs deliberately change account links and grants for later checks.
+
+A standalone command registers beside its implementation:
+
+```rust
+walkthrough_command!("my-new-proof", |url, argument| async move {
+    run(url, argument.unwrap_or("prepare")).await
+});
+```
+
+Run it through the default binary; no new binary wrapper or manifest entry is needed:
+
+```sh
+cargo run -p bilibi-people-walkthrough -- my-new-proof prepare
+cargo run -p bilibi-people-walkthrough -- --list
+```
+
+`--list` validates and prints the default order and available commands without reading `DATABASE_URL`. Standalone commands run in separate processes because Platform identity bindings install once per process. Existing `--bin` commands and their argument defaults still work, including the child-process setup used by Progression. For a new command, put all its setup in its own handler.
+
+Format discovered files explicitly, since `cargo fmt` does not follow generated module declarations:
+
+```sh
+rustfmt --edition 2021 apps/domains/people/fixtures/walkthrough/build.rs apps/domains/people/fixtures/walkthrough/src/*.rs apps/domains/people/fixtures/walkthrough/src/bin/*.rs
+```
+
+Then run the walkthrough against a fresh disposable database and run `scripts/domain-ci.sh` from the Platform root. Use `--check` with the same `rustfmt` command to verify formatting; the repository CI runs that check too.
+
 ## Sweep B
 
 Mount People in a Bilibi checkout. To check delivery of payroll and claim approvals, also mount Finance at a revision containing its People event subscriber. The proof uses Base Events receipts and has no Finance crate dependency or SQL reference to Finance tables.

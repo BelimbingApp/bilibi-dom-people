@@ -338,3 +338,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
     println!("PC4 live page proof complete");
     Ok(())
 }
+
+walkthrough_command!("claim-setup", |url, argument| async move {
+    run(url, argument.unwrap_or("prepare")).await
+});

@@ -276,3 +276,22 @@ pub(crate) async fn run(
     );
     Ok(())
 }
+
+walkthrough_step!(
+    "references",
+    after = ["claims_all_status"],
+    |ctx| async move {
+        let client = ctx.db.get().await?;
+        crate::references::run(
+            &ctx.services,
+            ctx.services.get::<Grants>("base/authz.grants")?.as_ref(),
+            &client,
+            &ctx.admin,
+            &ctx.manager,
+            &ctx.viewer,
+        )
+        .await?;
+
+        Ok(())
+    }
+);

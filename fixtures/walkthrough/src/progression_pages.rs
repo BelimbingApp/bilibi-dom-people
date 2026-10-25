@@ -167,3 +167,7 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
     }
     Ok(())
 }
+
+walkthrough_command!("progression-pages", |url, argument| async move {
+    run(url, argument.unwrap_or("prepare")).await
+});

@@ -1,15 +1,17 @@
 //! PT6 running-system proof: real page mounts, facade writes and current grants.
-use crate::{COMPANY, MANAGER, VIEWER};
+use crate::{ADMIN, COMPANY, MANAGER, TENANT, VIEWER};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_training::{
     NewCourse, NewEvent, NewSession, Training, COURSES_MANAGE, COURSES_VIEW, SESSIONS_VIEW,
 };
+use bilibi_tenancy::Authentication;
 use bilibi_tenancy::Scope;
 use bilibi_ui::page::{LiveBody, LiveInput, LiveRequest, LiveState, PageRequest, PageService};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 async fn send(
     state: &mut dyn LiveState<Scope, Error>,
@@ -279,3 +281,57 @@ pub(crate) async fn run(
     );
     Ok(())
 }
+
+/// Run only the Training catalog and its pages on a disposable database.
+/// Other slices' date-sensitive proofs must not gate a catalog page check.
+async fn standalone(url: &str) -> Result<()> {
+    bilibi_base::link();
+    bilibi_core::link();
+    bilibi_domains::link();
+    bilibi_extensions::link();
+    let db = bilibi_database::pool(url)?;
+    let modules = bilibi_module_registry::discover()?;
+    bilibi_database::migrate(&db, &modules).await?;
+    bilibi_walkthrough_fixture::install(&db).await?;
+    let mut services = Services::default();
+    services.provide("bootstrap.database", Arc::new(db.clone()))?;
+    services.provide("bootstrap.composition", Arc::new(bilibi_web::composition()))?;
+    services.install(&modules)?;
+    if std::env::var("BILIBI_ENV").as_deref() == Ok("development") {
+        services
+            .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
+            .set_enforced(false);
+    }
+    services
+        .get::<Grants>("base/authz.grants")?
+        .reconcile()
+        .await?;
+    let client = db.get().await?;
+    let auth = services.get::<Authentication>("base/tenancy.authentication")?;
+    let admin = auth
+        .authenticate(&**client, TENANT, ADMIN, "walkthrough".into())
+        .await?;
+    let manager = auth
+        .authenticate(&**client, TENANT, MANAGER, "walkthrough".into())
+        .await?;
+    let viewer = auth
+        .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
+        .await?;
+    crate::training::run(&services, &client, &admin, &manager, &viewer).await?;
+    run(&services, &admin, &manager, &viewer).await
+}
+
+walkthrough_step!(
+    "training_catalog_pages",
+    after = ["training_evaluation"],
+    |ctx| async move {
+        // PT6: catalog page events and browser records, after other slices' grant proofs.
+        crate::training_catalog_pages::run(&ctx.services, &ctx.admin, &ctx.manager, &ctx.viewer)
+            .await?;
+        Ok(())
+    }
+);
+
+walkthrough_command!("training-catalog-pages", |url, _argument| async move {
+    standalone(url).await
+});

@@ -445,3 +445,8 @@ pub(super) async fn run(url: &str) -> Result<()> {
     );
     Ok(())
 }
+
+walkthrough_command!(
+    "payroll_pages",
+    |url, _argument| async move { run(url).await }
+);

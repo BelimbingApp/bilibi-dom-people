@@ -1107,3 +1107,22 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
     println!("PK2 walkthrough complete; assessment register, standing, gaps, coverage and database refusals proved.");
     Ok(())
 }
+
+walkthrough_step!("assessments", after = ["references"], |ctx| async move {
+    let client = ctx.db.get().await?;
+    // Skills assessments (PK2): its own proof block at the end.
+    crate::assessments::run(
+        &ctx.services,
+        &client,
+        crate::assessments::Context {
+            admin: &ctx.admin,
+            manager: &ctx.manager,
+            viewer: &ctx.viewer,
+            manager_employee: ctx.manager_employment.id,
+            staff_employee: ctx.staff_employment.id,
+        },
+    )
+    .await?;
+
+    Ok(())
+});

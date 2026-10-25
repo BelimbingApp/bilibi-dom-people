@@ -175,3 +175,24 @@ pub async fn control(url: &str, action: &str) -> Result<()> {
     println!("PT8 proof condition applied through its owner: {action}");
     Ok(())
 }
+
+walkthrough_step!(
+    "training_learning_pages",
+    after = ["skill_actions"],
+    |ctx| async move {
+        // PT8: independent Learning page browser setup after prior unlink proofs.
+        crate::training_learning_pages::run(
+            &ctx.services,
+            &ctx.admin,
+            &ctx.manager,
+            ctx.staff_employment.id,
+        )
+        .await?;
+
+        Ok(())
+    }
+);
+
+walkthrough_command!("learning-control", |url, argument| async move {
+    control(url, argument.ok_or(bilibi_database::Error::Invalid)?).await
+});

@@ -558,3 +558,8 @@ pub async fn run(url: &str) -> Result<()> {
     println!("PK7 proof complete");
     Ok(())
 }
+
+walkthrough_command!(
+    "skill-reminders",
+    |url, _argument| async move { run(url).await }
+);
