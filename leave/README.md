@@ -97,7 +97,7 @@ revoked while a page stays open refuses the next call, and the performer is
 the scope's actor, never an argument.
 
 Every write runs in a `MutationBoundary` transaction that first holds the
-company's writable lock (`organisation::require_writable`, locked), so an
+company's writable lock (`bilibi_company::require_writable`, locked), so an
 archived company is `CompanyArchived` and a company's leave writes are
 serialized; it then locks the rows it decides on (`FOR UPDATE` on the types,
 on the latest policy), decides every refusal with plain reads, and only then

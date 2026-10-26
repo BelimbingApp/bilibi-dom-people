@@ -108,7 +108,7 @@ not know, and `people_training_event_guard` refuses shrinking an event
 below a session it already has. Every write goes through
 `MutationBoundary`, recorded as a `people_training_course`,
 `people_training_event` or `people_training_session_run` change, under the
-company's writable lock (`organisation::require_writable`), so an archived
+company's writable lock (`bilibi_company::require_writable`), so an archived
 company refuses and a company's writes serialize.
 
 ## Capabilities

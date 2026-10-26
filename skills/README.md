@@ -52,7 +52,7 @@ Every write authorizes through the Workforce `Authorization` helpers
 handed, so a grant revoked while a page stays connected refuses the very
 next operation, and a system principal cannot reach the facade at all. It
 then begins a `MutationBoundary` transaction and holds the company's writable
-lock (`organisation::require_writable(.., lock = true)`) first: an archived
+lock (`bilibi_company::require_writable(.., lock = true)`) first: an archived
 company is `CompanyArchived`, and a company's writes are serialized, which is
 what keeps "one draft and one published version per code" and the overlap
 rule true under concurrent publishers. Refusals are decided with `tx.sql()`
