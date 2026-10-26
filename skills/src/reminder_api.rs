@@ -3,7 +3,6 @@ use crate::{
     assessments, reminders, DueReminder, Reminder, ReminderCounts, ReminderRetryCounts, Result,
     Skills, SkillsError, Write, REMINDERS_SEND,
 };
-use bilibi_company::organisation;
 use bilibi_database::Error;
 use bilibi_people_workforce::authorization;
 use bilibi_queue::execution::Execution;
@@ -182,7 +181,7 @@ impl Skills {
                 let tx = execution
                     .begin(client, &format!("people.skills.{action}"))
                     .await?;
-                organisation::require_writable(tx.sql(), scope, company, true).await?;
+                bilibi_company::require_writable(tx.sql(), scope, company, true).await?;
                 authorization::authorize(tx.sql(), scope, company, REMINDERS_SEND).await?;
                 self.current_company(scope, company).await?;
                 Ok(Write {

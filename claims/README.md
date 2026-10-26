@@ -34,7 +34,7 @@ first. Reads of a company's categories, claim types, policies and
 assignments are capability-free company configuration, as in Bilimbi, for
 any account that can see the company.
 
-Every write runs through `MutationBoundary` and holds the company's writable lock (`organisation::require_writable`, locked), including currency changes. The facade checks the capability again inside that transaction. Archived companies refuse writes (`CompanyArchived`), and the company lock serializes catalog changes. Policy creation reads the allowed currencies after taking the lock. Refusals
+Every write runs through `MutationBoundary` and holds the company's writable lock (`bilibi_company::require_writable`, locked), including currency changes. The facade checks the capability again inside that transaction. Archived companies refuse writes (`CompanyArchived`), and the company lock serializes catalog changes. Policy creation reads the allowed currencies after taking the lock. Refusals
 are `ClaimsError` variants or `FieldError`s with Bilimbi's changeset words
 (`can't be blank`, `has already been taken`, `must not be before the start
 date`, `is not an allowed claim currency for this company`, `must have at

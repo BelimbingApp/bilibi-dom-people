@@ -1,7 +1,7 @@
 //! Bilimbi People company pickers: lifecycle options and existing record context.
 //! Standalone proof on an empty disposable database, with browser records.
 use bilibi_authz::grants::Grants;
-use bilibi_company::{organisation::NewCompany, CompanyService, CreateOutcome};
+use bilibi_company::{CompanyService, CreateOutcome, NewCompany};
 use bilibi_database::{pool, Error, Result};
 use bilibi_module_registry::Services;
 use bilibi_people_reference_data::{NewEntry, ReferenceData};

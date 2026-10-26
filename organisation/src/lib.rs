@@ -47,7 +47,7 @@ mod web;
 pub use bilibi_people_workforce::FieldError;
 pub use contributions::{CAPABILITIES, MANAGE, POSITIONS_PORT, VIEW};
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_people_workforce::{
     authorization, Freshness, NotCurrent, Reference, ReferenceType, Workforce, WorkforceError,
@@ -860,7 +860,7 @@ async fn lock_company(
     scope: &Scope,
     company_id: i64,
 ) -> Result<()> {
-    organisation::require_writable(client, scope, company_id, true)
+    bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map_err(|error| match error {
             WriteError::NotFound => OrganisationError::NotFound,

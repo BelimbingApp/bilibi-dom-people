@@ -336,7 +336,7 @@ async fn revoke_queued_settings(
             admin.mutation_context("walkthrough.pv1.queued_settings"),
         )
         .await?;
-    bilibi_company::organisation::require_writable(tx.sql(), admin, 1, true)
+    bilibi_company::require_writable(tx.sql(), admin, 1, true)
         .await
         .map_err(|_| Error::Internal)?;
     grants
@@ -450,7 +450,7 @@ async fn queued_refusal(
             admin.mutation_context("walkthrough.pv1.queued_owner"),
         )
         .await?;
-    bilibi_company::organisation::require_writable(tx.sql(), admin, 1, true)
+    bilibi_company::require_writable(tx.sql(), admin, 1, true)
         .await
         .map_err(|_| Error::Internal)?;
     grants

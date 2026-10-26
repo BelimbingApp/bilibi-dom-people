@@ -68,7 +68,7 @@ pub use contributions::{
     RECORDS_WORKSPACE_VIEW, RETENTION_MANAGE, SESSIONS_MANAGE, SESSIONS_VIEW,
 };
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary};
 use bilibi_party_ids::OrganisationId;
 use bilibi_people_workforce::{authorization, Workforce, WorkforceError};
@@ -739,7 +739,7 @@ impl Training {
 /// The company's writable lock every write holds first: an archived company
 /// is `CompanyUnavailable`, and the lock serializes the company's writes.
 async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
-    organisation::require_writable(client, scope, company_id, true)
+    bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())
         .map_err(|error| match error {

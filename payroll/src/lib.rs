@@ -13,7 +13,6 @@ mod setup;
 mod snapshot;
 mod store;
 mod web;
-use bilibi_company::organisation;
 use bilibi_database::{Db, Error, MutationBoundary, MutationTransaction};
 use bilibi_party_ids::OrganisationId;
 pub use bilibi_people_workforce::FieldError;
@@ -84,7 +83,7 @@ impl Payroll {
         self.authorize(tx.sql(), scope, company, capability).await?;
         // All People writers take the Company lock first. Taking it before our
         // private lock also prevents inversion with sibling-source writes.
-        organisation::require_writable(tx.sql(), scope, company, true)
+        bilibi_company::require_writable(tx.sql(), scope, company, true)
             .await
             .map_err(|e| match e {
                 bilibi_company::WriteError::Archived => PayrollError::CompanyArchived,

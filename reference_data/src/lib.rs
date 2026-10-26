@@ -27,7 +27,7 @@ mod web;
 
 pub use contributions::{MANAGE, REFERENCES_PATH};
 
-use bilibi_company::{organisation, WriteError};
+use bilibi_company::WriteError;
 use bilibi_database::{Db, Error, MutationBoundary};
 use bilibi_people_workforce::{authorization, Result, WorkforceError};
 use bilibi_tenancy::Scope;
@@ -246,7 +246,7 @@ async fn known_company(
     scope: &Scope,
     company_id: i64,
 ) -> Result<()> {
-    match organisation::identity(client, scope, company_id).await? {
+    match bilibi_company::identity(client, scope, company_id).await? {
         Some(_) => Ok(()),
         None => Err(WorkforceError::NotFound),
     }
@@ -259,7 +259,7 @@ async fn writable(
     scope: &Scope,
     company_id: i64,
 ) -> Result<()> {
-    organisation::require_writable(sql, scope, company_id, true)
+    bilibi_company::require_writable(sql, scope, company_id, true)
         .await
         .map(|_| ())
         .map_err(|error| match error {

@@ -92,7 +92,7 @@ so a system scope cannot reach these helpers at all.
 
 | Function | Does |
 | --- | --- |
-| `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `organisation::authorize_target`: the actor's own company, or any company of the tenant with `admin.company.tenant-wide.manage`). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
+| `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `bilibi_company::authorize_target`: the actor's own company, or any company of the tenant with `admin.company.tenant-wide.manage`). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
 | `authorize_company(..)` | The same, returning the `CompanySummary` (id, name, code, status, archived) for a page that renders it |
 | `selectable_companies(client, scope, capability)` | The unarchived companies the actor may target with the capability, by name (Bilimbi `list_selectable_companies/2`): none without the capability, the own company, or the whole tenant with the tenant-wide reach |
 | `company_choices(client, scope, capability, selected)` | Active companies for a People company chooser, plus the already-selected pending or suspended company if Core still authorizes it. Archived companies are never offered, even when selected or deep-linked. Keep the selection from server state or the addressed record, never a write form. Record discovery keeps using `selectable_companies` so existing records remain reachable |
