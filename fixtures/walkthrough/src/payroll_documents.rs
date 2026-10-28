@@ -408,7 +408,7 @@ pub async fn run(url: &str) -> Result<()> {
         |e| matches!(e, Refusal::Unauthorized),
     )?;
     let impersonated = auth
-        .authenticate_session(&**c, TENANT, MANAGER, Some(ADMIN), "PY3 proof".into())
+        .authenticate_session(&**c, TENANT, MANAGER, Some(ADMIN), None, "PY3 proof".into())
         .await?;
     denied(
         "impersonated download",

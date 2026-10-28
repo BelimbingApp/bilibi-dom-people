@@ -645,7 +645,7 @@ pub async fn run(url: &str) -> Result<()> {
         "history permission",
     )?;
     let impersonated = auth
-        .authenticate_session(&**client, 1, 1, Some(4), "walkthrough".into())
+        .authenticate_session(&**client, 1, 1, Some(4), None, "walkthrough".into())
         .await?;
     refused(
         pg.draft(&impersonated, 1, &performance_only).await,

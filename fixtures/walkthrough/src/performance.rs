@@ -774,7 +774,7 @@ pub(super) async fn run_with_pages(url: &str, pages: bool) -> Result<()> {
         "published-only selectors and direct-report choices",
     )?;
     let impersonated = auth
-        .authenticate_session(&**client, 1, 1, Some(4), "walkthrough".into())
+        .authenticate_session(&**client, 1, 1, Some(4), None, "walkthrough".into())
         .await?;
     refused(
         performance

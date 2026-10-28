@@ -121,7 +121,14 @@ pub async fn run(url: &str) -> Result<()> {
         |e| matches!(e, Refusal::NotFound | Refusal::Unauthorized),
     )?;
     let impersonated = auth
-        .authenticate_session(&**c, TENANT, MANAGER, Some(ADMIN), "payroll proof".into())
+        .authenticate_session(
+            &**c,
+            TENANT,
+            MANAGER,
+            Some(ADMIN),
+            None,
+            "payroll proof".into(),
+        )
         .await?;
     denied(
         "impersonated write refused",
