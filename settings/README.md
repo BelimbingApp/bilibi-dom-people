@@ -30,8 +30,7 @@ Base Menu hides a container without a visible child
 therefore shows no People entry at all, which is the expected state of the
 scaffold.
 
-Icons are bare Heroicon names (`users`, `cog-6-tooth`); the host adds the
-`hero-` prefix when it renders the sidebar (`apps/web/src/shell.rs`).
+Menu icons are bare Heroicon names (`users`, `cog-6-tooth`), rendered as inline SVG by the Platform (see [Icons](https://github.com/BelimbingApp/bilibi/blob/main/apps/base/ui/README.md#icons)). An unknown name shows a missing-icon glyph and logs a warning.
 
 ## Dependencies
 
