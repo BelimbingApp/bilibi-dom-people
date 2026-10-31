@@ -198,7 +198,7 @@ impl Leave {
         let client = self.db.get().await.map_err(Error::from)?;
         let reviewer =
             match authorization::authorize(&**client, scope, company_id, REQUESTS_APPROVE).await {
-                Ok(()) => true,
+                Ok(_) => true,
                 Err(crate::WorkforceError::Unauthorized | crate::WorkforceError::NotFound) => false,
                 Err(error) => return Err(error.into()),
             };

@@ -2,7 +2,7 @@
 
 Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages, Courses, Sessions & calendar, and the records and passport pages below. Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the Learning request, plan and budget pages, Courses, Sessions & calendar, and the records and passport pages below. Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -179,7 +179,7 @@ The PT2 block in `fixtures/walkthrough/src/participation.rs` runs against the sa
 
 ## Learning requests, plans and budgets
 
-Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the six learning pages use these methods.
+Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the learning pages use these methods.
 
 For example, an employee creates a draft with `create_learning_request`, submits it with a reason, and their direct manager recommends it. HR reviews it before an approver reserves the cost. Every decision remains in `learning_histories`.
 

@@ -194,7 +194,7 @@ fn schema(create: bool) -> Value {
     json!({"type":"object","required":if create {vec!["company_id","request"]}else{vec!["company_id","request_id","reason"]},"properties":{
         "company_id":{"type":"integer","minimum":1},"request_id":{"type":"integer","minimum":1},"reason":{"type":"string","maxLength":4000},
         "request":{"type":"object","required":["need","objective","expected_result","proposed_on","estimated_cost","currency"],"properties":{
-            "course_id":{"type":"integer","nullable":true},"need":{"type":"string"},"objective":{"type":"string"},"expected_result":{"type":"string"},"proposed_on":{"type":"string","format":"date"},"estimated_cost":{"type":"string"},"currency":{"type":"string"}
+            "course_id":{"type":"integer"},"need":{"type":"string"},"objective":{"type":"string"},"expected_result":{"type":"string"},"proposed_on":{"type":"string","format":"date"},"estimated_cost":{"type":"string"},"currency":{"type":"string"}
         }}
     }})
 }

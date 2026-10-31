@@ -1,6 +1,6 @@
 //! Training catalog, participation, governance, evaluation and Learning contributions.
 //! Mirrors Bilimbi Training.Contributions. No Training key is granted to a system role.
-//! web_learning.rs contributes six Learning routes and three menu leaves;
+//! web_learning.rs contributes the Learning routes and menu leaves;
 //! evaluation.rs contributes its six capabilities, the answer verb and six settings.
 use crate::{Training, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, VocabularyContribution, VOCABULARY};
