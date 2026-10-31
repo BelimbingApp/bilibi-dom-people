@@ -110,7 +110,7 @@ async fn account(
                 email: email.into(),
                 password: "bilibi-dev".into(),
                 person: Some(person.id),
-                affiliation: Some(affiliation.id),
+                company: Some(bilibi_party_ids::OrganisationId::new(company).map_err(fail)?),
             },
         )
         .await
@@ -172,6 +172,15 @@ async fn run(url: &str) -> Result<()> {
         bilibi_company::CreateOutcome::Created(c) => c.id,
         bilibi_company::CreateOutcome::Refused(e) => return Err(fail(format!("company: {e:?}"))),
     };
+    services
+        .get::<UserService>(bilibi_user::SERVICE)?
+        .set_desk(
+            &admin,
+            company,
+            admin.actor().person().ok_or(Error::Invalid)?.get(),
+            true,
+        )
+        .await?;
     let (manager_id, manager_employee) = account(
         &services,
         &admin,
