@@ -30,8 +30,7 @@ the schema is private.
 
 Every operation authorizes through the Workforce `Authorization` helpers
 (Bilimbi `authorize/3`): the capability now, and the company axis through
-Core Company (the actor's own company, or any company of the tenant with
-`admin.company.tenant-wide.manage`). A denied or unknown capability or a
+Core Company's operational desk proof (an explicit desk in the target company). A denied or unknown capability or a
 company outside the reach is `Unauthorized` ("You cannot do that for this
 company."); a company the scope cannot see is `NotFound`; an archived
 company is `CompanyUnavailable` ("Choose an active company."); and the

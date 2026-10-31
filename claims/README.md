@@ -177,7 +177,7 @@ While a manager review is open, run the same fixture binary with `revoke-reimbur
 
 ## My claims
 
-Open **People → My work → My claims** to submit an expense and follow its decision. The page uses the signed-in account’s company and working employee; neither can be chosen in the form.
+Open **People → My work → My claims** to submit an expense and follow its decision. The page uses the selected workplace and the signed-in Person’s working employment there. Switch desks in the top bar to change workplace; the employee cannot be chosen in the form.
 
 The open claim types table shows each category, currency, limits and receipt rule. The submission form asks for the type, expense date, amount, currency, receipt number and description. When the same type, date and amount already exist, it keeps the entered details and asks you to confirm that this is a separate expense. A repeated receipt number is refused even when that confirmation is checked.
 

@@ -152,7 +152,7 @@ For a disposable browser proof, run `DATABASE_URL=… BILIBI_ENV=development car
 
 ## My attendance
 
-Open `/people/attendance/my` to clock in or out, see your recent days and upcoming shifts, or request a missed clock event. The page requires `people.attendance.self.view` and a linked, working employment in your account’s company.
+Open `/people/attendance/my` to clock in or out, see your recent days and upcoming shifts, or request a missed clock event. The page requires `people.attendance.self.view` and a desk in the selected workplace and a working employment linked to your Person there. Switch desks in the top bar to change workplace.
 
 When self-clocking is enabled, Clock in and Clock out record the server’s current time. If the company requires a clocking location, the shared `LocationAction` control asks the browser for a position. Permission, connection and geofence refusals explain how to retry or request an adjustment. Impersonated accounts cannot clock.
 
