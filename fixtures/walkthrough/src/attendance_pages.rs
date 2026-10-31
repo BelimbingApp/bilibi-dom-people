@@ -97,7 +97,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
         )
         .await?;
     crate::give_staff_desk(
-        &services.get::<UserService>("core/user.accounts")?,
+        services.get::<UserService>("core/user.accounts")?.as_ref(),
         &admin,
         STAFF,
         affiliation.affiliation.person_id,

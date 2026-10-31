@@ -1,6 +1,5 @@
 //! PK3: facade and database proofs, using the disposable People walkthrough.
 //! Bilimbi's reassessment and action flows, including PK3 automatic closure.
-use bilibi_affiliation::AffiliationId;
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;

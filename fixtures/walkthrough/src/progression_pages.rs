@@ -61,7 +61,7 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
                 )
                 .await?;
             crate::give_staff_desk(
-                &services.get::<UserService>("core/user.accounts")?,
+                services.get::<UserService>("core/user.accounts")?.as_ref(),
                 &admin,
                 2,
                 affiliation.affiliation.person_id,
