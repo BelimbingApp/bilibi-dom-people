@@ -235,9 +235,7 @@ The capability prefix is `people.training.`. `learning.view` opens Learning requ
 
 All registers use `FlexTable` with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). History and plan items also use `FlexTable`. The request list defaults to Mine when authorized, then Team or Company according to available permissions. The company comes from the workspace shell; configuration pages retain their existing chooser.
 
-A new request can have no course. Accounts with `people.training.courses.view` can also choose an active course from the same creation form; the course list keeps its existing permission check. Both choices use `people.training.request.create`. The shared input omits an absent `course_id` when serialized, matching the operation's optional integer field.
-
-After preparing the disposable `one-door` walkthrough, run `one-door-courses` to create requests with and without a course through agent preview and commit. Create “Browser no course” and “Browser linked course” through the Learning requests form, then run `one-door-courses check` to verify both saved associations through the facade.
+The creation form makes requests without a course through `people.training.request.create`. The shared input omits the absent `course_id` when serialized, matching the operation's optional integer field.
 
 The live owner re-reads company reach and capabilities before every event. A confirmation retains its record, action and reason on the server and rechecks the specific action's grant on confirmation. The facade repeats its checks under the company lock. Refusals stay on the page as error messages. Budget corrections retain the prior currency; plan amendments create a new draft. Every form preserves entered values on refusal.
 

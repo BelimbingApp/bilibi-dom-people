@@ -290,7 +290,6 @@ struct Learning {
     companies: Vec<bilibi_people_workforce::CompanySummary>,
     company: Option<i64>,
     records: Vec<Record>,
-    courses: Vec<Course>,
     histories: LearningHistories,
     nested_columns: BTreeMap<String, ListColumns>,
     flags: HashMap<&'static str, bool>,
@@ -348,7 +347,6 @@ impl Learning {
             companies: vec![],
             company: None,
             records: vec![],
-            courses: vec![],
             histories: BTreeMap::new(),
             nested_columns: BTreeMap::new(),
             flags: HashMap::new(),
@@ -433,7 +431,6 @@ impl Learning {
                 .filter(|id| self.companies.iter().any(|c| c.id == *id))
         };
         self.records.clear();
-        self.courses.clear();
         self.histories.clear();
         self.flags.clear();
         self.tabs.clear();
@@ -506,22 +503,9 @@ impl Learning {
             REQUESTS_VIEW,
             PLANS_VIEW,
             BUDGETS_VIEW,
-            COURSES_VIEW,
         ] {
             self.flags
                 .insert(cap, self.training.allowed(scope, company, cap).await);
-        }
-        if self.task == Task::My
-            && self.record.is_none()
-            && self.can_create()
-            && self.can(COURSES_VIEW)
-        {
-            self.courses = self
-                .training
-                .courses(scope, company)
-                .await
-                .unwrap_or_default();
-            self.courses.retain(|course| course.active);
         }
         for task in Task::ALL {
             if self.can(task.cap()) && !matches!(task, Task::My | Task::Team) {
@@ -951,17 +935,8 @@ impl Learning {
     async fn save_entry(&self, scope: &Scope, credential: &str, company: i64) -> crate::Result<()> {
         match self.task {
             Task::My => {
-                let course = self.value("course_id");
-                let course_id = if course.trim().is_empty() {
-                    None
-                } else {
-                    Some(
-                        params::positive_id(Some(course.as_str()))
-                            .ok_or(TrainingError::CourseUnavailable)?,
-                    )
-                };
                 let request = NewLearningRequest {
-                    course_id,
+                    course_id: None,
                     need: self.value("need"),
                     objective: self.value("objective"),
                     expected_result: self.value("expected_result"),
@@ -1080,7 +1055,7 @@ impl Learning {
             ],
             _ => vec![],
         };
-        let mut fields: Vec<Field> = definitions
+        let fields: Vec<Field> = definitions
             .into_iter()
             .filter(|(key, _, _)| {
                 !(*key == "currency" && self.task == Task::Budgets && self.prior_id.is_some())
@@ -1098,24 +1073,6 @@ impl Learning {
                 field.attr("maxlength", if key == "currency" { "3" } else { "4000" })
             })
             .collect();
-        if self.task == Task::My && self.can(COURSES_VIEW) {
-            let choices = std::iter::once(Choice::new("No course", ""))
-                .chain(
-                    self.courses
-                        .iter()
-                        .map(|course| Choice::new(&course.name, course.id.to_string())),
-                )
-                .collect();
-            fields.insert(
-                0,
-                Field::in_form("entry", "course_id")
-                    .id("entry-course_id")
-                    .label("Course")
-                    .kind(InputKind::Select)
-                    .value(self.value("course_id"))
-                    .options(choices),
-            );
-        }
         fields
     }
     fn entry_dialog(&self) -> DbResult<Html> {
