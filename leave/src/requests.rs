@@ -188,6 +188,41 @@ impl Leave {
         let client = self.db.get().await.map_err(Error::from)?;
         client.query(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 ORDER BY starts_on DESC, id DESC LIMIT 50"), &[&scope.tenant(), &company_id, &me.employee_id]).await.map_err(Error::from)?.iter().map(read).collect()
     }
+    /// One leave request home. Self ownership is resolved anew for every read.
+    pub async fn request(&self, scope: &Scope, company_id: i64, id: i64) -> Result<PendingRequest> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        let reviewer = authorization::allowed(&**client, scope, company_id, REQUESTS_APPROVE).await;
+        drop(client);
+        let owner = if reviewer {
+            None
+        } else {
+            Some(
+                self.workforce
+                    .authorize_self(scope, company_id, SELF_VIEW)
+                    .await?
+                    .employee_id,
+            )
+        };
+        let client = self.db.get().await.map_err(Error::from)?;
+        let row=client.query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND id=$3 AND ($4::bigint IS NULL OR employee_id=$4)"),&[&scope.tenant(),&company_id,&id,&owner]).await.map_err(Error::from)?.ok_or(LeaveError::NotFound)?;
+        let request = read(&row)?;
+        drop(client);
+        self.current_company(scope, company_id).await?;
+        let employees = self
+            .workforce
+            .employees_by_ids(scope, company_id, &[request.employee_id])
+            .await?
+            .require_current()
+            .map_err(|e| LeaveError::NotCurrent(e.0))?;
+        let employee_name = employees
+            .iter()
+            .find(|e| e.reference.stable_id == request.employee_id.to_string())
+            .map(|e| format!("{} ({})", e.display_name, e.employee_number));
+        Ok(PendingRequest {
+            request,
+            employee_name,
+        })
+    }
     /// Pending requests (at most 200), earliest start first, for an approver.
     pub async fn pending_requests(
         &self,
@@ -241,7 +276,6 @@ impl Leave {
         company_id: i64,
         new: &NewRequest,
     ) -> Result<Request> {
-        let new = normalize(new)?;
         let mut client = self.db.get().await.map_err(Error::from)?;
         let mut tx = self
             .begin(
@@ -251,15 +285,31 @@ impl Leave {
                 "people.leave.submit_request",
             )
             .await?;
+        let result = self
+            .submit_request_in(&mut tx, scope, company_id, new)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub(super) async fn submit_request_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        new: &NewRequest,
+    ) -> Result<Request> {
+        crate::entries::serialize(tx.sql(), scope, company_id).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
+        let new = normalize(new)?;
         let me = self
             .workforce
-            .lock_self_employee(&tx, scope, company_id, SELF_VIEW)
+            .lock_self_employee(tx, scope, company_id, SELF_VIEW)
             .await?;
         let tenant = scope.tenant();
         if let Some(row) = tx.sql().query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 AND request_key=$4"), &[&tenant, &company_id, &me.employee_id, &new.request_key]).await.map_err(Error::from)? {
             let existing = read(&row)?;
             if existing.leave_type_id != new.leave_type_id || existing.starts_on != new.starts_on || existing.ends_on != new.ends_on || existing.day_part != new.day_part || existing.reason != new.reason || new.hours.is_some_and(|h| h != existing.quantity) { return Err(LeaveError::RequestKeyConflict); }
-            tx.rollback().await?; return Ok(existing);
+            return Ok(existing);
         }
         let leave_type = types::lock_active(tx.sql(), tenant, company_id, new.leave_type_id)
             .await?
@@ -352,7 +402,6 @@ impl Leave {
             changes.push(event(sql, tenant, company_id, &request, None, actor, None).await?);
             Ok((request, changes))
         })).await?;
-        tx.commit().await?;
         Ok(request)
     }
     /// Approves or rejects a pending request. The requester and linked subject
@@ -365,10 +414,6 @@ impl Leave {
         decision: Decision,
         note: Option<&str>,
     ) -> Result<Request> {
-        let note = input::optional_text(note, 500).map_err(|_| LeaveError::InvalidDecision)?;
-        if decision == Decision::Reject && note.is_none() {
-            return Err(LeaveError::NoteRequired);
-        }
         let mut client = self.db.get().await.map_err(Error::from)?;
         let mut tx = self
             .begin(
@@ -378,6 +423,27 @@ impl Leave {
                 "people.leave.decide_request",
             )
             .await?;
+        let result = self
+            .decide_request_in(&mut tx, scope, company_id, request_id, decision, note)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub(super) async fn decide_request_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        request_id: i64,
+        decision: Decision,
+        note: Option<&str>,
+    ) -> Result<Request> {
+        crate::entries::serialize(tx.sql(), scope, company_id).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
+        let note = input::optional_text(note, 500).map_err(|_| LeaveError::InvalidDecision)?;
+        if decision == Decision::Reject && note.is_none() {
+            return Err(LeaveError::NoteRequired);
+        }
         authorization::authorize(tx.sql(), scope, company_id, REQUESTS_APPROVE).await?;
         let request = lock(tx.sql(), scope, company_id, request_id).await?;
         if request.status != "pending" {
@@ -429,18 +495,10 @@ impl Leave {
                 request.id,
             )
             .await?;
-            write_entry(
-                &mut tx,
-                scope,
-                company_id,
-                &request,
-                "taken",
-                -request.quantity,
-            )
-            .await?;
+            write_entry(tx, scope, company_id, &request, "taken", -request.quantity).await?;
         }
         let after = transition(
-            &mut tx,
+            tx,
             scope,
             company_id,
             request,
@@ -452,7 +510,6 @@ impl Leave {
             note,
         )
         .await?;
-        tx.commit().await?;
         Ok(after)
     }
     /// Cancels one's own pending request at any time, or approved leave before
@@ -472,9 +529,24 @@ impl Leave {
                 "people.leave.cancel_request",
             )
             .await?;
+        let result = self
+            .cancel_request_in(&mut tx, scope, company_id, request_id)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub(super) async fn cancel_request_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company_id: i64,
+        request_id: i64,
+    ) -> Result<Request> {
+        crate::entries::serialize(tx.sql(), scope, company_id).await?;
+        bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let me = self
             .workforce
-            .lock_self_employee(&tx, scope, company_id, SELF_VIEW)
+            .lock_self_employee(tx, scope, company_id, SELF_VIEW)
             .await?;
         let request = lock(tx.sql(), scope, company_id, request_id).await?;
         if request.employee_id != me.employee_id {
@@ -500,7 +572,7 @@ impl Leave {
                     return Err(LeaveError::YearClosed);
                 }
                 write_entry(
-                    &mut tx,
+                    tx,
                     scope,
                     company_id,
                     &request,
@@ -511,12 +583,11 @@ impl Leave {
             }
             _ => return Err(LeaveError::NotCancellable),
         }
-        let after = transition(&mut tx, scope, company_id, request, "cancelled", None).await?;
-        tx.commit().await?;
+        let after = transition(tx, scope, company_id, request, "cancelled", None).await?;
         Ok(after)
     }
 }
-fn normalize(new: &NewRequest) -> Result<NewRequest> {
+pub(super) fn normalize(new: &NewRequest) -> Result<NewRequest> {
     let span = new.ends_on.duration_since(new.starts_on).as_secs() / 86400;
     if new.leave_type_id <= 0
         || !(0..366).contains(&span)

@@ -119,12 +119,6 @@ async fn main() -> Result<()> {
             json!({"type":"approve","request_id":"1"}),
         ),
         (
-            "people/leave.pages",
-            "requests",
-            "people.leave.requests.approve",
-            json!({"type":"approve","request_id":"1"}),
-        ),
-        (
             "people/leave.policy_pages",
             "policies",
             "people.leave.policies.manage",
