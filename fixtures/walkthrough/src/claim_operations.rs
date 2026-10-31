@@ -215,7 +215,7 @@ pub(super) async fn run(services: &Services) -> Result<()> {
         .await
         .map_err(check)?;
     println!(
-        "PC5 browser batch {}: /people/claims/operations?company_id=1&tab=batches",
+        "PC5 browser batch {}: /people/claims?audience=team",
         batch.id
     );
     Ok(())

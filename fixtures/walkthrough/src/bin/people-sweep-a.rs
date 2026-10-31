@@ -137,8 +137,8 @@ async fn main() -> Result<()> {
             json!({"type":"create_category"}),
         ),
         (
-            "people/claims.operations_pages",
-            "operations",
+            "people/claims.pages",
+            "list",
             "people.claims.approve",
             json!({"type":"approve","id":"1"}),
         ),

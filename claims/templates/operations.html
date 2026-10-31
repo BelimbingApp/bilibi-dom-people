@@ -1,18 +1,25 @@
-{# Bilimbi Claims.Web.OperationsLive; shared Platform UI owns presentation. #}
+{# Claims has one list and one record home; mirrors Bilimbi Claims workflows. #}
 {% import "components.html" as ui %}
 {% import "feedback.html" as feedback %}
+{% import "workspace.html" as workspace %}
 <div data-shared-ui>
 {% call feedback::flash_group(messages=flash) %}{% endcall %}
-{% call ui::page(id="people-claim-operations", variant=bilibi_ui::PageVariant::List) %}
-{% call ui::header(subtitle="Decide claims, record reimbursement, and hand approved claims off.") %}Claim operations{% endcall %}
+{% call ui::page(id="people-claims", variant=bilibi_ui::PageVariant::List) %}
+{% if detail %}
+{% call workspace::announce(kind="people/claims",record_id=record_id) %}{% endcall %}
+{% call ui::back_link(href="/people/claims") %}Claims{% endcall %}
+{% call ui::header() %}Claim{% endcall %}
+{% else %}
+{% call ui::header() %}Claims{% endcall %}
+{% endif %}
 {% if available %}
-{{ filters }}{{ tabs }}
-{% call ui::section_heading(id=heading_id, title=heading, description=description) %}{% endcall %}
-{% call ui::card(role="region", labelledby=heading_id) %}
-{{ waiting }}{{ table }}
-{% endcall %}
-{% if truncated %}<p class="mt-2 text-xs text-ink-muted">Showing the first 500 claims.</p>{% endif %}
+{% if !detail %}{{ filters }}{% endif %}
+{{ table }}
+{% if truncated %}{% call feedback::alert(kind=bilibi_ui::StatusKind::Info) %}Showing the first 500 matching claims. Filter by employee or status to narrow the list.{% endcall %}{% endif %}
+{{ submission }}
+{% if !waiting.is_empty() %}{% call ui::section_heading(id="claims-waiting-heading",title="Hand-off") %}{% endcall %}{{ waiting }}{% endif %}
+{% if !batches.is_empty() %}{% call ui::section_heading(id="claims-batches-heading",title="Hand-off batches") %}{% endcall %}{{ batches }}{% endif %}
 {% else %}{{ empty }}{% endif %}
 {% endcall %}
-{{ dialog }}{{ confirmation }}
+{{ dialog }}{{ confirmation }}{{ withdrawal }}
 </div>

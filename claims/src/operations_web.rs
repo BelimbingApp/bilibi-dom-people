@@ -1,8 +1,5 @@
 //! Bilimbi Claims.Web.OperationsLive: decisions, reimbursement and hand-off.
-use crate::{
-    Approval, Claims, ClaimsError, HandoffBatch, HandoffWaiting, QueueClaim, Reimbursement,
-    Rejection, APPROVE, REIMBURSE,
-};
+use crate::{Claims, ClaimsError, HandoffBatch, HandoffWaiting, QueueClaim, APPROVE, REIMBURSE};
 use askama::Template;
 use bilibi_database::{Db, Error, Result};
 use bilibi_people_workforce::{authorization, CompanySummary};
@@ -14,7 +11,7 @@ use bilibi_ui::{
     },
     params, BuiltinColumn, Button, ButtonVariant, Choice, ConfirmDialog, EmptyState, Field, Filter,
     FilterToolbar, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec, ListState,
-    Modal, StatusKind, Tab, TableEmpty, Tabs, ToolbarControl, NO_FLASH,
+    Modal, StatusKind, TableEmpty, ToolbarControl, NO_FLASH,
 };
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -23,26 +20,40 @@ use std::{
     sync::Arc,
 };
 
-const PATH: &str = "/people/claims/operations";
-const TABS: [&str; 5] = ["submitted", "approved", "reimbursed", "rejected", "batches"];
+pub(crate) const SERVICE: &str = "people/claims.pages";
+const PATH: &str = "/people/claims";
+
 const FORBIDDEN: &str = "You are not allowed to do that for this company.";
 struct Core {
     db: Db,
     claims: Arc<Claims>,
+    contracts: Arc<bilibi_agent_api::page::PageContracts>,
 }
 pub(crate) struct Pages(Arc<Core>);
 impl Pages {
-    pub(crate) fn new(db: Db, claims: Arc<Claims>) -> Self {
-        Self(Arc::new(Core { db, claims }))
+    pub(crate) fn new(
+        db: Db,
+        claims: Arc<Claims>,
+        contracts: Arc<bilibi_agent_api::page::PageContracts>,
+    ) -> Self {
+        Self(Arc::new(Core {
+            db,
+            claims,
+            contracts,
+        }))
     }
 }
 impl Page<Scope, Error> for Pages {
     fn title(&self, _: &str) -> Option<&'static str> {
-        Some("Claim operations")
+        Some("Claims")
     }
     fn render<'a>(&'a self, request: PageRequest<'a, Scope>) -> PageFuture<'a, Error> {
         Box::pin(async move {
-            let mut state = Operations::new(self.0.clone(), request.query)?;
+            let mut query = request.query.clone();
+            query.remove("id");
+            query.extend(request.path.clone());
+            let mut state = Operations::new(self.0.clone(), &query)?;
+            state.workspace = request.framed;
             state
                 .load(request.scope.ok_or(Error::Unauthorized)?)
                 .await?;
@@ -55,10 +66,14 @@ impl Page<Scope, Error> for Pages {
     }
     fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
         Box::pin(async move {
-            Ok(Some(
-                Box::new(Operations::new(self.0.clone(), request.query)?)
-                    as Box<dyn LiveState<Scope, Error>>,
-            ))
+            Ok(Some(Box::new({
+                let mut query = request.query.clone();
+                query.remove("id");
+                query.extend(request.path.clone());
+                let mut state = Operations::new(self.0.clone(), &query)?;
+                state.workspace = request.framed;
+                state
+            }) as Box<dyn LiveState<Scope, Error>>))
         })
     }
 }
@@ -66,7 +81,9 @@ fn spec() -> Result<Arc<ListSpec>> {
     ListSpec {
         filters: BTreeMap::from([
             ("company_id".into(), Filter::string("")),
-            ("tab".into(), Filter::string("submitted")),
+            ("status".into(), Filter::string("")),
+            ("audience".into(), Filter::string("mine")),
+            ("employee_id".into(), Filter::string("")),
         ]),
         // Bilimbi's queues are bounded at 500, with no pagination or search.
         page_sizes: vec![500],
@@ -87,27 +104,22 @@ fn columns(id: &str, fields: &[(&str, &str)]) -> Result<ListColumns> {
     )
     .map_err(|_| Error::Internal)
 }
-fn queue_columns(tab: &str) -> Result<ListColumns> {
-    let mut fields = vec![
-        ("employee", "Employee"),
-        ("claim", "Claim"),
-        ("date", "Date"),
-        ("claimed", "Claimed"),
-    ];
-    if tab != "submitted" {
-        fields.push(("approved", "Approved"));
-    }
-    fields.push(("receipt", "Receipt"));
-    if matches!(tab, "approved" | "reimbursed") {
-        fields.push(("batch", "Batch"));
-    }
-    if tab == "rejected" {
-        fields.push(("reason", "Reason"));
-    }
-    if tab == "reimbursed" {
-        fields.push(("paid", "Paid"));
-    }
-    columns("claim-queue-table", &fields)
+fn queue_columns(_: &str) -> Result<ListColumns> {
+    columns(
+        "claims-table",
+        &[
+            ("employee", "Employee"),
+            ("claim", "Claim"),
+            ("date", "Date"),
+            ("claimed", "Claimed"),
+            ("approved", "Approved"),
+            ("status", "Status"),
+            ("receipt", "Receipt"),
+            ("batch", "Batch"),
+            ("reason", "Reason"),
+            ("paid", "Reimbursement"),
+        ],
+    )
 }
 #[derive(Clone, Copy)]
 enum Action {
@@ -156,6 +168,11 @@ struct Operations {
     companies: Vec<CompanySummary>,
     company: Option<CompanySummary>,
     can_reimburse: bool,
+    can_review: bool,
+    submission: crate::submission::Submission,
+    record: Option<i64>,
+    workspace: bool,
+
     rows: Vec<QueueClaim>,
     batches: Vec<HandoffBatch>,
     waiting: Vec<HandoffWaiting>,
@@ -168,8 +185,21 @@ struct Operations {
 }
 impl Operations {
     fn new(core: Arc<Core>, query: &HashMap<String, String>) -> Result<Self> {
+        if query.contains_key("id")
+            && params::positive_id(query.get("id").map(String::as_str)).is_none()
+        {
+            return Err(Error::NotFound);
+        }
         let mut state = Self {
+            submission: crate::submission::Submission::new(
+                core.claims.clone(),
+                core.contracts.clone(),
+                query,
+            )?,
             core,
+            can_review: false,
+            record: params::positive_id(query.get("id").map(String::as_str)),
+            workspace: false,
             list: ListState::parse(query, spec()?).map_err(|_| Error::Internal)?,
             columns: queue_columns("submitted")?,
             batches_columns: columns(
@@ -207,11 +237,11 @@ impl Operations {
         Ok(state)
     }
     fn tab(&self) -> &str {
-        &self.list.filters["tab"]
+        &self.list.filters["status"]
     }
     fn normalize(&mut self) {
-        if !TABS.contains(&self.tab()) {
-            self.list.filters.insert("tab".into(), "submitted".into());
+        if !self.tab().is_empty() && !crate::REQUEST_STATUSES.contains(&self.tab()) {
+            self.list.filters.insert("status".into(), String::new());
         }
         self.list.page = 1;
     }
@@ -235,24 +265,34 @@ impl Operations {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         let client = self.core.db.get().await?;
-        self.companies = match authorization::company_choices(
-            &**client,
-            scope,
-            APPROVE,
-            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
-        )
-        .await
+        let current = scope.current_company().map(|id| id.get());
+        self.companies =
+            match authorization::company_choices(&**client, scope, crate::SUBMIT, current).await {
+                Ok(rows) => rows,
+                Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),
+                Err(_) => vec![],
+            };
+        let review = match authorization::company_choices(&**client, scope, APPROVE, current).await
         {
             Ok(rows) => rows,
             Err(bilibi_people_workforce::WorkforceError::Failed(e)) => return Err(e),
             Err(_) => vec![],
         };
+        for c in review {
+            if !self.companies.iter().any(|r| r.id == c.id) {
+                self.companies.push(c);
+            }
+        }
         self.company = self
             .companies
             .iter()
-            .find(|c| c.id.to_string() == self.list.filters["company_id"])
-            .or_else(|| self.companies.first())
+            .find(|c| Some(c.id) == current)
             .cloned();
+        self.can_review = if let Some(c) = &self.company {
+            authorization::allowed(&**client, scope, c.id, APPROVE).await
+        } else {
+            false
+        };
         self.can_reimburse = if let Some(c) = &self.company {
             authorization::allowed(&**client, scope, c.id, REIMBURSE).await
         } else {
@@ -271,6 +311,7 @@ impl Operations {
         self.instance =
             Some(bilibi_system::Instance::resolve(&self.core.claims.settings, &**client).await?);
         drop(client);
+        self.submission.load(scope).await?;
         self.rows.clear();
         self.batches.clear();
         self.waiting.clear();
@@ -279,29 +320,52 @@ impl Operations {
             self.list
                 .filters
                 .insert("company_id".into(), company.to_string());
-            let loaded = async {
-                if self.tab() == "batches" {
-                    self.batches = self.core.claims.handoff_batches(scope, company).await?;
-                } else {
-                    self.rows = self
-                        .core
-                        .claims
-                        .claim_queue(scope, company, self.tab())
-                        .await?;
-                    if self.tab() == "approved" {
-                        self.waiting = self.core.claims.handoff_waiting(scope, company).await?;
-                    }
-                }
-                Ok::<_, ClaimsError>(())
+            let mut team = self.list.filters["audience"] == "team" && self.can_review;
+            if !self.submission.available() && self.can_review {
+                team = true;
             }
-            .await;
-            if let Err(error) = loaded {
-                self.company = None;
-                self.rows.clear();
-                self.batches.clear();
-                self.waiting.clear();
-                self.can_reimburse = false;
-                self.refused(error);
+            self.list
+                .filters
+                .insert("audience".into(), if team { "team" } else { "mine" }.into());
+            if !team {
+                self.list
+                    .filters
+                    .insert("employee_id".into(), String::new());
+            }
+            let loaded = self
+                .core
+                .claims
+                .requests(
+                    scope,
+                    company,
+                    if self.record.is_some() {
+                        self.can_review
+                    } else {
+                        team
+                    },
+                    self.tab(),
+                    params::positive_id(self.list.filters.get("employee_id").map(String::as_str)),
+                    self.record,
+                )
+                .await;
+            match loaded {
+                Ok(rows) => self.rows = rows,
+                Err(ClaimsError::Failed(e)) => return Err(e),
+                Err(e) => self.refused(e),
+            }
+            if self.can_review && self.can_reimburse && self.record.is_none() {
+                self.waiting = self
+                    .core
+                    .claims
+                    .handoff_waiting(scope, company)
+                    .await
+                    .unwrap_or_default();
+                self.batches = self
+                    .core
+                    .claims
+                    .handoff_batches(scope, company)
+                    .await
+                    .unwrap_or_default();
             }
         }
         let selected = self
@@ -311,6 +375,7 @@ impl Operations {
             .or(self.selection.as_ref());
         if selected.is_some_and(|selection| {
             self.company.as_ref().map(|c| c.id) != Some(selection.company)
+                || !self.can_review
                 || selection.action.capability() == REIMBURSE && !self.can_reimburse
         }) {
             self.clear();
@@ -363,7 +428,7 @@ impl Operations {
         };
         self.message(StatusKind::Error, text);
     }
-    async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<()> {
+    async fn event(&mut self, scope: &Scope, credential: &str, payload: &Value) -> Result<()> {
         let event = payload.get("type").and_then(Value::as_str).unwrap_or("");
         let action = match event {
             "approve" => Some(Action::Approve),
@@ -393,14 +458,15 @@ impl Operations {
             }
         }
         match event {
-            "clear-flash" => self.flash = None,
+            "clear-flash" => {
+                self.flash = None;
+                self.submission.event(scope, credential, payload).await?;
+            }
             "cancel" => self.clear(),
             "filters" => {
                 self.clear();
                 self.list
                     .apply_filters(&params::form_values(payload, "filters"));
-                // Bilimbi's company patch opens the awaiting-decision queue.
-                self.list.filters.insert("tab".into(), "submitted".into());
                 self.normalize();
                 self.columns = queue_columns(self.tab())?;
             }
@@ -511,69 +577,58 @@ impl Operations {
                     self.values.clear();
                     let Pending { selection, values } = pending;
                     let company = selection.company;
-                    let reason = values.get("decision_reason").cloned();
-                    let payment = Reimbursement {
-                        payment_reference: values.get("payment_reference").cloned(),
-                    };
-                    let claims = &self.core.claims;
-                    let (result, message) = match (selection.action, selection.subject) {
-                        (Action::Approve, Subject::Claim(row)) => (
-                            claims
-                                .approve_request(
-                                    scope,
-                                    company,
-                                    row.request.id,
-                                    &Approval {
-                                        approved_amount: values
-                                            .get("approved_amount")
-                                            .filter(|s| !s.trim().is_empty())
-                                            .and_then(|s| s.parse().ok()),
-                                        decision_reason: reason,
-                                    },
-                                )
-                                .await
-                                .map(|_| ()),
-                            "Claim approved.",
-                        ),
-                        (Action::Reject, Subject::Claim(row)) => (
-                            claims
-                                .reject_request(
-                                    scope,
-                                    company,
-                                    row.request.id,
-                                    &Rejection {
-                                        decision_reason: reason.unwrap_or_default(),
-                                    },
-                                )
-                                .await
-                                .map(|_| ()),
-                            "Claim rejected.",
-                        ),
-                        (Action::Reimburse, Subject::Claim(row)) => (
-                            claims
-                                .reimburse_request(scope, company, row.request.id, &payment)
-                                .await
-                                .map(|_| ()),
-                            "Claim marked reimbursed.",
-                        ),
-                        (_, Subject::Currency(currency)) => (
-                            claims
-                                .create_handoff_batch(scope, company, &currency)
-                                .await
-                                .map(|_| ()),
-                            "Hand-off batch created. Open it under Batches to export it.",
-                        ),
-                        (Action::Batch, Subject::Batch(batch)) => (
-                            claims
-                                .reimburse_batch(scope, company, batch.id, &payment)
-                                .await
-                                .map(|_| ()),
-                            "Batch claims marked reimbursed.",
-                        ),
+                    let mut input = serde_json::json!({"company_id":company});
+                    for key in ["approved_amount", "decision_reason", "payment_reference"] {
+                        if let Some(value) = values.get(key).filter(|v| !v.trim().is_empty()) {
+                            input[key] = Value::String(value.clone());
+                        }
+                    }
+                    let (contract, message) = match (selection.action, selection.subject) {
+                        (Action::Approve, Subject::Claim(row)) => {
+                            input["request_id"] = row.request.id.into();
+                            ("people.claims.request.approve", "Claim approved.")
+                        }
+                        (Action::Reject, Subject::Claim(row)) => {
+                            input["request_id"] = row.request.id.into();
+                            ("people.claims.request.reject", "Claim rejected.")
+                        }
+                        (Action::Reimburse, Subject::Claim(row)) => {
+                            input["request_id"] = row.request.id.into();
+                            (
+                                "people.claims.request.reimburse",
+                                "Claim marked reimbursed.",
+                            )
+                        }
+                        (_, Subject::Currency(currency)) => {
+                            input["currency"] = currency.into();
+                            ("people.claims.handoff.create", "Hand-off batch created.")
+                        }
+                        (_, Subject::Batch(batch)) => {
+                            input["batch_id"] = batch.id.into();
+                            (
+                                "people.claims.handoff.reimburse",
+                                "Batch marked reimbursed.",
+                            )
+                        }
                         _ => return Ok(()),
                     };
+                    let result = self
+                        .core
+                        .contracts
+                        .submit(
+                            &bilibi_agent_api::page::Call {
+                                scope,
+                                credential,
+                                service: SERVICE,
+                                event: "confirm",
+                                contract,
+                            },
+                            input,
+                        )
+                        .await
+                        .map_err(crate::agent::page_error);
                     match result {
-                        Ok(()) => self.message(StatusKind::Success, message),
+                        Ok(_) => self.message(StatusKind::Success, message),
                         Err(error) => self.refused(error),
                     }
                 }
@@ -612,13 +667,7 @@ impl Operations {
             .iter()
             .map(|row| {
                 let r = &row.request;
-                let mut actions = Html::EMPTY;
-                if self.tab() == "submitted" {
-                    actions.push(&action("approve", "Approve", &r.id.to_string())?);
-                    actions.push(&action("reject", "Reject", &r.id.to_string())?);
-                } else if self.tab() == "approved" && self.can_reimburse {
-                    actions.push(&action("reimburse", "Mark reimbursed", &r.id.to_string())?);
-                }
+                let actions = self.claim_actions(row)?;
                 let mut paid =
                     self.moment(format!("claim-paid-{}", r.id), r.reimbursed_at.as_deref())?;
                 if let Some(reference) = &r.payment_reference {
@@ -633,7 +682,20 @@ impl Operations {
                             row.employee_number.as_deref().unwrap_or("")
                         )),
                     )
-                    .slot("claim", render(&ClaimCell { row, compact })?)
+                    .slot(
+                        "claim",
+                        render(&ClaimCell {
+                            row,
+                            compact,
+                            workspace: self.workspace,
+                            href: format!(
+                                "{PATH}/{}?company_id={}",
+                                r.id,
+                                self.company.as_ref().map_or(0, |c| c.id)
+                            ),
+                        })?,
+                    )
+                    .slot("status", Html::text(&r.status))
                     .slot("date", Html::text(&r.incurred_on.to_string()))
                     .slot(
                         "claimed",
@@ -665,13 +727,9 @@ impl Operations {
         table.zoom = self.columns.zoom;
         table.suggestions = self.columns.flex_suggestions();
         table.add_query = &self.columns.add_query;
-        table.actions = self.tab() == "submitted" || self.tab() == "approved" && self.can_reimburse;
+        table.actions = true;
         table.empty = Some(TableEmpty::State(
-            EmptyState::missing(
-                format!("No claims are {}.", label(self.tab()).to_lowercase()),
-                "",
-            )
-            .id("claim-queue-empty"),
+            EmptyState::missing("No claims match these filters.", "").id("claim-queue-empty"),
         ));
         render(&table)
     }
@@ -739,7 +797,7 @@ impl Operations {
         render(&table)
     }
     fn waiting_table(&self) -> Result<Html> {
-        if self.tab() != "approved" || !self.can_reimburse || self.waiting.is_empty() {
+        if !self.can_review || !self.can_reimburse || self.waiting.is_empty() {
             return Ok(Html::EMPTY);
         }
         let rows = self
@@ -911,71 +969,188 @@ impl Operations {
             cancel_event: "cancel",
         })
     }
+    fn claim_actions(&self, row: &QueueClaim) -> Result<Html> {
+        let r = &row.request;
+        let mut body = Html::EMPTY;
+        if self.can_review && Some(r.employee_id) != self.submission.own_id() {
+            if r.status == "submitted" {
+                body.push(&action("approve", "Approve", &r.id.to_string())?);
+                body.push(&action("reject", "Reject", &r.id.to_string())?);
+            }
+            if r.status == "approved" && self.can_reimburse {
+                body.push(&action("reimburse", "Mark reimbursed", &r.id.to_string())?);
+            }
+        }
+        if r.status == "submitted" && Some(r.employee_id) == self.submission.own_id() {
+            body.push(&action("withdraw_claim", "Withdraw", &r.id.to_string())?);
+        }
+        Ok(body)
+    }
     fn render(&self) -> Result<String> {
-        let filters = render(&FilterToolbar::new(
-            "claim-operations-company",
-            vec![ToolbarControl::select(
-                "claim-operations-company-select",
-                "company_id",
-                "Company",
-                &self.list.filters["company_id"],
-                self.companies
-                    .iter()
-                    .map(|c| Choice::new(&c.name, c.id.to_string()))
+        let mut controls = vec![
+            ToolbarControl::select(
+                "claims-audience",
+                "audience",
+                "Audience",
+                &self.list.filters["audience"],
+                if self.can_review {
+                    vec![Choice::new("Mine", "mine"), Choice::new("Team", "team")]
+                } else {
+                    vec![Choice::new("Mine", "mine")]
+                },
+            ),
+            ToolbarControl::select(
+                "claims-status",
+                "status",
+                "Status",
+                self.tab(),
+                std::iter::once(Choice::new("All statuses", ""))
+                    .chain(crate::REQUEST_STATUSES.iter().map(|s| Choice::new(*s, *s)))
                     .collect(),
-            )],
-        ))?;
-        let links: Vec<_> = TABS
-            .iter()
-            .map(|tab| {
-                let mut query = self.list.to_params();
-                query.insert("tab".into(), (*tab).into());
-                params::address(PATH, &query)
-            })
-            .collect();
-        let ids: Vec<_> = TABS.iter().map(|tab| format!("claim-tab-{tab}")).collect();
-        let tabs = render(&Tabs {
-            id: "claim-operations-tabs",
-            label: "Claim queues",
-            tabs: TABS
-                .iter()
-                .zip(&links)
-                .zip(&ids)
-                .map(|((tab, href), id)| Tab {
-                    id,
-                    ..Tab::patch(href, label(tab), self.tab() == *tab)
-                })
-                .collect(),
-            ..Tabs::default()
-        })?;
+            ),
+        ];
+        if self.can_review && self.list.filters["audience"] == "team" {
+            let mut employees = std::collections::BTreeMap::new();
+            for row in &self.rows {
+                employees.insert(
+                    row.request.employee_id,
+                    row.employee_name
+                        .clone()
+                        .unwrap_or_else(|| row.request.employee_id.to_string()),
+                );
+            }
+            if let Some(id) =
+                params::positive_id(self.list.filters.get("employee_id").map(String::as_str))
+            {
+                employees
+                    .entry(id)
+                    .or_insert_with(|| format!("Employee {id}"));
+            }
+            controls.push(ToolbarControl::select(
+                "claims-employee",
+                "employee_id",
+                "Employee",
+                &self.list.filters["employee_id"],
+                std::iter::once(Choice::new("All employees", ""))
+                    .chain(
+                        employees
+                            .into_iter()
+                            .map(|(id, name)| Choice::new(name, id.to_string())),
+                    )
+                    .collect(),
+            ));
+        }
         View {
             flash: self.flash(),
             available: self.company.is_some(),
-            filters,
-            tabs,
-            empty: render(
-                &EmptyState::missing("No company is available for claim operations.", "")
-                    .id("claim-operations-empty"),
-            )?,
-            heading: label(self.tab()),
-            heading_id: if self.tab() == "batches" { "claim-batches-heading" } else { "claim-queue-heading" },
-            description: if self.tab() == "batches" { "A batch groups approved claims of one currency for finance or payroll. Export it as a CSV, then mark it reimbursed once paid." } else { "" },
-            waiting: self.waiting_table()?,
-            table: if self.company.is_none() {
-                Html::EMPTY
-            } else if self.tab() == "batches" {
-                self.batch_table()?
+            filters: render(&FilterToolbar::new("claims-filters", controls))?,
+            table: if self.record.is_some() {
+                self.record_view()?
             } else {
                 self.queue()?
             },
-            truncated: self.tab() != "batches" && self.rows.len() >= 500,
+            empty: render(&EmptyState::missing(
+                "No company is available for claims.",
+                "",
+            ))?,
+            submission: if self.record.is_none() {
+                self.submission.render()?
+            } else {
+                Html::EMPTY
+            },
+            waiting: if self.record.is_none() {
+                self.waiting_table()?
+            } else {
+                Html::EMPTY
+            },
+            batches: if self.record.is_none() && self.can_review && self.can_reimburse {
+                self.batch_table()?
+            } else {
+                Html::EMPTY
+            },
+            truncated: self.record.is_none() && self.rows.len() >= 500,
+            detail: self.record.is_some(),
+            record_id: self.record.map(|id| id.to_string()).unwrap_or_default(),
             dialog: self.dialog()?,
             confirmation: self.confirmation()?,
+            withdrawal: if self.record.is_some() {
+                self.submission.confirmation()?
+            } else {
+                Html::EMPTY
+            },
         }
         .render()
         .map_err(|_| Error::Internal)
     }
+    fn record_view(&self) -> Result<Html> {
+        let row = self.rows.first().ok_or(Error::NotFound)?;
+        let r = &row.request;
+        let facts = vec![
+            bilibi_ui::Fact {
+                title: "Employee",
+                value: Html::text(row.employee_name.as_deref().unwrap_or("—")),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Claim type",
+                value: Html::text(&row.claim_type_name),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Expense date",
+                value: Html::text(&r.incurred_on.to_string()),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Amount",
+                value: Html::text(&format!("{} {}", r.amount, r.currency)),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Approved amount",
+                value: Html::text(&money(r.approved_amount)),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Status",
+                value: Html::text(&r.status),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Receipt",
+                value: Html::text(r.receipt_number.as_deref().unwrap_or("—")),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Description",
+                value: Html::text(r.description.as_deref().unwrap_or("—")),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Decision",
+                value: Html::text(r.decision_reason.as_deref().unwrap_or("—")),
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Reimbursed",
+                value: self.moment(format!("claim-paid-{}", r.id), r.reimbursed_at.as_deref())?,
+                ..Default::default()
+            },
+            bilibi_ui::Fact {
+                title: "Payment reference",
+                value: Html::text(r.payment_reference.as_deref().unwrap_or("—")),
+                ..Default::default()
+            },
+        ];
+        let mut body = render(&bilibi_ui::Facts {
+            items: facts,
+            ..Default::default()
+        })?;
+        body.push(&self.claim_actions(row)?);
+        Ok(body)
+    }
 }
+
 impl LiveState<Scope, Error> for Operations {
     fn update<'a>(&'a mut self, request: LiveRequest<'a, Scope>) -> LiveFuture<'a, Error> {
         Box::pin(async move {
@@ -989,7 +1164,25 @@ impl LiveState<Scope, Error> for Operations {
                 }
                 LiveInput::Event(payload) => {
                     self.load(request.scope).await?;
-                    self.event(request.scope, payload).await?;
+                    let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
+                    if matches!(
+                        kind,
+                        "submit_claim"
+                            | "withdraw_claim"
+                            | "confirm_withdraw"
+                            | "cancel_withdraw"
+                            | "open_types_grid"
+                    ) {
+                        self.submission
+                            .event(request.scope, request.credential, payload)
+                            .await?;
+                        if let Some(message) = self.submission.take_flash() {
+                            self.flash = Some(message);
+                        }
+                    } else {
+                        self.event(request.scope, request.credential, payload)
+                            .await?;
+                    }
                 }
             }
             self.load(request.scope).await?;
@@ -1009,15 +1202,6 @@ fn selection_refusal(event: &str) -> &'static str {
         "handoff" => "You may not hand off claims.",
         "reimburse_batch" => "This batch cannot be reimbursed.",
         _ => FORBIDDEN,
-    }
-}
-fn label(tab: &str) -> &'static str {
-    match tab {
-        "approved" => "Approved",
-        "reimbursed" => "Reimbursed",
-        "rejected" => "Rejected",
-        "batches" => "Hand-off batches",
-        _ => "Awaiting decision",
     }
 }
 fn money(value: Option<Decimal>) -> String {
@@ -1042,16 +1226,17 @@ struct View<'a> {
     flash: FlashMap<'a>,
     available: bool,
     filters: Html,
-    tabs: Html,
     empty: Html,
-    heading: &'a str,
-    heading_id: &'a str,
-    description: &'a str,
-    waiting: Html,
     table: Html,
+    submission: Html,
+    waiting: Html,
+    batches: Html,
     truncated: bool,
+    detail: bool,
+    record_id: String,
     dialog: Html,
     confirmation: Html,
+    withdrawal: Html,
 }
 #[derive(Template)]
 #[template(path = "decision_form.html")]
@@ -1061,12 +1246,14 @@ struct DecisionForm {
 }
 #[derive(Template)]
 #[template(
-    source = "<div>{{ row.claim_type_name }} <span class=\"text-ink-muted\">· {{ row.category_name }}</span></div>{% if !compact %}{% if let Some(description) = row.request.description %}<div class=\"text-xs text-ink-muted\">{{ description }}</div>{% endif %}{% if row.request.duplicate_confirmed %}<div class=\"text-xs text-warning-ink\">Submitter confirmed a similar claim.</div>{% endif %}{% endif %}",
+    source = "{% import \"lists.html\" as lists %}{% call lists::record_link(workspace=workspace, kind=\"people/claims\", record_id=row.request.id.to_string(), href=href) %}{{ row.claim_type_name }}{% endcall %}<div> <span class=\"text-ink-muted\">· {{ row.category_name }}</span></div>{% if !compact %}{% if let Some(description) = row.request.description %}<div class=\"text-xs text-ink-muted\">{{ description }}</div>{% endif %}{% if row.request.duplicate_confirmed %}<div class=\"text-xs text-warning-ink\">Submitter confirmed a similar claim.</div>{% endif %}{% endif %}",
     ext = "html"
 )]
 struct ClaimCell<'a> {
     row: &'a QueueClaim,
     compact: bool,
+    workspace: bool,
+    href: String,
 }
 #[derive(Template)]
 #[template(

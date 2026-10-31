@@ -29,6 +29,7 @@
 //! and transactional events consumed by other Domains.
 //!
 //! See `README.md`.
+mod agent;
 mod assignments;
 mod catalog;
 mod contributions;
@@ -39,7 +40,7 @@ mod operations_web;
 mod policies;
 mod requests;
 mod setup_web;
-mod web;
+mod submission;
 mod workflow;
 
 pub use handoff::{HandoffBatch, HandoffExport, HandoffWaiting};

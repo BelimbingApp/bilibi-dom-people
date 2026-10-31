@@ -1,4 +1,4 @@
-//! My claims mirrors Bilimbi People Claims.Web.MyClaimsLive. Its unpaged lists
+//! Claim submission mirrors Bilimbi People Claims.Web.MyClaimsLive. Its unpaged lists
 //! use FlexTable column controls; no sort/filter/page controls exist in Bilimbi.
 use crate::{
     Claims, ClaimsError, FieldError, NewRequest, OpenClaimType, Request, SelfEmployee, SUBMIT,
@@ -8,72 +8,24 @@ use bilibi_database::{Error, Result};
 use bilibi_people_workforce::authorization;
 use bilibi_tenancy::Scope;
 use bilibi_ui::{
-    choices,
-    page::{
-        LiveBody, LiveFuture, LiveInput, LiveRequest, LiveState, MountFuture, Page, PageBody,
-        PageFuture, PageRequest,
-    },
-    params, BuiltinColumn, Button, ButtonVariant, ConfirmDialog, EmptyState, ErrorSummary, Field,
-    FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec, ListState, StatusKind,
-    TableEmpty, NO_FLASH,
+    choices, params, BuiltinColumn, Button, ButtonVariant, ConfirmDialog, EmptyState, ErrorSummary,
+    Field, FlashMap, FlexRow, FlexTable, Html, InputKind, ListColumns, ListSpec, ListState,
+    StatusKind, TableEmpty, NO_FLASH,
 };
 use rust_decimal::Decimal;
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
-pub(crate) const SERVICE: &str = "people/claims.pages";
 const UNAVAILABLE: &str = "You are not a working employee of this company.";
 const NO_PERMISSION: &str = "You no longer have permission to submit claims here.";
 
-pub(crate) struct Pages(Arc<Claims>);
-impl Pages {
-    pub(crate) fn new(claims: Arc<Claims>) -> Self {
-        Self(claims)
-    }
-}
-impl Page<Scope, Error> for Pages {
-    fn title(&self, operation: &str) -> Option<&'static str> {
-        (operation == "my_claims").then_some("My claims")
-    }
-    fn render<'a>(&'a self, request: PageRequest<'a, Scope>) -> PageFuture<'a, Error> {
-        Box::pin(async move {
-            if request.operation != "my_claims" {
-                return Err(Error::NotFound);
-            }
-            let mut state = MyClaims::new(self.0.clone(), request.query)?;
-            state
-                .load(request.scope.ok_or(Error::Unauthorized)?)
-                .await?;
-            Ok(PageBody {
-                html: state.render()?,
-                live: true,
-                title: None,
-            })
-        })
-    }
-    fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
-        Box::pin(async move {
-            if request.operation != "my_claims" {
-                return Ok(None);
-            }
-            Ok(Some(
-                Box::new(MyClaims::new(self.0.clone(), request.query)?)
-                    as Box<dyn LiveState<Scope, Error>>,
-            ))
-        })
-    }
-}
-
 #[derive(Template)]
-#[template(path = "my_claims.html")]
+#[template(path = "submission.html")]
 struct View<'a> {
     flash: FlashMap<'a>,
-    subtitle: String,
     available: bool,
     has_types: bool,
     open_types: Html,
-    requests: Html,
-    unavailable: Html,
     fields: Vec<Field>,
     possible_duplicate: bool,
     duplicate_field: Field,
@@ -81,8 +33,9 @@ struct View<'a> {
     errors: Html,
     confirmation: Html,
 }
-struct MyClaims {
+pub(super) struct Submission {
     claims: Arc<Claims>,
+    contracts: Arc<bilibi_agent_api::page::PageContracts>,
     company: Option<i64>,
     employee: Option<SelfEmployee>,
     open: Vec<OpenClaimType>,
@@ -94,14 +47,18 @@ struct MyClaims {
     /// Only the selection proven to be an own submitted claim is retained.
     pending_withdraw: Option<i64>,
     open_columns: ListColumns,
-    request_columns: ListColumns,
     list: ListState,
     flash: Option<(StatusKind, String)>,
 }
-impl MyClaims {
-    fn new(claims: Arc<Claims>, query: &HashMap<String, String>) -> Result<Self> {
+impl Submission {
+    pub(super) fn new(
+        claims: Arc<Claims>,
+        contracts: Arc<bilibi_agent_api::page::PageContracts>,
+        query: &HashMap<String, String>,
+    ) -> Result<Self> {
         Ok(Self {
             claims,
+            contracts,
             company: None,
             employee: None,
             open: vec![],
@@ -121,18 +78,6 @@ impl MyClaims {
                     ("receipt", "Receipt rule"),
                 ],
             )?,
-            request_columns: columns(
-                "my-claims-table",
-                &[
-                    ("type", "Type"),
-                    ("date", "Date"),
-                    ("amount", "Amount"),
-                    ("receipt", "Receipt"),
-                    ("status", "Status"),
-                    ("decision", "Decision"),
-                    ("actions", "Actions"),
-                ],
-            )?,
             list: list_state(query)?,
             flash: None,
         })
@@ -147,9 +92,9 @@ impl MyClaims {
         self.errors.clear();
         self.possible_duplicate = false;
     }
-    async fn load(&mut self, scope: &Scope) -> Result<()> {
+    pub(super) async fn load(&mut self, scope: &Scope) -> Result<()> {
         // This company comes only from the signed-in account, never from an event.
-        self.company = scope.actor().organisation().map(|id| id.get());
+        self.company = scope.current_company().map(|id| id.get());
         let Some(company) = self.company else {
             self.clear_private();
             return Ok(());
@@ -175,9 +120,6 @@ impl MyClaims {
                     self.open_columns
                         .load(&open, |t| t.claim_type.id.to_string());
                 }
-                if self.requests != requests {
-                    self.request_columns.load(&requests, |r| r.id.to_string());
-                }
                 self.employee = Some(employee);
                 self.open = open;
                 self.requests = requests;
@@ -191,7 +133,12 @@ impl MyClaims {
     fn flash(&mut self, kind: StatusKind, message: impl Into<String>) {
         self.flash = Some((kind, message.into()));
     }
-    async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<()> {
+    pub(super) async fn event(
+        &mut self,
+        scope: &Scope,
+        credential: &str,
+        payload: &Value,
+    ) -> Result<()> {
         let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
         if kind == "clear-flash" {
             if self
@@ -203,13 +150,8 @@ impl MyClaims {
             }
             return Ok(());
         }
-        if kind == "open_types_grid" || kind == "claims_grid" {
-            let columns = if kind == "open_types_grid" {
-                &mut self.open_columns
-            } else {
-                &mut self.request_columns
-            };
-            columns.handle(&params::string_values(payload));
+        if kind == "open_types_grid" {
+            self.open_columns.handle(&params::string_values(payload));
             return Ok(());
         }
         if kind == "cancel_withdraw" {
@@ -251,7 +193,7 @@ impl MyClaims {
                 self.errors.clear();
                 let result = parse_request(&self.form).map_err(ClaimsError::Invalid);
                 let result = match result {
-                    Ok(input) => self.claims.submit_request(scope, company, &input).await,
+                    Ok(input) => self.contracts.submit(&bilibi_agent_api::page::Call {scope,credential,service:crate::operations_web::SERVICE,event:"submit_claim",contract:"people.claims.request.submit"},serde_json::json!({"company_id":company,"claim_type_id":input.claim_type_id,"incurred_on":input.incurred_on.to_string(),"amount":input.amount.to_string(),"currency":input.currency,"description":input.description.unwrap_or_default(),"receipt_number":input.receipt_number.unwrap_or_default(),"confirm_duplicate":input.confirm_duplicate})).await.map_err(crate::agent::page_error),
                     Err(error) => Err(error),
                 };
                 match result {
@@ -287,7 +229,21 @@ impl MyClaims {
             }
             "confirm_withdraw" => {
                 if let Some(id) = self.pending_withdraw.take() {
-                    match self.claims.withdraw_request(scope, company, id).await {
+                    match self
+                        .contracts
+                        .submit(
+                            &bilibi_agent_api::page::Call {
+                                scope,
+                                credential,
+                                service: crate::operations_web::SERVICE,
+                                event: "confirm_withdraw",
+                                contract: "people.claims.request.withdraw",
+                            },
+                            serde_json::json!({"company_id":company,"request_id":id}),
+                        )
+                        .await
+                        .map_err(crate::agent::page_error)
+                    {
                         Ok(_) => self.flash(StatusKind::Success, "Claim withdrawn."),
                         Err(error) => self.flash(
                             StatusKind::Error,
@@ -307,7 +263,7 @@ impl MyClaims {
         }
         Ok(())
     }
-    fn render(&self) -> Result<String> {
+    pub(super) fn render(&self) -> Result<Html> {
         let mut flash = NO_FLASH;
         if let Some((kind, message)) = &self.flash {
             match kind {
@@ -329,40 +285,6 @@ impl MyClaims {
                     .slot("receipt", Html::text(&receipt_rule(t)))
             })
             .collect();
-        let mut rows = Vec::new();
-        for r in &self.requests {
-            let actions = if r.status == "submitted" {
-                render(&Button {
-                    id: &format!("claim-{}-withdraw", r.id),
-                    event: "withdraw_claim",
-                    name: "id",
-                    value: &r.id.to_string(),
-                    body: Html::text("Withdraw"),
-                    ..Button::default()
-                })?
-            } else {
-                Html::EMPTY
-            };
-            rows.push(
-                FlexRow::new(format!("claim-{}", r.id))
-                    .slot(
-                        "type",
-                        Html::text(self.names.get(&r.claim_type_id).map_or("—", String::as_str)),
-                    )
-                    .slot("date", Html::text(&r.incurred_on.to_string()))
-                    .slot(
-                        "amount",
-                        Html::text(&format!("{} {}", r.amount, r.currency)),
-                    )
-                    .slot(
-                        "receipt",
-                        Html::text(r.receipt_number.as_deref().unwrap_or("—")),
-                    )
-                    .slot("status", Html::text(&capitalize(&r.status)))
-                    .slot("decision", Html::text(&decision(r)))
-                    .slot("actions", actions),
-            );
-        }
         let fields = self.fields();
         let mut summary = ErrorSummary::new("my-claims-errors");
         for field in &fields {
@@ -386,13 +308,8 @@ impl MyClaims {
         } else {
             Html::EMPTY
         };
-        View {
+        render(&View {
             flash,
-            subtitle: self
-                .employee
-                .as_ref()
-                .map(|e| format!("{} · {}", e.display_name, e.employee_number))
-                .unwrap_or_default(),
             available: self.employee.is_some(),
             has_types: !self.open.is_empty(),
             open_types: table(
@@ -403,22 +320,6 @@ impl MyClaims {
                 "No claim types are open for claims yet.",
                 "my-claims-no-types",
                 &self.list,
-            )?,
-            requests: table(
-                &self.request_columns,
-                "claims_grid",
-                "Submitted claims",
-                rows,
-                "You have not submitted any claims.",
-                "my-claims-empty",
-                &self.list,
-            )?,
-            unavailable: render(
-                &EmptyState::missing(
-                    "Your account is not linked to a working employee in this company.",
-                    "",
-                )
-                .id("my-claims-unavailable"),
             )?,
             fields,
             possible_duplicate: self.possible_duplicate,
@@ -439,9 +340,31 @@ impl MyClaims {
             })?,
             errors: render(&summary)?,
             confirmation,
+        })
+    }
+    pub(super) fn take_flash(&mut self) -> Option<(StatusKind, String)> {
+        self.flash.take()
+    }
+    pub(super) fn confirmation(&self) -> Result<Html> {
+        if let Some(id) = self.pending_withdraw {
+            render(&ConfirmDialog {
+                id: "claim-withdraw-confirm",
+                consequence: "Withdraw this claim?",
+                detail: &format!("Claim #{id} will be withdrawn. This cannot be undone."),
+                confirm: "Withdraw",
+                working: "Withdrawing…",
+                confirm_event: "confirm_withdraw",
+                cancel_event: "cancel_withdraw",
+            })
+        } else {
+            Ok(Html::EMPTY)
         }
-        .render()
-        .map_err(|_| Error::Internal)
+    }
+    pub(super) fn available(&self) -> bool {
+        self.employee.is_some()
+    }
+    pub(super) fn own_id(&self) -> Option<i64> {
+        self.employee.as_ref().map(|e| e.id)
     }
     fn fields(&self) -> Vec<Field> {
         let value = |key: &str| self.form.get(key).cloned().unwrap_or_default();
@@ -504,25 +427,6 @@ impl MyClaims {
                 .collect();
         }
         fields
-    }
-}
-impl LiveState<Scope, Error> for MyClaims {
-    fn update<'a>(&'a mut self, request: LiveRequest<'a, Scope>) -> LiveFuture<'a, Error> {
-        Box::pin(async move {
-            self.load(request.scope).await?;
-            match request.input {
-                LiveInput::Event(payload) => self.event(request.scope, payload).await?,
-                LiveInput::Params(query) => self.list = list_state(query)?,
-                LiveInput::Refresh => {}
-            }
-            self.load(request.scope).await?;
-            Ok(LiveBody {
-                html: self.render()?,
-                rows: self.requests.len() + self.open.len(),
-                query: self.list.to_params(),
-                ..LiveBody::default()
-            })
-        })
     }
 }
 fn columns(id: &str, labels: &[(&str, &str)]) -> Result<ListColumns> {
@@ -670,33 +574,5 @@ fn receipt_rule(t: &OpenClaimType) -> String {
                 .map(|v| v.to_string())
                 .unwrap_or_default()
         ),
-    }
-}
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or(String::new(), |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
-fn decision(r: &Request) -> String {
-    match r.status.as_str() {
-        "approved" | "reimbursed" => {
-            let mut text = format!(
-                "Approved {} {}",
-                r.approved_amount.map(|a| a.to_string()).unwrap_or_default(),
-                r.currency
-            );
-            if let Some(reason) = &r.decision_reason {
-                text.push_str(&format!(": {reason}"));
-            }
-            if r.status == "reimbursed" {
-                if let Some(at) = &r.reimbursed_at {
-                    text.push_str(&format!(", paid {}", at.split('T').next().unwrap_or(at)));
-                }
-            }
-            text
-        }
-        "rejected" => r.decision_reason.clone().unwrap_or_default(),
-        _ => "—".into(),
     }
 }
