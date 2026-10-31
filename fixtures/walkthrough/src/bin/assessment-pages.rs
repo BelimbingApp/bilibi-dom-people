@@ -7,7 +7,7 @@ use bilibi_people_skills::*;
 use bilibi_people_workforce::Workforce;
 use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::page::{LiveInput, LiveRequest, LiveState, PageRequest, PageService};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Arc};
 
 fn must<T>(result: bilibi_people_skills::Result<T>) -> Result<T> {
@@ -98,8 +98,6 @@ async fn main() -> Result<()> {
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    let affiliation = bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-        .map_err(|_| Error::Invalid)?;
     if mode == "revoke-review" || mode == "restore-review" {
         grants
             .set_direct(
