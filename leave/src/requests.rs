@@ -119,6 +119,11 @@ struct CountedDate {
     quantity: Decimal,
 }
 
+pub(super) struct SubmittedRequest {
+    pub request: Request,
+    pub created: bool,
+}
+
 impl Leave {
     /// Today's date in the company's configured `localization.timezone`.
     pub async fn today(&self, scope: &Scope, company_id: i64) -> Result<Date> {
@@ -191,20 +196,28 @@ impl Leave {
     /// One leave request home. Self ownership is resolved anew for every read.
     pub async fn request(&self, scope: &Scope, company_id: i64, id: i64) -> Result<PendingRequest> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let reviewer = authorization::allowed(&**client, scope, company_id, REQUESTS_APPROVE).await;
+        let reviewer =
+            match authorization::authorize(&**client, scope, company_id, REQUESTS_APPROVE).await {
+                Ok(()) => true,
+                Err(crate::WorkforceError::Unauthorized | crate::WorkforceError::NotFound) => false,
+                Err(error) => return Err(error.into()),
+            };
         drop(client);
-        let owner = if reviewer {
-            None
-        } else {
-            Some(
-                self.workforce
-                    .authorize_self(scope, company_id, SELF_VIEW)
-                    .await?
-                    .employee_id,
-            )
+        let owner = match self
+            .workforce
+            .authorize_self(scope, company_id, SELF_VIEW)
+            .await
+        {
+            Ok(employee) => Some(employee.employee_id),
+            Err(
+                crate::WorkforceError::Unauthorized
+                | crate::WorkforceError::NotFound
+                | crate::WorkforceError::NotLinked,
+            ) if reviewer => None,
+            Err(error) => return Err(error.into()),
         };
         let client = self.db.get().await.map_err(Error::from)?;
-        let row=client.query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND id=$3 AND ($4::bigint IS NULL OR employee_id=$4)"),&[&scope.tenant(),&company_id,&id,&owner]).await.map_err(Error::from)?.ok_or(LeaveError::NotFound)?;
+        let row=client.query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND id=$3 AND (employee_id=$4 OR ($5 AND status='pending'))"),&[&scope.tenant(),&company_id,&id,&owner,&reviewer]).await.map_err(Error::from)?.ok_or(LeaveError::NotFound)?;
         let request = read(&row)?;
         drop(client);
         self.current_company(scope, company_id).await?;
@@ -288,8 +301,12 @@ impl Leave {
         let result = self
             .submit_request_in(&mut tx, scope, company_id, new)
             .await?;
-        tx.commit().await?;
-        Ok(result)
+        if result.created {
+            tx.commit().await?;
+        } else {
+            tx.rollback().await?;
+        }
+        Ok(result.request)
     }
     pub(super) async fn submit_request_in(
         &self,
@@ -297,7 +314,7 @@ impl Leave {
         scope: &Scope,
         company_id: i64,
         new: &NewRequest,
-    ) -> Result<Request> {
+    ) -> Result<SubmittedRequest> {
         crate::entries::serialize(tx.sql(), scope, company_id).await?;
         bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let new = normalize(new)?;
@@ -309,7 +326,10 @@ impl Leave {
         if let Some(row) = tx.sql().query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 AND request_key=$4"), &[&tenant, &company_id, &me.employee_id, &new.request_key]).await.map_err(Error::from)? {
             let existing = read(&row)?;
             if existing.leave_type_id != new.leave_type_id || existing.starts_on != new.starts_on || existing.ends_on != new.ends_on || existing.day_part != new.day_part || existing.reason != new.reason || new.hours.is_some_and(|h| h != existing.quantity) { return Err(LeaveError::RequestKeyConflict); }
-            return Ok(existing);
+            return Ok(SubmittedRequest {
+                request: existing,
+                created: false,
+            });
         }
         let leave_type = types::lock_active(tx.sql(), tenant, company_id, new.leave_type_id)
             .await?
@@ -402,7 +422,10 @@ impl Leave {
             changes.push(event(sql, tenant, company_id, &request, None, actor, None).await?);
             Ok((request, changes))
         })).await?;
-        Ok(request)
+        Ok(SubmittedRequest {
+            request,
+            created: true,
+        })
     }
     /// Approves or rejects a pending request. The requester and linked subject
     /// cannot decide; rejection requires a note. Approval rechecks cover.

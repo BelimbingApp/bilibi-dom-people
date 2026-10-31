@@ -1,5 +1,8 @@
 //! Bilimbi Claims.Web.OperationsLive: decisions, reimbursement and hand-off.
-use crate::{Claims, ClaimsError, HandoffBatch, HandoffWaiting, QueueClaim, APPROVE, REIMBURSE};
+use crate::{
+    AssignableEmployee, Claims, ClaimsError, HandoffBatch, HandoffWaiting, QueueClaim, APPROVE,
+    REIMBURSE,
+};
 use askama::Template;
 use bilibi_database::{Db, Error, Result};
 use bilibi_people_workforce::{authorization, CompanySummary};
@@ -174,6 +177,7 @@ struct Operations {
     workspace: bool,
 
     rows: Vec<QueueClaim>,
+    employees: Vec<AssignableEmployee>,
     batches: Vec<HandoffBatch>,
     waiting: Vec<HandoffWaiting>,
     selection: Option<Selection>,
@@ -223,6 +227,7 @@ impl Operations {
             company: None,
             can_reimburse: false,
             rows: vec![],
+            employees: vec![],
             batches: vec![],
             waiting: vec![],
             selection: None,
@@ -313,6 +318,7 @@ impl Operations {
         drop(client);
         self.submission.load(scope).await?;
         self.rows.clear();
+        self.employees.clear();
         self.batches.clear();
         self.waiting.clear();
         if let Some(c) = &self.company {
@@ -352,6 +358,18 @@ impl Operations {
                 Ok(rows) => self.rows = rows,
                 Err(ClaimsError::Failed(e)) => return Err(e),
                 Err(e) => self.refused(e),
+            }
+            if team && self.record.is_none() {
+                match self
+                    .core
+                    .claims
+                    .request_employees(scope, company, self.tab())
+                    .await
+                {
+                    Ok(rows) => self.employees = rows,
+                    Err(ClaimsError::Failed(e)) => return Err(e),
+                    Err(e) => self.refused(e),
+                }
             }
             if self.can_review && self.can_reimburse && self.record.is_none() {
                 self.waiting = self
@@ -1010,33 +1028,18 @@ impl Operations {
             ),
         ];
         if self.can_review && self.list.filters["audience"] == "team" {
-            let mut employees = std::collections::BTreeMap::new();
-            for row in &self.rows {
-                employees.insert(
-                    row.request.employee_id,
-                    row.employee_name
-                        .clone()
-                        .unwrap_or_else(|| row.request.employee_id.to_string()),
-                );
-            }
-            if let Some(id) =
-                params::positive_id(self.list.filters.get("employee_id").map(String::as_str))
-            {
-                employees
-                    .entry(id)
-                    .or_insert_with(|| format!("Employee {id}"));
-            }
             controls.push(ToolbarControl::select(
                 "claims-employee",
                 "employee_id",
                 "Employee",
                 &self.list.filters["employee_id"],
                 std::iter::once(Choice::new("All employees", ""))
-                    .chain(
-                        employees
-                            .into_iter()
-                            .map(|(id, name)| Choice::new(name, id.to_string())),
-                    )
+                    .chain(self.employees.iter().map(|employee| {
+                        Choice::new(
+                            format!("{} ({})", employee.name, employee.employee_number),
+                            employee.id.to_string(),
+                        )
+                    }))
                     .collect(),
             ));
         }
@@ -1068,7 +1071,9 @@ impl Operations {
             } else {
                 Html::EMPTY
             },
-            truncated: self.record.is_none() && self.rows.len() >= 500,
+            truncated: self.record.is_none()
+                && self.list.filters["audience"] == "team"
+                && self.rows.len() >= 500,
             detail: self.record.is_some(),
             record_id: self.record.map(|id| id.to_string()).unwrap_or_default(),
             dialog: self.dialog()?,

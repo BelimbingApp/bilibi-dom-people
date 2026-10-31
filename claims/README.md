@@ -121,7 +121,7 @@ Calendar-month and calendar-year limits count every live claim of that type and 
 
 An account cannot approve, reject or reimburse a claim it submitted, or a claim of the employee it is linked to now. `Workforce::owns_employee` checks the current account link under the employment lock, including inactive employments. Refusals use `OwnClaim` and `NotDecidable`. Every transition saves one `people_claim_request_events` row, including the decision reason for approval and rejection. A refusal rolls back the request, history, audit and outbox together.
 
-The unified `requests` read accepts an empty status (all) or any request status, an optional employee and an optional request id. It returns at most 500 matching records: submitted claims oldest first, other filters newest first. Mine resolves the signed-in employee; team reads require `people.claims.approve`. Rows include employee numbers and names through Workforce and category/type labels through this module's catalog. Employee claim lists sort by newest expense date and then newest id. Returned timestamps are ISO 8601 UTC strings; render them through Base DateTime in a page.
+The unified `requests` read accepts an empty status (all) or any request status, an optional employee and an optional request id. Mine resolves the signed-in employee and returns the complete matching history. Team reads require `people.claims.approve` and return at most 500 matching records: submitted claims oldest first, other filters newest first. `request_employees` supplies employees with matching claims independently of that window, including every employment status. Rows include employee numbers and names through Workforce and category/type labels through this module's catalog. Employee claim lists sort by newest expense date and then newest id. Returned timestamps are ISO 8601 UTC strings; render them through Base DateTime in a page.
 
 ## Hand-off and CSV download
 
@@ -171,7 +171,7 @@ Reviewers with reimbursement permission can create hand-off batches from waiting
 
 The page and agent use the same reviewed contracts: `people.claims.request.submit`, `.withdraw`, `.approve`, `.reject`, `.reimburse`, and `people.claims.handoff.create` and `.reimburse`. They invoke the same supplied-transaction writes. The owner rechecks grants, company state, employee ownership and record state under its locks and saves request history, audit and events together. Catalog and policy setup remains a separate configuration task.
 
-The disposable walkthrough commands `claims-page` and `claim-operations` create expenses and change links or grants for browser checks. The task's one-door proof exercises the common list, record and operation contracts with both audiences.
+The disposable walkthrough commands `claims-page` and `claim-operations` create expenses and change links or grants for browser checks. The task's one-door proof exercises the common list, record and operation contracts with both audiences, including complete owner history beyond 500 claims and reviewer employee choices outside the bounded team window.
 
 ## Claim policies
 

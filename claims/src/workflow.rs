@@ -397,13 +397,43 @@ impl Claims {
         };
         let client = self.db.get().await.map_err(Error::from)?;
         let order = if status == "submitted" { "ASC" } else { "DESC" };
-        let rows = client.query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3='' OR r.status=$3) AND ($4::bigint IS NULL OR r.employee_id=$4) AND ($5::bigint IS NULL OR r.id=$5) ORDER BY r.id {order} LIMIT 500", requests::COLUMNS), &[&scope.tenant(), &company_id, &status, &employee, &request_id]).await.map_err(Error::from)?;
+        let limit = if team { " LIMIT 500" } else { "" };
+        let rows = client.query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3='' OR r.status=$3) AND ($4::bigint IS NULL OR r.employee_id=$4) AND ($5::bigint IS NULL OR r.id=$5) ORDER BY r.id {order}{limit}", requests::COLUMNS), &[&scope.tenant(), &company_id, &status, &employee, &request_id]).await.map_err(Error::from)?;
         let requests = rows
             .iter()
             .map(requests::read)
             .collect::<bilibi_database::Result<Vec<_>>>()?;
         drop(client);
         self.decorate(scope, company_id, requests).await
+    }
+    /// Employees a reviewer may select independently of the bounded queue.
+    pub async fn request_employees(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        status: &str,
+    ) -> Result<Vec<crate::AssignableEmployee>> {
+        if !status.is_empty() && !crate::REQUEST_STATUSES.contains(&status) {
+            return Err(ClaimsError::Invalid(vec![FieldError::new(
+                "status",
+                "is invalid",
+            )]));
+        }
+        let client = self.db.get().await.map_err(Error::from)?;
+        authorization::authorize(&**client, scope, company_id, APPROVE).await?;
+        let employee_ids: Vec<i64> = client
+            .query(
+                "SELECT DISTINCT employee_id FROM people_claim_submissions WHERE tenant_id=$1 AND company_id=$2 AND ($3='' OR status=$3) ORDER BY employee_id",
+                &[&scope.tenant(), &company_id, &status],
+            )
+            .await
+            .map_err(Error::from)?
+            .iter()
+            .map(|row| row.get(0))
+            .collect();
+        drop(client);
+        self.employee_options(scope, company_id, Some(&employee_ids))
+            .await
     }
     pub(crate) async fn decorate(
         &self,

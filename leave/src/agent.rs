@@ -244,11 +244,10 @@ impl WriteHandler for RequestWrite {
                 serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
             let leave = facade()?;
             let request = match self.0 {
-                "submit" => {
-                    leave
-                        .submit_request_in(tx, scope, input.company_id, &input.new_request()?)
-                        .await
-                }
+                "submit" => leave
+                    .submit_request_in(tx, scope, input.company_id, &input.new_request()?)
+                    .await
+                    .map(|request| request.request),
                 "cancel" => {
                     leave
                         .cancel_request_in(

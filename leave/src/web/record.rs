@@ -218,6 +218,7 @@ impl LiveState<Scope, Error> for Record {
     fn update<'a>(&'a mut self, req: LiveRequest<'a, Scope>) -> LiveFuture<'a, Error> {
         Box::pin(async move {
             self.load(req.scope).await?;
+            let mut redirect = None;
             if let LiveInput::Event(payload) = req.input {
                 match payload.get("type").and_then(Value::as_str).unwrap_or("") {
                     "clear-flash" => self.flash.clear(payload),
@@ -259,17 +260,33 @@ impl LiveState<Scope, Error> for Record {
                                 .write(req.scope, req.credential, "confirm_record", key, input)
                                 .await
                             {
-                                Ok(_) => self.flash.success(match key {
-                                    "people.leave.request.approve" => "Leave request approved.",
-                                    "people.leave.request.reject" => "Leave request rejected.",
-                                    _ => "Leave request cancelled.",
-                                }),
+                                Ok(_) => {
+                                    self.flash.success(match key {
+                                        "people.leave.request.approve" => "Leave request approved.",
+                                        "people.leave.request.reject" => "Leave request rejected.",
+                                        _ => "Leave request cancelled.",
+                                    });
+                                    if key != "people.leave.request.cancel" {
+                                        redirect = Some(format!(
+                                            "/people/leave/requests?company_id={}",
+                                            self.company
+                                        ));
+                                    }
+                                }
                                 Err(e) => self.flash.error(&e.to_string()),
                             }
                         }
                     }
                     _ => {}
                 }
+            }
+            if redirect.is_some() {
+                return Ok(LiveBody {
+                    html: self.render()?,
+                    redirect,
+                    flash: self.flash.0.clone(),
+                    ..Default::default()
+                });
             }
             self.load(req.scope).await?;
             Ok(LiveBody {

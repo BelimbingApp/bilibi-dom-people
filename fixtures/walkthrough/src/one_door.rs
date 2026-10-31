@@ -303,6 +303,45 @@ async fn run(url: &str) -> Result<()> {
     {
         return Err(fail("Claims privacy failed"));
     }
+    for offset in 0_i64..501 {
+        claims
+            .submit_request(
+                &staff,
+                company,
+                &bilibi_people_claims::NewRequest {
+                    claim_type_id: kind.id,
+                    incurred_on: "2026-10-30".parse().map_err(fail)?,
+                    amount: rust_decimal::Decimal::from(1_000 + offset),
+                    currency: "USD".into(),
+                    description: Some(format!("Claim history {offset}")),
+                    receipt_number: None,
+                    confirm_duplicate: false,
+                },
+            )
+            .await
+            .map_err(fail)?;
+    }
+    let mine = claims
+        .requests(&staff, company, false, "", None, None)
+        .await
+        .map_err(fail)?;
+    let team = claims
+        .requests(&manager, company, true, "", None, None)
+        .await
+        .map_err(fail)?;
+    let employees = claims
+        .request_employees(&manager, company, "")
+        .await
+        .map_err(fail)?;
+    if mine.len() != 504
+        || team.len() != 500
+        || team.iter().any(|row| row.request.id == manager_claim)
+        || !employees
+            .iter()
+            .any(|employee| employee.id == manager_employee)
+    {
+        return Err(fail("Claims history or employee filter window failed"));
+    }
     let training =
         services.get::<bilibi_people_training::Training>(bilibi_people_training::SERVICE)?;
     training
@@ -396,6 +435,7 @@ async fn run(url: &str) -> Result<()> {
     ] {
         operation(&services,"onedoor-employee@example.test","people.leave.request.submit",json!({"company_id":company,"leave_type_id":leave_type.id,"starts_on":date,"ends_on":date,"request_key":key,"reason":"One-door leave proof"})).await?;
     }
+    operation(&services,"onedoor-employee@example.test","people.leave.request.submit",json!({"company_id":company,"leave_type_id":leave_type.id,"starts_on":"2026-11-20","ends_on":"2026-11-20","request_key":"agent-leave","reason":"One-door leave proof"})).await?;
     let requests = leave.self_requests(&staff, company).await.map_err(fail)?;
     let agent_leave = requests
         .iter()
@@ -407,6 +447,25 @@ async fn run(url: &str) -> Result<()> {
         .find(|r| r.starts_on.to_string() == "2026-11-23")
         .ok_or(Error::NotFound)?
         .id;
+    let replayed = leave
+        .submit_request(
+            &staff,
+            company,
+            &bilibi_people_leave::NewRequest {
+                leave_type_id: leave_type.id,
+                starts_on: "2026-11-20".parse().map_err(fail)?,
+                ends_on: "2026-11-20".parse().map_err(fail)?,
+                day_part: "full".into(),
+                hours: None,
+                reason: Some("One-door leave proof".into()),
+                request_key: "agent-leave".into(),
+            },
+        )
+        .await
+        .map_err(fail)?;
+    if replayed.id != agent_leave {
+        return Err(fail("Leave request replay failed"));
+    }
     operation(
         &services,
         "onedoor-reviewer@example.test",
@@ -414,6 +473,24 @@ async fn run(url: &str) -> Result<()> {
         json!({"company_id":company,"request_id":agent_leave,"note":"One-door proof"}),
     )
     .await?;
+    if leave.request(&manager, company, agent_leave).await.is_ok()
+        || leave
+            .request(&staff, company, agent_leave)
+            .await
+            .map_err(fail)?
+            .request
+            .status
+            != "approved"
+        || leave
+            .request(&manager, company, browser_leave)
+            .await
+            .map_err(fail)?
+            .request
+            .status
+            != "pending"
+    {
+        return Err(fail("Leave owner or pending-reviewer visibility failed"));
+    }
     operation(
         &services,
         "onedoor-employee@example.test",
@@ -421,6 +498,17 @@ async fn run(url: &str) -> Result<()> {
         json!({"company_id":company,"request_id":agent_leave}),
     )
     .await?;
+    if leave
+        .request(&staff, company, agent_leave)
+        .await
+        .map_err(fail)?
+        .request
+        .status
+        != "cancelled"
+        || leave.request(&manager, company, agent_leave).await.is_ok()
+    {
+        return Err(fail("Leave decided history privacy failed"));
+    }
     println!(
         "One-door proof ready: {}",
         json!({"company":company,"staff":staff_id,"reviewer":manager_id,"pending_claim":pending_claim,"claim_of_reviewer":manager_claim,"learning_request":learning,"pending_leave":browser_leave})
