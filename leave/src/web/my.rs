@@ -37,8 +37,10 @@ struct View<'a> {
     confirm: Html,
 }
 pub(super) struct My {
+    pub(super) workspace: bool,
     core: Arc<Core>,
     summary: Option<SelfSummary>,
+    company_id: Option<i64>,
     requests: Vec<Request>,
     today: Option<Date>,
     form: HashMap<String, String>,
@@ -53,7 +55,9 @@ impl My {
     pub(super) fn new(core: Arc<Core>) -> Result<Self> {
         Ok(Self {
             core,
+            workspace: false,
             summary: None,
+            company_id: None,
             requests: vec![],
             today: None,
             form: HashMap::new(),
@@ -102,9 +106,10 @@ impl My {
         })
     }
     fn company(scope: &Scope) -> Option<i64> {
-        scope.actor().organisation().map(|id| id.get())
+        scope.current_company().map(|id| id.get())
     }
     pub(super) async fn load(&mut self, scope: &Scope, rows_changed: bool) -> Result<()> {
+        self.company_id = Self::company(scope);
         // No employee id is cached: every event re-resolves the account link.
         let result = async {
             let company = Self::company(scope).ok_or(LeaveError::NotLinked)?;
@@ -157,7 +162,7 @@ impl My {
             }
         }
     }
-    async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<bool> {
+    async fn event(&mut self, scope: &Scope, credential: &str, payload: &Value) -> Result<bool> {
         let kind = text(payload, "type");
         match kind.as_str() {
             "clear-flash" => self.flash.clear(payload),
@@ -184,7 +189,7 @@ impl My {
                         .collect();
                         let result = match self.input() {
                             Ok(input) => {
-                                self.core.leave.submit_request(scope, company, &input).await
+                                self.core.write(scope,credential,"submit_request","people.leave.request.submit",serde_json::json!({"company_id":company,"leave_type_id":input.leave_type_id,"starts_on":input.starts_on.to_string(),"ends_on":input.ends_on.to_string(),"day_part":input.day_part,"hours":input.hours.map(|h|h.to_string()).unwrap_or_default(),"reason":input.reason.unwrap_or_default(),"request_key":input.request_key})).await
                             }
                             Err(error) => Err(error),
                         };
@@ -217,7 +222,17 @@ impl My {
                                 self.flash.error("That request can no longer be cancelled.");
                                 return Ok(true);
                             }
-                            match self.core.leave.cancel_request(scope, company, id).await {
+                            match self
+                                .core
+                                .write(
+                                    scope,
+                                    credential,
+                                    "confirm_cancel",
+                                    "people.leave.request.cancel",
+                                    serde_json::json!({"company_id":company,"request_id":id}),
+                                )
+                                .await
+                            {
                                 Ok(_) => self.flash.success("Leave request cancelled."),
                                 Err(error) => {
                                     let error = refusal(error)?;
@@ -334,7 +349,15 @@ impl My {
             for r in &self.requests {
                 rows.push(
                     row("leave-request", r.id)
-                        .slot("dates", Html::text(&dates(r)))
+                        .slot(
+                            "dates",
+                            super::request_link(
+                                self.company_id.unwrap_or(0),
+                                r.id,
+                                dates(r),
+                                self.workspace,
+                            )?,
+                        )
                         .slot("type", Html::text(type_name(&types, r.leave_type_id)))
                         .slot(
                             "quantity",
@@ -455,7 +478,10 @@ impl LiveState<Scope, Error> for My {
     fn update<'a>(&'a mut self, request: LiveRequest<'a, Scope>) -> LiveFuture<'a, Error> {
         Box::pin(async move {
             let changed = match request.input {
-                LiveInput::Event(payload) => self.event(request.scope, payload).await?,
+                LiveInput::Event(payload) => {
+                    self.event(request.scope, request.credential, payload)
+                        .await?
+                }
                 _ => true,
             };
             self.load(request.scope, changed).await?;

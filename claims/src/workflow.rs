@@ -98,10 +98,23 @@ impl Claims {
                 scope.mutation_context("people.claims.submit_request"),
             )
             .await?;
+        let saved = self
+            .submit_request_in(&mut tx, scope, company_id, input)
+            .await?;
+        tx.commit().await?;
+        Ok(saved)
+    }
+    pub(super) async fn submit_request_in(
+        &self,
+        tx: &mut Tx<'_>,
+        scope: &Scope,
+        company_id: i64,
+        input: &NewRequest,
+    ) -> Result<Request> {
         writable(tx.sql(), scope, company_id).await?;
         let me = self
             .workforce
-            .lock_self_employee(&tx, scope, company_id, SUBMIT)
+            .lock_self_employee(tx, scope, company_id, SUBMIT)
             .await?;
         let input = requests::validate(input)?;
         let claim_type =
@@ -159,7 +172,7 @@ impl Claims {
         submission_limits(tx.sql(), scope, company_id, me.employee_id, &input, &policy).await?;
         let confirmed = duplicates(tx.sql(), scope, company_id, me.employee_id, &input).await?;
         let saved = requests::insert(
-            &mut tx,
+            tx,
             scope,
             company_id,
             me.employee_id,
@@ -168,9 +181,9 @@ impl Claims {
             confirmed,
         )
         .await?;
-        tx.commit().await?;
         Ok(saved)
     }
+
     pub async fn withdraw_request(
         &self,
         scope: &Scope,
@@ -186,10 +199,23 @@ impl Claims {
                 scope.mutation_context("people.claims.withdraw_request"),
             )
             .await?;
+        let saved = self
+            .withdraw_request_in(&mut tx, scope, company_id, request_id)
+            .await?;
+        tx.commit().await?;
+        Ok(saved)
+    }
+    pub(super) async fn withdraw_request_in(
+        &self,
+        tx: &mut Tx<'_>,
+        scope: &Scope,
+        company_id: i64,
+        request_id: i64,
+    ) -> Result<Request> {
         writable(tx.sql(), scope, company_id).await?;
         let me = self
             .workforce
-            .lock_self_employee(&tx, scope, company_id, SUBMIT)
+            .lock_self_employee(tx, scope, company_id, SUBMIT)
             .await?;
         let old = requests::find(tx.sql(), scope.tenant(), company_id, request_id, true).await?;
         if old.employee_id != me.employee_id {
@@ -202,11 +228,10 @@ impl Claims {
         new.status = "withdrawn".into();
         new.withdrawn_by_actor_id = Some(scope.user());
         let saved =
-            requests::transition(&mut tx, scope.tenant(), company_id, old, new, scope.user())
-                .await?;
-        tx.commit().await?;
+            requests::transition(tx, scope.tenant(), company_id, old, new, scope.user()).await?;
         Ok(saved)
     }
+
     pub async fn approve_request(
         &self,
         scope: &Scope,
@@ -244,7 +269,7 @@ impl Claims {
         id: i64,
         decision: Decision<'_>,
     ) -> Result<Request> {
-        let (capability, from, action) = match decision {
+        let (capability, _from, action) = match decision {
             Decision::Approve(_) => (APPROVE, "submitted", "people.claims.approve_request"),
             Decision::Reject(_) => (APPROVE, "submitted", "people.claims.reject_request"),
             Decision::Reimburse(_) => (REIMBURSE, "approved", "people.claims.reimburse_request"),
@@ -255,13 +280,32 @@ impl Claims {
             .mutations
             .begin(&mut client, scope.mutation_context(action))
             .await?;
+        let saved = self
+            .decide_in(&mut tx, scope, company_id, id, decision)
+            .await?;
+        tx.commit().await?;
+        Ok(saved)
+    }
+    pub(super) async fn decide_in(
+        &self,
+        tx: &mut Tx<'_>,
+        scope: &Scope,
+        company_id: i64,
+        id: i64,
+        decision: Decision<'_>,
+    ) -> Result<Request> {
+        let (capability, from, _action) = match decision {
+            Decision::Approve(_) => (APPROVE, "submitted", "people.claims.approve_request"),
+            Decision::Reject(_) => (APPROVE, "submitted", "people.claims.reject_request"),
+            Decision::Reimburse(_) => (REIMBURSE, "approved", "people.claims.reimburse_request"),
+        };
         writable(tx.sql(), scope, company_id).await?;
         authorization::authorize(tx.sql(), scope, company_id, capability).await?;
         let unlocked = requests::find(tx.sql(), scope.tenant(), company_id, id, false).await?;
         if unlocked.status != from {
             return Err(ClaimsError::NotDecidable);
         }
-        self.refuse_own(&tx, scope, company_id, &unlocked, capability)
+        self.refuse_own(tx, scope, company_id, &unlocked, capability)
             .await?;
         let old = requests::find(tx.sql(), scope.tenant(), company_id, id, true).await?;
         if old.status != from {
@@ -269,13 +313,10 @@ impl Claims {
         }
         let new = decision.apply(&old, scope.user())?;
         let saved =
-            requests::transition(&mut tx, scope.tenant(), company_id, old, new, scope.user())
-                .await?;
+            requests::transition(tx, scope.tenant(), company_id, old, new, scope.user()).await?;
         if saved.status != "rejected" {
-            self.publish_claim(&mut tx, scope, company_id, &saved)
-                .await?;
+            self.publish_claim(tx, scope, company_id, &saved).await?;
         }
-        tx.commit().await?;
         Ok(saved)
     }
     pub(crate) async fn refuse_own(
@@ -326,28 +367,73 @@ impl Claims {
             .await?;
         Ok(())
     }
-    /// Four operator queues; submitted oldest first, the others newest first (≤500).
-    pub async fn claim_queue(
+    /// The one claims read. Mine is resolved from the signed-in employee;
+    /// team visibility always requires APPROVE, independently of payment rights.
+    pub async fn requests(
         &self,
         scope: &Scope,
         company_id: i64,
+        team: bool,
         status: &str,
+        employee_id: Option<i64>,
+        request_id: Option<i64>,
     ) -> Result<Vec<QueueClaim>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorization::authorize(&**client, scope, company_id, APPROVE).await?;
-        if !["submitted", "approved", "rejected", "reimbursed"].contains(&status) {
+        if !status.is_empty() && !crate::REQUEST_STATUSES.contains(&status) {
             return Err(ClaimsError::Invalid(vec![FieldError::new(
                 "status",
                 "is invalid",
             )]));
         }
+        let employee = if team {
+            let client = self.db.get().await.map_err(Error::from)?;
+            authorization::authorize(&**client, scope, company_id, APPROVE).await?;
+            employee_id
+        } else {
+            let me = self.self_service_employee(scope, company_id).await?;
+            if employee_id.is_some_and(|id| id != me.id) {
+                return Err(ClaimsError::NotFound);
+            }
+            Some(me.id)
+        };
+        let client = self.db.get().await.map_err(Error::from)?;
         let order = if status == "submitted" { "ASC" } else { "DESC" };
-        let rows=client.query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND r.status=$3 ORDER BY r.id {order} LIMIT 500",requests::COLUMNS), &[&scope.tenant(),&company_id,&status]).await.map_err(Error::from)?;
+        let limit = if team { " LIMIT 500" } else { "" };
+        let rows = client.query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3='' OR r.status=$3) AND ($4::bigint IS NULL OR r.employee_id=$4) AND ($5::bigint IS NULL OR r.id=$5) ORDER BY r.id {order}{limit}", requests::COLUMNS), &[&scope.tenant(), &company_id, &status, &employee, &request_id]).await.map_err(Error::from)?;
         let requests = rows
             .iter()
             .map(requests::read)
             .collect::<bilibi_database::Result<Vec<_>>>()?;
+        drop(client);
         self.decorate(scope, company_id, requests).await
+    }
+    /// Employees a reviewer may select independently of the bounded queue.
+    pub async fn request_employees(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        status: &str,
+    ) -> Result<Vec<crate::AssignableEmployee>> {
+        if !status.is_empty() && !crate::REQUEST_STATUSES.contains(&status) {
+            return Err(ClaimsError::Invalid(vec![FieldError::new(
+                "status",
+                "is invalid",
+            )]));
+        }
+        let client = self.db.get().await.map_err(Error::from)?;
+        authorization::authorize(&**client, scope, company_id, APPROVE).await?;
+        let employee_ids: Vec<i64> = client
+            .query(
+                "SELECT DISTINCT employee_id FROM people_claim_submissions WHERE tenant_id=$1 AND company_id=$2 AND ($3='' OR status=$3) ORDER BY employee_id",
+                &[&scope.tenant(), &company_id, &status],
+            )
+            .await
+            .map_err(Error::from)?
+            .iter()
+            .map(|row| row.get(0))
+            .collect();
+        drop(client);
+        self.employee_options(scope, company_id, Some(&employee_ids))
+            .await
     }
     pub(crate) async fn decorate(
         &self,
@@ -413,7 +499,7 @@ impl Claims {
     }
 }
 
-enum Decision<'a> {
+pub(super) enum Decision<'a> {
     Approve(&'a Approval),
     Reject(&'a Rejection),
     Reimburse(&'a Reimbursement),

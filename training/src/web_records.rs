@@ -783,7 +783,7 @@ impl Records {
         }
         if self.task != Task::Records && self.can(LEARNING_VIEW) {
             links.push((
-                "/people/training/my".into(),
+                "/people/training/requests".into(),
                 "Learning requests & evaluations",
                 false,
             ));

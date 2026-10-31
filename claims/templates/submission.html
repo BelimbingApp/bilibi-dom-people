@@ -1,11 +1,7 @@
-{# Bilimbi People Claims.Web.MyClaimsLive, using the Platform's shared lists and forms. #}
 {% import "components.html" as ui %}
 {% import "forms.html" as forms %}
 {% import "feedback.html" as feedback %}
-<div data-shared-ui>
 {% call feedback::flash_group(messages=flash) %}{% endcall %}
-{% call ui::page(id="people-my-claims") %}
-{% call ui::header(subtitle=subtitle) %}My claims{% endcall %}
 {% if available %}
 {% call ui::card(id="my-claims-new", class="mt-5") %}
 {% call ui::section_heading(id="new-claim-heading", title="New claim") %}{% endcall %}
@@ -20,13 +16,5 @@
 {% endcall %}
 {% endif %}
 {% endcall %}
-{% call ui::card(id="my-claims-submitted", class="mt-5") %}
-{% call ui::section_heading(id="claims-heading", title="Submitted claims") %}{% endcall %}
-{{ requests }}
-{% endcall %}
-{% else %}
-{{ unavailable }}
 {% endif %}
 {{ confirmation }}
-{% endcall %}
-</div>

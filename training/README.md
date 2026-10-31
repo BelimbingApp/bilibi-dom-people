@@ -2,7 +2,7 @@
 
 Module ID: `people/training`, crate `bilibi-people-training`. Training manages a company's course catalog, events, sessions, learning requests, team plans and budgets. Other People modules and pages use its public methods; the schema stays private. The behaviour reference is [Bilimbi Training](https://github.com/BelimbingApp/b-dom-people/blob/main/training/docs/README.md).
 
-The catalog, attendance records, private evidence and governance methods are implemented, along with the six Learning pages, Courses, Sessions & calendar, and the records and passport pages below. Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
+The catalog, attendance records, private evidence and governance methods are implemented, along with the Learning request, plan and budget pages, Courses, Sessions & calendar, and the records and passport pages below. Evaluation and Learning insights are PT9. An administrator grants Training access; no Training grant is added to a system role.
 
 ## Public API
 
@@ -179,7 +179,7 @@ The PT2 block in `fixtures/walkthrough/src/participation.rs` runs against the sa
 
 ## Learning requests, plans and budgets
 
-Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the six learning pages use these methods.
+Employees propose learning, managers recommend it, and independent reviewers approve it against a company budget. This service implements Bilimbi's `Training.Governance`; the learning pages use these methods.
 
 For example, an employee creates a draft with `create_learning_request`, submits it with a reason, and their direct manager recommends it. HR reviews it before an approver reserves the cost. Every decision remains in `learning_histories`.
 
@@ -219,24 +219,27 @@ The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It cre
 
 Employees can request learning, managers can recommend it and create plans, and independent reviewers can approve both. Budget operators set the accepted currencies and allocations.
 
-Open **My learning**, add a request, then submit it with a reason. The manager recommends it from **Team requests**. HR reviews it from **Learning requests & reviews**, and an approver records the final decision there. Each decision asks for confirmation and remains in History.
+Open **People → My work → Learning requests** at `/people/training/requests`. Mine shows your own drafts and decisions. Team shows submitted requests from direct reports, and Company shows the submitted register for authorized HR readers. The employee, status and audience filters share one list; each row opens `/people/training/requests/{id}` with its content, decisions and history. Each audience retains its original read permission. A record link resolves an audience the reader may use, so an employee and an authorized reviewer can open the same link. Non-owner audiences still exclude private drafts.
 
-| Address under `/people/training` | Task | Entry capability |
+Create a request from Mine, then open its record and submit it with a reason. A manager recommends it from Team; HR reviews it from Company, and an independent approver records the final decision there. Every decision asks for confirmation. The page and agent call the same `people.training.request.*` contracts for creation, submission, cancellation, recommendation, review, approval and rejection. All paths use the owner's same supplied transaction, ownership checks, team reach, independent review and budget checks.
+
+| Address under `/people/training` | Task | Entry permission |
 | --- | --- | --- |
-| `/my` | Own learning requests | `people.training.learning.view` |
-| `/team` | Direct-report requests | `people.training.requests.recommend` |
-| `/plans` | Create team plans with up to 300 learning items; submit, cancel or amend | `people.training.plans.submit` |
-| `/requests` | HR request register and review or approval | `people.training.requests.view` |
-| `/plan-reviews` | Submitted plans and independent approval | `people.training.plans.view` |
-| `/budgets` | Company currencies, policy versions and totals for each currency and period | `people.training.budgets.view` |
+| `/requests` | Learning requests, with Mine, Team and Company audiences | `learning.view`, `requests.recommend` or `requests.view` |
+| `/requests/{id}` | The common learning request record | The selected audience's permission |
+| `/plans` | Create, submit, cancel or amend team plans | `plans.submit` |
+| `/plan-reviews` | Submitted plans and independent approval | `plans.view` |
+| `/budgets` | Currencies, policies and allocations | `budgets.view` |
 
-Task links appear only with their own grant. `learning.view` opens My learning without granting request submission: a reader without `requests.submit` sees the authorized task links and the reference's task guidance. Request, review, approval and budget controls each need their separate write grant.
+The capability prefix is `people.training.`. `learning.view` opens Learning requests without granting request submission: a reader without `requests.submit` sees their authorized learning tasks. Request, recommendation, review, approval and budget controls each need their separate write grant. My evaluations remains available in the Mine audience. Plans and budget policies keep their own record types and checks.
 
-All registers use the shared FlexTable with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). The reference has no record sorting or search on these pages. History and plan items also use FlexTable. The company chooser uses Workforce's `authorization::company_choices` and defaults to the first active company the account may select. It retains an already-selected pending or suspended company while still authorized, never an archived one; an explicitly unavailable company does not silently select another.
+All registers use `FlexTable` with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). History and plan items also use `FlexTable`. Mine and Team require a current linked employee; the request list defaults to Mine, then Team or Company according to available access, and an unavailable copied audience normalizes to Company only when that audience is authorized. The company comes from the workspace shell; configuration pages retain their existing chooser.
+
+The creation form makes requests without a course through `people.training.request.create`. The shared input omits the absent `course_id` when serialized, matching the operation's optional integer field.
 
 The live owner re-reads company reach and capabilities before every event. A confirmation retains its record, action and reason on the server and rechecks the specific action's grant on confirmation. The facade repeats its checks under the company lock. Refusals stay on the page as error messages. Budget corrections retain the prior currency; plan amendments create a new draft. Every form preserves entered values on refusal.
 
-The page service is `people/training.learning_pages`, implemented in `src/web_learning.rs`. It declares the facade writes through `PageWrites::pending`, following the port plan. The My evaluations section belongs to the evaluation page slice (PT9).
+The page service is `people/training.learning_pages`, implemented in `src/web_learning.rs`. It declares request contracts through `PageWrites::contracts`; plan, budget and evaluation writes retain their pending facade allowance. The My evaluations section belongs to the evaluation page slice (PT9).
 
 
 For a mounted-page refusal proof, prepare the disposable database with `cargo run -p bilibi-people-walkthrough`, then keep the Learning page open. With the same `DATABASE_URL` and `BILIBI_ENV=development`, run `cargo run -p bilibi-people-walkthrough --bin learning-control -- deny-submit`, then press the stale request control. `allow-submit` restores the grant. The command also supports `deny-budget-manage`, `allow-budget-manage`, `unlink-staff`, `relink-staff` and `archive-company-three`. Company 002 is already archived by an earlier proof; archiving Company 003 is permanent, so use it last. These commands call the owning facades and belong only on the disposable walkthrough database.
@@ -378,7 +381,7 @@ On a new disposable database, run `bilibi-web migrate` and `BILIBI_ENV=developme
 
 Open **Effectiveness** at `/people/training/effectiveness` to answer direct reports' reviews, read frozen summaries, or configure evaluation policy.
 
-For example, save the company's evaluation settings, publish effective-dated criteria, then enter a completed session and choose **Prepare reviews**. Review the confirmation before preparing obligations. Employees answer under **My learning → My evaluations**; heads of department answer under **Effectiveness → Review**. Leave a score blank for an unknown outcome, add evidence and an explanation, then confirm. **Submitted answers and published criteria are permanent.**
+For example, save the company's evaluation settings, publish effective-dated criteria, then enter a completed session and choose **Prepare reviews**. Review the confirmation before preparing obligations. Employees answer under **Learning requests → Mine → My evaluations**; heads of department answer under **Effectiveness → Review**. Leave a score blank for an unknown outcome, add evidence and an explanation, then confirm. **Submitted answers and published criteria are permanent.**
 
 | Page section | Permission under `people.training.` |
 | --- | --- |
@@ -387,7 +390,7 @@ For example, save the company's evaluation settings, publish effective-dated cri
 | Frozen HR summaries | Entry plus `effectiveness.summary.view` |
 | Settings and published criteria | Entry plus `evaluation.policy.manage` |
 | Prepare reviews, refresh reminders, freeze closed periods | Entry plus `evaluation.reminders.manage` |
-| My evaluations | My learning entry plus both `requests.submit` and `evaluation.submit` |
+| My evaluations | Learning requests entry plus both `requests.submit` and `evaluation.submit` |
 
 Unsaved settings show proposed starting values: seven evaluation days, checkpoints at 30 and 90 days, three reminder days, a disclosure minimum of five, three reporting months, and 14 grace days. **These proposals do not apply until saved.** The next reporting-period start appears below the settings form. Published policies capture timing and criteria; changing settings leaves earlier policies intact.
 

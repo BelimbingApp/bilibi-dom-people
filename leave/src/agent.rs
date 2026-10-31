@@ -132,3 +132,195 @@ inventory::submit! { Contribution::new(DEFINITIONS, "people/leave.agent", Proven
         body:include_str!("../entry-guide.md"),
     }],
 }) }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RequestInput {
+    company_id: i64,
+    request_id: Option<i64>,
+    leave_type_id: Option<i64>,
+    starts_on: Option<String>,
+    ends_on: Option<String>,
+    day_part: Option<String>,
+    hours: Option<String>,
+    reason: Option<String>,
+    request_key: Option<String>,
+    note: Option<String>,
+}
+impl RequestInput {
+    fn new_request(&self) -> bilibi_agent_api::Result<crate::NewRequest> {
+        crate::requests::normalize(&crate::NewRequest {
+            leave_type_id: self.leave_type_id.ok_or(Error::Invalid)?,
+            starts_on: self
+                .starts_on
+                .as_deref()
+                .ok_or(Error::Invalid)?
+                .parse()
+                .map_err(|_| Error::Invalid)?,
+            ends_on: self
+                .ends_on
+                .as_deref()
+                .ok_or(Error::Invalid)?
+                .parse()
+                .map_err(|_| Error::Invalid)?,
+            day_part: self.day_part.clone().unwrap_or_else(|| "full".into()),
+            hours: self
+                .hours
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(str::parse)
+                .transpose()
+                .map_err(|_| Error::Invalid)?,
+            reason: self.reason.clone(),
+            request_key: self.request_key.clone().ok_or(Error::Invalid)?,
+        })
+        .map_err(refusal)
+    }
+}
+struct RequestWrite(&'static str);
+impl WriteHandler for RequestWrite {
+    fn owner(&self) -> &'static str {
+        MODULE
+    }
+    fn preview<'a>(
+        &'a self,
+        client: &'a dyn OperationClient,
+        scope: &'a Scope,
+        value: &'a Value,
+    ) -> OperationFuture<'a> {
+        Box::pin(async move {
+            let input: RequestInput =
+                serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
+            let cap = if matches!(self.0, "submit" | "cancel") {
+                crate::SELF_VIEW
+            } else {
+                crate::REQUESTS_APPROVE
+            };
+            bilibi_people_workforce::authorization::authorize_company_proof(
+                client,
+                scope,
+                input.company_id,
+                cap,
+            )
+            .await
+            .map_err(LeaveError::from)
+            .map_err(refusal)?;
+            let leave = facade()?;
+            let record = if self.0 == "submit" {
+                let request = input.new_request()?;
+                let summary = leave
+                    .self_summary(scope, input.company_id, None)
+                    .await
+                    .map_err(refusal)?;
+                json!({"leave_year":summary.leave_year,"leave_type_id":request.leave_type_id,"starts_on":request.starts_on.to_string(),"ends_on":request.ends_on.to_string()})
+            } else {
+                let row = leave
+                    .request(
+                        scope,
+                        input.company_id,
+                        input.request_id.ok_or(Error::Invalid)?,
+                    )
+                    .await
+                    .map_err(refusal)?;
+                if self.0 != "cancel" && row.request.status != "pending" {
+                    return Err(refusal(LeaveError::NotPending));
+                }
+                if self.0 == "reject" && input.note.as_deref().is_none_or(|s| s.trim().is_empty()) {
+                    return Err(refusal(LeaveError::NoteRequired));
+                }
+                json!(row)
+            };
+            Ok(json!({"company_id":input.company_id,"record":record,"input":value}).into())
+        })
+    }
+    fn commit<'a>(
+        &'a self,
+        tx: &'a mut MutationTransaction<'_>,
+        scope: &'a Scope,
+        value: &'a Value,
+    ) -> OperationFuture<'a> {
+        Box::pin(async move {
+            let input: RequestInput =
+                serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
+            let leave = facade()?;
+            let request = match self.0 {
+                "submit" => leave
+                    .submit_request_in(tx, scope, input.company_id, &input.new_request()?)
+                    .await
+                    .map(|request| request.request),
+                "cancel" => {
+                    leave
+                        .cancel_request_in(
+                            tx,
+                            scope,
+                            input.company_id,
+                            input.request_id.ok_or(Error::Invalid)?,
+                        )
+                        .await
+                }
+                action => {
+                    leave
+                        .decide_request_in(
+                            tx,
+                            scope,
+                            input.company_id,
+                            input.request_id.ok_or(Error::Invalid)?,
+                            if action == "approve" {
+                                crate::Decision::Approve
+                            } else {
+                                crate::Decision::Reject
+                            },
+                            input.note.as_deref(),
+                        )
+                        .await
+                }
+            }
+            .map_err(refusal)?;
+            Ok(json!(request).into())
+        })
+    }
+}
+fn request_schema(submit: bool) -> Value {
+    json!({"type":"object","required":if submit{vec!["company_id","leave_type_id","starts_on","ends_on","request_key"]}else{vec!["company_id","request_id"]},"properties":{
+        "company_id":{"type":"integer","minimum":1},"request_id":{"type":"integer","minimum":1},"leave_type_id":{"type":"integer","minimum":1},
+        "starts_on":{"type":"string","format":"date"},"ends_on":{"type":"string","format":"date"},"day_part":{"type":"string","enum":["full","am","pm","hours"]},"hours":{"type":"string"},"reason":{"type":"string","maxLength":500},"note":{"type":"string","maxLength":500},"request_key":{"type":"string","maxLength":160}
+    }})
+}
+macro_rules! request_operation { ($key:literal,$title:literal,$action:literal,$cap:ident) => {
+    Operation{key:$key,title:$title,summary:$title,keywords:&["leave","request"],capability:crate::$cap,input:||request_schema($action=="submit"),output:||json!({"type":"object"}),handler:Handler::SafeWrite(&RequestWrite($action)),channels:Channels::Every,step_up:&[]}
+}; }
+inventory::submit! { Contribution::new(DEFINITIONS,"people/leave.request_operations",Provenance{module:MODULE,source:file!(),line:line!()},&Definitions {operations:&[
+    request_operation!("people.leave.request.submit","Submit a leave request","submit",SELF_VIEW),
+    request_operation!("people.leave.request.cancel","Cancel a leave request","cancel",SELF_VIEW),
+    request_operation!("people.leave.request.approve","Approve a leave request","approve",REQUESTS_APPROVE),
+    request_operation!("people.leave.request.reject","Reject a leave request","reject",REQUESTS_APPROVE),
+],guides:&[]}) }
+pub(super) fn page_error(error: bilibi_agent_api::Error) -> LeaveError {
+    match error {
+        bilibi_agent_api::Error::Forbidden => LeaveError::Unauthorized,
+        bilibi_agent_api::Error::NotFound => LeaveError::NotFound,
+        bilibi_agent_api::Error::InvalidInput(fields) => {
+            for candidate in [
+                LeaveError::SelfApproval,
+                LeaveError::NotPending,
+                LeaveError::NotCancellable,
+                LeaveError::NoteRequired,
+                LeaveError::YearClosed,
+                LeaveError::CompanyArchived,
+                LeaveError::NotLinked,
+                LeaveError::EmployeeUnavailable,
+                LeaveError::LeaveTypeUnavailable,
+            ] {
+                if fields
+                    .values()
+                    .flatten()
+                    .any(|s| *s == candidate.to_string())
+                {
+                    return candidate;
+                }
+            }
+            LeaveError::InvalidRequest
+        }
+        _ => LeaveError::InvalidRequest,
+    }
+}

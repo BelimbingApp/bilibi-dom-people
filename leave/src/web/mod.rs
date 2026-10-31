@@ -2,6 +2,7 @@
 //! identity and writes; mounted pages keep only drafts and confirmation intent.
 mod approvals;
 mod my;
+mod record;
 
 use crate::{Leave, LeaveError};
 use bilibi_database::{Db, Error, Result};
@@ -18,11 +19,20 @@ pub(crate) const PAGES: &str = "people/leave.pages";
 struct Core {
     db: Db,
     leave: Arc<Leave>,
+    contracts: Arc<bilibi_agent_api::page::PageContracts>,
 }
 pub(crate) struct Pages(Arc<Core>);
 impl Pages {
-    pub(crate) fn new(db: Db, leave: Arc<Leave>) -> Self {
-        Self(Arc::new(Core { db, leave }))
+    pub(crate) fn new(
+        db: Db,
+        leave: Arc<Leave>,
+        contracts: Arc<bilibi_agent_api::page::PageContracts>,
+    ) -> Self {
+        Self(Arc::new(Core {
+            db,
+            leave,
+            contracts,
+        }))
     }
 }
 impl Page<Scope, Error> for Pages {
@@ -30,6 +40,7 @@ impl Page<Scope, Error> for Pages {
         match operation {
             "my" => Some("My leave"),
             "requests" => Some("Leave approvals"),
+            "record" => Some("Leave request"),
             _ => None,
         }
     }
@@ -39,12 +50,20 @@ impl Page<Scope, Error> for Pages {
             let html = match request.operation {
                 "my" => {
                     let mut page = my::My::new(self.0.clone())?;
+                    page.workspace = request.framed;
                     page.load(scope, true).await?;
                     page.render()?
                 }
                 "requests" => {
                     let mut page = approvals::Approvals::new(self.0.clone(), request.query)?;
+                    page.workspace = request.framed;
                     page.load(scope, true).await?;
+                    page.render()?
+                }
+                "record" => {
+                    let mut page =
+                        record::Record::new(self.0.clone(), request.path, request.query)?;
+                    page.load(scope).await?;
                     page.render()?
                 }
                 _ => return Err(Error::NotFound),
@@ -59,8 +78,21 @@ impl Page<Scope, Error> for Pages {
     fn mount<'a>(&'a self, request: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
         Box::pin(async move {
             let page: Box<dyn LiveState<Scope, Error>> = match request.operation {
-                "my" => Box::new(my::My::new(self.0.clone())?),
-                "requests" => Box::new(approvals::Approvals::new(self.0.clone(), request.query)?),
+                "my" => Box::new({
+                    let mut state = my::My::new(self.0.clone())?;
+                    state.workspace = request.framed;
+                    state
+                }),
+                "requests" => Box::new({
+                    let mut state = approvals::Approvals::new(self.0.clone(), request.query)?;
+                    state.workspace = request.framed;
+                    state
+                }),
+                "record" => Box::new(record::Record::new(
+                    self.0.clone(),
+                    request.path,
+                    request.query,
+                )?),
                 _ => return Ok(None),
             };
             Ok(Some(page))
@@ -236,5 +268,53 @@ fn refusal(error: LeaveError) -> Result<LeaveError> {
     match error {
         LeaveError::Failed(error) => Err(error),
         other => Ok(other),
+    }
+}
+
+#[derive(askama::Template)]
+#[template(
+    source = "{% import \"lists.html\" as lists %}{% call lists::record_link(workspace=workspace,kind=\"people/leave\",record_id=id,href=href) %}{{ label }}{% endcall %}",
+    ext = "html"
+)]
+struct RequestLink {
+    workspace: bool,
+    id: String,
+    href: String,
+    label: String,
+}
+fn request_link(company: i64, id: i64, label: String, workspace: bool) -> Result<Html> {
+    render(&RequestLink {
+        workspace,
+        id: id.to_string(),
+        href: if company == 0 {
+            format!("/people/leave/requests/{id}")
+        } else {
+            format!("/people/leave/requests/{id}?company_id={company}")
+        },
+        label,
+    })
+}
+impl Core {
+    async fn write(
+        &self,
+        scope: &Scope,
+        credential: &str,
+        event: &str,
+        contract: &'static str,
+        input: Value,
+    ) -> crate::Result<Value> {
+        self.contracts
+            .submit(
+                &bilibi_agent_api::page::Call {
+                    scope,
+                    credential,
+                    service: PAGES,
+                    event,
+                    contract,
+                },
+                input,
+            )
+            .await
+            .map_err(crate::agent::page_error)
     }
 }

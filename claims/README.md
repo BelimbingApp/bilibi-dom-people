@@ -2,7 +2,7 @@
 
 Claims manages employee expenses from submission through approval and reimbursement. It also groups approved claims by currency for hand-off and CSV export.
 
-Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. My claims is available at `/people/claims`, and Claim operations at `/people/claims/operations`. Claim policies is available at `/people/claims/setup`.
+Module ID: `people/claims`; crate: `bilibi-people-claims`; registry service: `people/claims.claims`. Behaviour mirrors Bilimbi's `Bilimbi.People.Claims`. Claims is available at `/people/claims`; each row opens `/people/claims/{id}`. Claim policies is available at `/people/claims/setup`.
 
 ## Ownership
 
@@ -113,7 +113,7 @@ Calendar-month and calendar-year limits count every live claim of that type and 
 | --- | --- | --- |
 | `self_requests`, `self_request_events` | `people.claims.submit` | Resolve the linked employee again on every read. |
 | `withdraw_request` | `people.claims.submit` | Only the linked employee's submitted claims. |
-| `employee_requests`, `request_events`, `claim_queue` | `people.claims.approve` | Private claims and history for this company. |
+| `employee_requests`, `request_events`, team `requests` | `people.claims.approve` | Private claims and history for this company. |
 | `approve_request` with `Approval` | `people.claims.approve` | Submitted only; absent amount means full approval. A lower amount needs a reason. |
 | `reject_request` with `Rejection` | `people.claims.approve` | Submitted only; a reason is required. |
 | `reimburse_request` with `Reimbursement` | `people.claims.reimburse` | Approved only; payment reference is optional, at most 100 characters. |
@@ -121,7 +121,7 @@ Calendar-month and calendar-year limits count every live claim of that type and 
 
 An account cannot approve, reject or reimburse a claim it submitted, or a claim of the employee it is linked to now. `Workforce::owns_employee` checks the current account link under the employment lock, including inactive employments. Refusals use `OwnClaim` and `NotDecidable`. Every transition saves one `people_claim_request_events` row, including the decision reason for approval and rejection. A refusal rolls back the request, history, audit and outbox together.
 
-The operator queue accepts `submitted`, `approved`, `rejected` or `reimbursed`. It returns at most 500 records, with submitted claims oldest first and other statuses newest first. Queue rows include employee numbers and names through Workforce and category/type labels through this module's catalog. Employee claim lists sort by newest expense date and then newest id. Returned timestamps are ISO 8601 UTC strings; render them through Base DateTime in a page.
+The unified `requests` read accepts an empty status (all) or any request status, an optional employee and an optional request id. Mine resolves the signed-in employee and returns the complete matching history. Team reads require `people.claims.approve` and return at most 500 matching records: submitted claims oldest first, other filters newest first. `request_employees` supplies employees with matching claims independently of that window, including every employment status. Rows include employee numbers and names through Workforce and category/type labels through this module's catalog. Employee claim lists sort by newest expense date and then newest id. Returned timestamps are ISO 8601 UTC strings; render them through Base DateTime in a page.
 
 ## Hand-off and CSV download
 
@@ -159,35 +159,19 @@ IDs are JSON integers. `reference` is the stable `CLM-{claim_id}` reference. The
 
 The appended PC2 block in `fixtures/walkthrough/src/claim_workflow.rs` runs on the same disposable database. It creates its own catalog and policies through the facade, submits and decides claims, groups currencies, checks CSV quoting and formula neutralisation, and verifies exact event payloads and ordered history. It also proves period limits, duplicate receipts, confirmed duplicates, own-claim refusals, batch rollback, grant revocation, account unlinking and relinking to an inactive employee. PostgreSQL refuses changes to the stored history and hand-off records.
 
-## Claim operations
+## Claims list and record
 
-Open `/people/claims/operations` to decide claims, record payments, and group approved claims for hand-off. The Time and expenses menu shows Claim operations with `people.claims.approve`.
+Open **People → My work → Claims** at `/people/claims` to submit expenses and follow their decisions. Mine is the default for a working employee. Reviewers can choose Team; reviewers without a linked working employee start there. Employee and status filters stay in the address through `ListState`. Changing a filter clears unfinished decisions.
 
-Choose a company and one of five tabs: Awaiting decision, Approved, Reimbursed, Rejected, or Hand-off batches. Each tab is a `Tab::patch` link, so a copied address and Back restore the selected company and queue. The queues keep Bilimbi's 500-record bound and order. Every list uses `FlexTable` with `ListState` and `ListColumns`, including waiting currency totals and batch records.
+All claims use one `FlexTable` with employee, type, expense date, claimed and approved amounts, status, receipt, hand-off batch, decision reason and reimbursement. Every row opens the same `/people/claims/{id}` record page. Company selection comes from the workspace shell. An employee without review permission cannot select another employee or read their record, including by a forged address.
 
-Approve and Reject open a reason dialog. Approval accepts an optional lower amount; the owner requires a reason for a reduction. Rejection always needs a reason. Mark reimbursed accepts an optional payment reference. Review opens `ConfirmDialog`; only its confirmation runs the write. Cancel and Escape discard it. The server holds the company, record, action and reviewed values; a confirmation payload cannot replace them. Changing company or tab discards an unfinished action.
+The submission form keeps the existing receipt, currency, policy, assignment, limits and duplicate checks. Withdraw asks for confirmation and re-proves the signed-in employee under the employment lock. Approve and Reject review their amount and reason before confirmation. Mark reimbursed reviews its payment reference. Cancel and Escape leave the record unchanged. The server retains the selected record and action; confirmation input cannot replace them.
 
-The Approved tab can create one hand-off batch per waiting currency. Hand-off batches lists stored batches, links directly to the authorized CSV download, and can mark the batch's remaining approved claims reimbursed. Without `people.claims.reimburse`, payment, batch and download controls are absent, and the batches tab says “Hand-off batches need the reimbursement permission.”
+Reviewers with reimbursement permission can create hand-off batches from waiting currency totals, download them, and mark their remaining claims reimbursed on this same page. Payment and batch controls remain hidden without that permission. Own-claim decisions and payments remain refused, including an entire batch containing an own claim.
 
-Every write-shaped event rechecks the queue permission and the action's permission for the company. The Claims facade checks its permission again in the transaction. A revoked grant, stale claim, own claim or archived company returns a page message and closes the confirmation. Flash messages survive table and tab events until dismissed or replaced.
+The page and agent use the same reviewed contracts: `people.claims.request.submit`, `.withdraw`, `.approve`, `.reject`, `.reimburse`, and `people.claims.handoff.create` and `.reimburse`. They invoke the same supplied-transaction writes. The owner rechecks grants, company state, employee ownership and record state under its locks and saves request history, audit and events together. Catalog and policy setup remains a separate configuration task.
 
-For browser proof, first run the default People walkthrough on a disposable database. Initialize its stored Dev role with `BILIBI_ENV=development ./target/debug/bilibi-web seed-production`, then run `BILIBI_ENV=development cargo run -p bilibi-people-walkthrough --bin claim-operations`. It creates separate records through the Claims facade and gives the fixture viewer queue access with reimbursement explicitly denied. Sign in as the fixture manager to exercise all five tabs, or as the viewer to check withheld controls.
-
-While a manager review is open, run the same fixture binary with `revoke-reimburse` or `revoke-approve` to prove that the next event refuses it. Restore the grant with `restore-reimburse` or `restore-approve`. These commands call Authz and refuse a database without the walkthrough accounts.
-
-## My claims
-
-Open **People → My work → My claims** to submit an expense and follow its decision. The page uses the signed-in account’s company and working employee; neither can be chosen in the form.
-
-The open claim types table shows each category, currency, limits and receipt rule. The submission form asks for the type, expense date, amount, currency, receipt number and description. When the same type, date and amount already exist, it keeps the entered details and asks you to confirm that this is a separate expense. A repeated receipt number is refused even when that confirmation is checked.
-
-Submitted claims show their status, approved amount and decision reason. A reimbursed claim also shows its payment date. **Withdraw** first asks for confirmation; Cancel and Escape leave the claim unchanged. The server keeps the selected claim, and confirmation checks ownership and status again through `Claims::withdraw_request`.
-
-Both lists use `FlexTable` with `ListColumns` for column selection, order and compact rows. Bilimbi’s page has no sorting, filters or pagination, so those controls are absent here. `ListState` validates the page’s URL state. The page is available in a workspace tile and declares its facade writes through `PageWrites` with a pending operation-contract allowance.
-
-Every page update resolves the account’s current employee link again. Every write event checks `people.claims.submit` before parsing input, and the facade checks again under its locks. A revoked grant or removed link clears the private rows, form and pending withdrawal. Refusals stay on the page as messages; field validation also appears beside the fields and in an error summary.
-
-For browser checks on a disposable database, first run the default People walkthrough, then run `cargo run -p bilibi-people-walkthrough --bin claims-page -- relink` followed by `cargo run -p bilibi-people-walkthrough --bin claims-page -- prepare`. The relink step restores the staff account after other slices’ account-link refusal proofs. Sign in as `staff@example.test` to see submitted, partly approved, rejected and reimbursed expenses, plus three open receipt rules. The same binary accepts `revoke`/`restore` and `unlink`/`relink` to change that account while its page is open.
+The disposable walkthrough commands `claims-page` and `claim-operations` create expenses and change links or grants for browser checks. The task's one-door proof exercises the common list, record and operation contracts with both audiences, including complete owner history beyond 500 claims and reviewer employee choices outside the bounded team window.
 
 ## Claim policies
 

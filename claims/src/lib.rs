@@ -29,6 +29,7 @@
 //! and transactional events consumed by other Domains.
 //!
 //! See `README.md`.
+mod agent;
 mod assignments;
 mod catalog;
 mod contributions;
@@ -39,7 +40,7 @@ mod operations_web;
 mod policies;
 mod requests;
 mod setup_web;
-mod web;
+mod submission;
 mod workflow;
 
 pub use handoff::{HandoffBatch, HandoffExport, HandoffWaiting};
@@ -259,7 +260,7 @@ pub struct AssignmentMembers {
     pub employee_ids: Vec<i64>,
 }
 
-/// An employee an assignment may cover, for a claims manager's picker.
+/// An employee option for a claims manager or reviewer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AssignableEmployee {
     pub id: i64,
@@ -883,12 +884,35 @@ impl Claims {
     ) -> Result<Vec<AssignableEmployee>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        let employees = self
-            .workforce
-            .employees_at_any_status(scope, company_id, None)
-            .await?
-            .value
-            .unwrap_or_default();
+        drop(client);
+        self.employee_options(scope, company_id, None).await
+    }
+
+    async fn employee_options(
+        &self,
+        scope: &Scope,
+        company_id: i64,
+        employee_ids: Option<&[i64]>,
+    ) -> Result<Vec<AssignableEmployee>> {
+        let mut employees = Vec::new();
+        if let Some(ids) = employee_ids {
+            for page in ids.chunks(MEMBER_LIMIT) {
+                employees.extend(
+                    self.workforce
+                        .employees_at_any_status(scope, company_id, Some(page))
+                        .await?
+                        .value
+                        .unwrap_or_default(),
+                );
+            }
+        } else {
+            employees = self
+                .workforce
+                .employees_at_any_status(scope, company_id, None)
+                .await?
+                .value
+                .unwrap_or_default();
+        }
         let mut employees: Vec<AssignableEmployee> = employees
             .into_iter()
             .map(|employee| AssignableEmployee {

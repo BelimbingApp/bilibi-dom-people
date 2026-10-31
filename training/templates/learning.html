@@ -1,9 +1,14 @@
 {# Mirrors Bilimbi Training.Web.LearningLive; shared UI owns every control. #}
 {% import "components.html" as ui %}
 {% import "feedback.html" as feedback %}
+{% import "workspace.html" as workspace %}
 <div data-shared-ui>
 {% call feedback::flash_group(messages=flash) %}{% endcall %}
 {% call ui::page(id="people-learning", class="space-y-4") %}
+{% if !record.is_empty() %}
+{% call ui::back_link(href="/people/training/requests") %}Learning requests{% endcall %}
+{% call workspace::announce(kind="people/training", record_id=record) %}{% endcall %}
+{% endif %}
 {% call ui::header(actions=header_actions) %}{{ title }}{% endcall %}
 {{ tabs }}
 {{ choose_task }}

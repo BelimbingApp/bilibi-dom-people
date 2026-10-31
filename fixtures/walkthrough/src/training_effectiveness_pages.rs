@@ -418,11 +418,11 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             && body.html.contains("Unobserved outcome: Unknown"),
         "confirmed answer preserves bounded score and explicit unknown",
     )?;
-    let mut mine = mount(&learning, &staff, "my", &query).await?;
+    let mut mine = mount(&learning, &staff, "requests", &query).await?;
     let body = refresh(&mut mine, &staff).await?;
     proof(
         body.html.contains("my-evaluation-tasks"),
-        "My learning embeds its independent evaluations FlexTable",
+        "Learning requests embeds its independent evaluations FlexTable",
     )?;
     let own = saved(
         training
