@@ -173,7 +173,7 @@ async fn run(url: &str) -> Result<()> {
         bilibi_company::CreateOutcome::Refused(e) => return Err(fail(format!("company: {e:?}"))),
     };
     services
-        .get::<UserService>(bilibi_user::SERVICE)?
+        .get::<UserService>("core/user.accounts")?
         .set_desk(
             &admin,
             company,
