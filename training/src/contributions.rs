@@ -72,7 +72,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/artifacts", "base/authz", "base/database", "base/datetime", "base/module_registry",
+            "base/agent_api", "base/artifacts", "base/authz", "base/database", "base/datetime", "base/module_registry",
             "base/party_ids", "base/settings", "base/tenancy", "base/menu", "base/system", "base/ui",
             "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
@@ -86,13 +86,15 @@ inventory::submit! {
         services: &[Service {
             id: SERVICE,
             factory: |services| {
-                Ok(Arc::new(Training {
+                let facade = Arc::new(Training {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
                     artifacts: services.get("base/artifacts.store")?,
-                }))
+                });
+                crate::learning_agent::bind(facade.clone())?;
+                Ok(facade)
             },
         }, Service {
             id: crate::download::SERVICE,
@@ -107,7 +109,7 @@ inventory::submit! {
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_records::Pages(services.get(SERVICE)?))))),
         }, Service {
             id: crate::web_learning::PAGES,
-            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?))))),
+            factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_learning::Pages(services.get(SERVICE)?, services.get(bilibi_agent_api::page::SERVICE)?))))),
         }, Service {
             id: crate::web_effectiveness::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web_effectiveness::Pages(services.get(SERVICE)?))))),

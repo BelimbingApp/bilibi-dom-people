@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 bilibi-artifacts.workspace = true
 askama.workspace = true
+bilibi-agent-api.workspace = true
 bilibi-menu.workspace = true
 bilibi-system.workspace = true
 bilibi-ui.workspace = true
