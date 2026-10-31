@@ -286,7 +286,7 @@ Reminders tell the responsible accounts when a skill or development action needs
 | `reminder_inbox(scope, company, limit)` | This account's sent ledger rows, newest first, with a limit of 1–300 |
 | `reminder_ledger(scope, company, limit)` | Company delivery rows, including failures, newest first; reminder-send permission and a limit of 1–300 |
 
-The first four need `people.skills.reminders.send`, checked through Workforce Authorization for the caller's company. The inbox needs a current account affiliation with that company. `as_of` is `Option<Date>`; `None` means today in UTC.
+The first four need `people.skills.reminders.send`, checked through Workforce Authorization for the caller's company. The inbox needs a current desk in that company. `as_of` is `Option<Date>`; `None` means today in UTC.
 
 | Rule | Due condition | Recipients | Period |
 | --- | --- | --- | --- |
@@ -295,7 +295,7 @@ The first four need `people.skills.reminders.send`, checked through Workforce Au
 | `overdue_action` | A `not_started`, `scheduled`, `in_progress` or `pending_reassessment` action is past its due date | Owner's company accounts | ISO week |
 | `coverage_gap` | An active critical skill has fewer qualified working holders than `backup_minimum` | Company accounts holding `people.skills.assessments.manage` | Calendar month, such as `2026-M10` |
 
-Accounts come from Core User's proven company-account read. Workforce matches their affiliations to employment ids through `employment_links_on`; no employment-page grant is needed. Audience capability discovery uses Authz's read of effective grants, including direct denies. It never supplies authority for the operator's write. If several accounts share an affiliation, each receives its own reminder. A due item with no recipient creates no ledger row and increments `unaddressed` once.
+Accounts come from Core User's proven company-account read. Workforce matches their Persons to employment ids through `employment_people_on`; no employment-page grant is needed. Audience capability discovery uses Authz's read of effective grants, including direct denies. It never supplies authority for the operator's write. If several accounts share a Person, each receives its own reminder. A due item with no recipient creates no ledger row and increments `unaddressed` once.
 
 **Repeating a run never sends a sent reminder again in the same period.** The unique ledger key includes company, rule, employee, skill, action, period and recipient, including null employee/action values. Claims and deliveries take the company lock and recheck authorization. A claim commits as `pending`; delivery locks it, creates the recipient's `people.skills.reminder` notification through `NotificationBoundary::notify`, and marks it sent in the same transaction. The bell wakes only after commit. Titles, bodies and links match Bilimbi.
 

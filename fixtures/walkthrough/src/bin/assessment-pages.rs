@@ -7,7 +7,7 @@ use bilibi_people_skills::*;
 use bilibi_people_workforce::Workforce;
 use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::page::{LiveInput, LiveRequest, LiveState, PageRequest, PageService};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 
 fn must<T>(result: bilibi_people_skills::Result<T>) -> Result<T> {

@@ -77,7 +77,7 @@ All six live under the Authz domain `people` and are granted by an administrator
 
 ## Self-service seam
 
-`self_days` uses Workforce's `authorize_self` and the returned `SelfEmployee.employee_id`. Workforce re-proves the account through Base Authentication on each call and resolves its affiliation to a working employment in the requested company. An account unlinked between calls is refused even when a caller retains an earlier scope. PW1 owns this proof and the employment lock used by self-service writes.
+`self_days` uses Workforce's `authorize_self` and the returned `SelfEmployee.employee_id`. Workforce re-proves the account through Base Authentication on each call and resolves its Person to a working employment in the requested company. An account unlinked between calls is refused even when a caller retains an earlier scope. PW1 owns this proof and the employment lock used by self-service writes.
 
 ## Database
 
