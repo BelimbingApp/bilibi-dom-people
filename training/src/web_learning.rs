@@ -43,7 +43,7 @@ inventory::submit! {
 macro_rules! route {
     ($key:literal, $path:literal, $cap:expr) => {
         inventory::submit! {
-            Contribution::new(ROUTES, concat!("people/training.learning_", $key), PROVENANCE, &Route {
+            Contribution::new(ROUTES, concat!("people/training.learning_", $key), PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
                 method: Method::Get, path: $path, service: PAGES, operation: $key,
                 access: Access::Capability($cap), framed: true,
             })
@@ -1140,7 +1140,10 @@ impl Learning {
             table.zoom = self.columns.zoom;
             table.suggestions = self.columns.flex_suggestions();
             table.add_query = &self.columns.add_query;
-            table.empty=Some(TableEmpty::State(EmptyState::missing("No learning records yet","Choose a company and add a request, plan or budget when you have the required access.")));
+            table.empty = Some(TableEmpty::State(EmptyState::missing(
+                "No learning records yet",
+                "Choose a company and add a request, plan or budget when you have the required access.",
+            )));
             table_html = render(&table)?;
             pagination = render(&Pagination::new(
                 "learning-pagination",
@@ -1191,7 +1194,18 @@ impl Learning {
             Html::EMPTY
         };
         let confirmation = if let Some(p) = &self.pending {
-            let dialog=render(&ConfirmDialog { id:"learning-decision-confirm",consequence:&format!("Record {} for this learning record?",p.action),detail:&format!("{} The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.", self.instance_notice),confirm:"Record decision",working:"Recording…",confirm_event:"confirm_decision",cancel_event:"cancel_decision" })?;
+            let dialog = render(&ConfirmDialog {
+                id: "learning-decision-confirm",
+                consequence: &format!("Record {} for this learning record?", p.action),
+                detail: &format!(
+                    "{} The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.",
+                    self.instance_notice
+                ),
+                confirm: "Record decision",
+                working: "Recording…",
+                confirm_event: "confirm_decision",
+                cancel_event: "cancel_decision",
+            })?;
             // The banner belongs inside the review dialog, beside its consequence.
             // ConfirmDialog has no body slot, so use the shared instance banner immediately before it.
             join([self.banner.clone(), dialog])
@@ -1211,7 +1225,10 @@ impl Learning {
             read_only: !writable && self.error.is_none(),
             error: self.error.as_deref().unwrap_or(""),
             choose_task: if !show {
-                render(&EmptyState::missing("Choose a learning task", "Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access."))?
+                render(&EmptyState::missing(
+                    "Choose a learning task",
+                    "Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access.",
+                ))?
             } else {
                 Html::EMPTY
             },

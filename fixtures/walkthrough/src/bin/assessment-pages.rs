@@ -115,10 +115,15 @@ async fn main() -> Result<()> {
         users.unlink(&admin, 3).await.map_err(|_| Error::Internal)?;
         return Ok(());
     }
-    users
-        .link_affiliation(&admin, 3, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        &admin,
+        3,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     if mode == "relink-staff" {
         return Ok(());
     }
@@ -302,10 +307,15 @@ async fn main() -> Result<()> {
             && !html.contains("id=\"my-skills-section\""),
         "unlinking the account removes scores on the next table event",
     )?;
-    users
-        .link_affiliation(&admin, 3, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        &admin,
+        3,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let mut restricted = mount(&services, &viewer, "assessments").await?;
     let html = event(
         &mut restricted,

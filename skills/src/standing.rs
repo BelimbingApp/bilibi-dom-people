@@ -15,7 +15,7 @@ fn columns() -> String {
 
 async fn present(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     records: Vec<Row>,
@@ -78,7 +78,7 @@ async fn present(
 
 pub(crate) async fn gaps(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     reach: &access::Reach,
@@ -90,7 +90,7 @@ pub(crate) async fn gaps(
 
 pub(crate) async fn own(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,

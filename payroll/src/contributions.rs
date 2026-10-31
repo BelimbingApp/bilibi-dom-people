@@ -85,7 +85,7 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
 }) }
 macro_rules! page {
     ($id:literal, $path:literal, $operation:literal, $cap:expr) => {
-        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
             method: bilibi_module_registry::contributions::Method::Get, path: $path, service: crate::web::PAGES, operation: $operation,
             access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,
         }) }
@@ -150,7 +150,7 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
     service: crate::web::RUN_PAGES, contracts: &[],
     pending: bilibi_module_registry::contributions::Pending::Every { reason: "Payroll run writes use the authorized facade; their operation contracts have not been reviewed." },
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/payroll.runs", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/payroll.runs", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/payroll/runs", service: crate::web::RUN_PAGES, operation: "runs",
     access: bilibi_module_registry::contributions::Access::Capability(VIEW), framed: true,
 }) }

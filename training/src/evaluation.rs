@@ -769,7 +769,7 @@ fn report_months(settings: &EvaluationSettings) -> Result<i32> {
         .ok_or(TrainingError::EffectivenessReportNotConfigured)
 }
 async fn next_period(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     months: i32,

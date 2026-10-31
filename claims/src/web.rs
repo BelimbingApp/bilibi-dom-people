@@ -149,7 +149,7 @@ impl MyClaims {
     }
     async fn load(&mut self, scope: &Scope) -> Result<()> {
         // This company comes only from the signed-in account, never from an event.
-        self.company = scope.actor().organisation().map(|id| id.get());
+        self.company = scope.current_company().map(|id| id.get());
         let Some(company) = self.company else {
             self.clear_private();
             return Ok(());
@@ -632,8 +632,12 @@ fn parse_request(
 fn refusal(error: &ClaimsError) -> &'static str {
     match error {
         ClaimsError::Unauthorized => NO_PERMISSION,
-        ClaimsError::NotFound | ClaimsError::NotLinked | ClaimsError::EmployeeNotFound => UNAVAILABLE,
-        ClaimsError::ClaimTypeUnavailable | ClaimsError::ClaimTypeNotFound => "Choose a claim type that is open for claims.",
+        ClaimsError::NotFound | ClaimsError::NotLinked | ClaimsError::EmployeeNotFound => {
+            UNAVAILABLE
+        }
+        ClaimsError::ClaimTypeUnavailable | ClaimsError::ClaimTypeNotFound => {
+            "Choose a claim type that is open for claims."
+        }
         ClaimsError::ClaimTypeNotAssigned => "This claim type is not assigned to you.",
         ClaimsError::FutureIncurredOn => "The expense date cannot be in the future.",
         ClaimsError::NoEffectivePolicy => "No claim policy covers this type on the expense date.",
@@ -643,7 +647,9 @@ fn refusal(error: &ClaimsError) -> &'static str {
         ClaimsError::MonthlyLimitExceeded => "The amount would exceed this month's limit.",
         ClaimsError::YearlyLimitExceeded => "The amount would exceed this year's limit.",
         ClaimsError::DuplicateReceipt => "This receipt number is already on one of your claims.",
-        ClaimsError::PossibleDuplicate => "You already claimed this type, date, and amount. Confirm it is a separate expense to submit.",
+        ClaimsError::PossibleDuplicate => {
+            "You already claimed this type, date, and amount. Confirm it is a separate expense to submit."
+        }
         ClaimsError::CompanyArchived => "This company is archived and read-only",
         _ => "Check the claim details.",
     }

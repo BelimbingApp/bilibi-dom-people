@@ -544,7 +544,7 @@ fn normalize(new: &NewRequest) -> Result<NewRequest> {
     })
 }
 async fn lock(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     id: i64,
@@ -554,7 +554,7 @@ async fn lock(
 }
 #[allow(clippy::too_many_arguments)]
 async fn covered(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -605,7 +605,7 @@ async fn write_entry(
     Ok(())
 }
 async fn event(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     request: &Request,

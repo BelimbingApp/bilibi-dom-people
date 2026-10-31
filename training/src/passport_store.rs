@@ -27,7 +27,7 @@ fn passport_row(r: &Row) -> PassportRow {
     }
 }
 pub(crate) async fn passport(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     employee: i64,
@@ -58,7 +58,7 @@ pub(crate) async fn passport(
     Ok(page)
 }
 pub(crate) async fn all_passport(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     employee: i64,

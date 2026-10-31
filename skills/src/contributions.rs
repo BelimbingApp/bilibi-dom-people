@@ -109,7 +109,7 @@ inventory::submit! {
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService(Arc::new(crate::pk6::Pages::new(services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_system::SERVICE)?))))),
         }, Service {
             id: crate::reminder_worker::SERVICE,
-            factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::reminder_worker::ReminderWorker(services.get(SERVICE)?))))),
+            factory: |services| Ok(Arc::new(bilibi_queue::HandlerService(Arc::new(crate::reminder_worker::ReminderWorker(services.get(SERVICE)?))))),
         }],
     }
 }
@@ -156,7 +156,7 @@ policy_setting!(policy::MULTIPLIER_DEVELOPMENT);
 
 // Bilimbi Skills.ReminderWorker: five attempts as the enqueuing operator.
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::reminder_worker::validate }) }
-inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::reminder_worker::SERVICE, capability: REMINDERS_SEND }) }
+inventory::submit! { Contribution::new(bilibi_queue::HANDLERS, crate::reminder_worker::WORKER, provenance!(), &bilibi_queue::HandlerBinding { service: crate::reminder_worker::SERVICE, capability: REMINDERS_SEND }) }
 
 // PK6 mirrors Skills.Web.ActionsLive and Skills.Web.PolicyLive.
 inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::pk6::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
@@ -165,7 +165,7 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
 }) }
 macro_rules! pk6_page {
     ($id:literal, $path:literal, $operation:literal, $cap:expr) => {
-        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
             method: bilibi_module_registry::contributions::Method::Get, path: $path,
             service: crate::pk6::PAGES, operation: $operation,
             access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,
@@ -216,7 +216,7 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
 }) }
 macro_rules! pk4_page {
     ($id:literal, $path:literal, $operation:literal) => {
-        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+        inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
             method: bilibi_module_registry::contributions::Method::Get, path: $path,
             service: crate::pk4::PAGES, operation: $operation,
             access: bilibi_module_registry::contributions::Access::Capability(CATALOG_VIEW), framed: true,
@@ -243,12 +243,12 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
     service: crate::pk5::PAGES, contracts: &[],
     pending: bilibi_module_registry::contributions::Pending::Every { reason: "Skills assessment and reassessment writes call the Skills facade; operation contracts await review." },
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.assessments", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.assessments", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/skills/assessments",
     service: crate::pk5::PAGES, operation: "assessments",
     access: bilibi_module_registry::contributions::Access::Capability(ASSESSMENTS_VIEW), framed: true,
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.my", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/skills.my", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/skills/my",
     service: crate::pk5::PAGES, operation: "my",
     access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,

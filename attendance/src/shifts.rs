@@ -162,7 +162,7 @@ fn read(row: &Row) -> ShiftTemplate {
 
 /// The company's templates, active first then by code.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
 ) -> Result<Vec<ShiftTemplate>> {
@@ -180,7 +180,7 @@ pub(crate) async fn list(
 
 /// A taken code, decided on the transaction before the insert.
 pub(crate) async fn check_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     code: &str,

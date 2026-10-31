@@ -57,7 +57,7 @@ fn read(row: &Row) -> Result<Row_> {
 
 /// The company's employments in the given statuses, by id.
 pub(crate) async fn in_statuses(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     statuses: &[String],
@@ -76,7 +76,7 @@ pub(crate) async fn in_statuses(
 
 /// The employments among `ids` in the given statuses, by id.
 pub(crate) async fn by_ids(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     ids: &[i64],
@@ -96,7 +96,7 @@ pub(crate) async fn by_ids(
 
 /// The working employments reporting to one employment, by id.
 pub(crate) async fn reporting_to(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     supervisor_id: i64,
@@ -116,14 +116,16 @@ pub(crate) async fn reporting_to(
 
 /// One employment of the company at any status, or `None`.
 pub(crate) async fn find(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
 ) -> Result<Option<Row_>> {
     client
         .query_opt(
-            &format!("SELECT {COLUMNS} {FROM} WHERE e.tenant_id = $1 AND e.company_id = $2 AND e.id = $3"),
+            &format!(
+                "SELECT {COLUMNS} {FROM} WHERE e.tenant_id = $1 AND e.company_id = $2 AND e.id = $3"
+            ),
             &[&tenant, &company_id, &id],
         )
         .await
@@ -134,23 +136,22 @@ pub(crate) async fn find(
 }
 
 /// The company's employment holding one affiliation, in the given statuses.
-pub(crate) async fn by_affiliation(
-    client: &impl GenericClient,
+pub(crate) async fn by_person(
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
-    affiliation_id: i64,
+    person_id: i64,
     statuses: &[String],
 ) -> Result<Option<Row_>> {
-    client
-        .query_opt(
-            &format!("SELECT {COLUMNS} {FROM} WHERE e.tenant_id = $1 AND e.company_id = $2 AND e.affiliation_id = $3 AND e.status = ANY($4::text[])"),
-            &[&tenant, &company_id, &affiliation_id, &statuses],
-        )
-        .await
-        .map_err(Error::from)?
-        .as_ref()
-        .map(read)
-        .transpose()
+    let rows = client.query(
+        &format!("SELECT {COLUMNS} {FROM} WHERE e.tenant_id=$1 AND e.company_id=$2 AND e.person_id=$3 AND e.status=ANY($4::text[]) ORDER BY e.id LIMIT 2"),
+        &[&tenant,&company_id,&person_id,&statuses],
+    ).await.map_err(Error::from)?;
+    // Ambiguous parallel employments confer no self-service identity.
+    if rows.len() > 1 {
+        return Err(WorkforceError::NotLinked);
+    }
+    rows.first().map(read).transpose()
 }
 
 /// One employment of the company at any status, locked for the rest of the
@@ -158,7 +159,7 @@ pub(crate) async fn by_affiliation(
 /// write waits; a read does not), or `None`. The supervisor join is left out
 /// so the lock lands on this row alone.
 pub(crate) async fn lock(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -183,7 +184,7 @@ pub(crate) async fn lock(
 /// of the company. A supervisor outside the working statuses ends the chain,
 /// as the reads hide such a supervisor.
 pub(crate) async fn supervisor_chain(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -227,7 +228,7 @@ pub(crate) async fn supervisor_chain(
 /// others, at any status: making it the employee's supervisor would close a
 /// cycle. Bounded, so a chain already damaged by hand cannot loop.
 async fn reports_to(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     supervisor_id: i64,
     employee_id: i64,
@@ -250,7 +251,7 @@ async fn reports_to(
 
 /// Counts by status, every status listed, plus the working total.
 pub(crate) async fn summary(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     working: &[String],
@@ -419,7 +420,7 @@ pub(crate) fn validate_change(
 /// working employee of the company, and a department that is not the
 /// company's, as field errors.
 async fn check_references(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     except: Option<i64>,
@@ -469,7 +470,7 @@ async fn check_references(
 /// The refusals decided on the transaction before the insert: an
 /// affiliation already employed, then the reference checks.
 pub(crate) async fn check_new(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     affiliation_id: i64,
@@ -508,7 +509,7 @@ pub(crate) async fn check_new(
 /// row's lock: the reference checks and a supervisor who reports to this
 /// employee.
 pub(crate) async fn check_change(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     current: &Employment,
@@ -699,22 +700,22 @@ impl Reference {
 }
 
 /// Minimal (affiliation, employment) identity links, without private HR facts.
-pub(crate) async fn affiliation_links(
-    client: &impl GenericClient,
+pub(crate) async fn person_links(
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
-    affiliations: &[i64],
+    people: &[i64],
 ) -> Result<Vec<(i64, i64)>> {
     Ok(client.query(
-        "SELECT affiliation_id,id FROM people_workforce_employments WHERE tenant_id=$1 AND company_id=$2 AND affiliation_id=ANY($3::bigint[]) ORDER BY id",
-        &[&tenant,&company,&affiliations],
+        "SELECT person_id,id FROM people_workforce_employments WHERE tenant_id=$1 AND company_id=$2 AND person_id=ANY($3::bigint[]) ORDER BY id",
+        &[&tenant,&company,&people],
     ).await.map_err(Error::from)?.iter().map(|r| (r.get(0),r.get(1))).collect())
 }
 
 /// A bounded immutable-id page, including one lookahead row. An id watermark
 /// keeps new employments out of the pass; renumbering never changes its order.
 pub(crate) async fn scan(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     statuses: &[String],

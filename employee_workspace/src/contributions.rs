@@ -51,7 +51,7 @@ inventory::submit! {
 }
 
 inventory::submit! {
-    Contribution::new(ROUTES, "people/employee_workspace.employees", Provenance { module: MODULE, source: file!(), line: line!() }, &Route {
+    Contribution::new(ROUTES, "people/employee_workspace.employees", Provenance { module: MODULE, source: file!(), line: line!() }, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/employees", service: PAGES, operation: "employees", access: Access::Capability(VIEW), framed: true,
     })
 }
@@ -70,7 +70,7 @@ bilibi_menu::contribute!(
 
 // Bilimbi EmployeeWorkspace.Web.ShowLive.
 inventory::submit! {
-    Contribution::new(ROUTES, "people/employee_workspace.employee", Provenance { module: MODULE, source: file!(), line: line!() }, &Route {
+    Contribution::new(ROUTES, "people/employee_workspace.employee", Provenance { module: MODULE, source: file!(), line: line!() }, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/employees/{id}", service: PAGES, operation: "employee", access: Access::Capability(VIEW), framed: true,
     })
 }

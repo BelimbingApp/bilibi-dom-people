@@ -96,11 +96,15 @@ pub(super) async fn run(url: &str) -> Result<()> {
             },
         )
         .await?;
-    services
-        .get::<UserService>("core/user.accounts")?
-        .link_affiliation(&admin, STAFF, affiliation.id)
-        .await
-        .map_err(failed)?;
+    crate::give_staff_desk(
+        &services.get::<UserService>("core/user.accounts")?,
+        &admin,
+        STAFF,
+        affiliation.affiliation.person_id,
+        affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(failed)?;
     let staff_employee = workforce
         .create_employment(
             &admin,
@@ -191,7 +195,9 @@ pub(super) async fn run(url: &str) -> Result<()> {
             .await
             .map_err(failed)?;
     }
-    println!("PA5 browser fixture ready: company 1, week from {today}; manager and staff have two drafts and three pending requests. Manager can plan and decide; admin can independently decide the manager request; viewer has neither permission.");
+    println!(
+        "PA5 browser fixture ready: company 1, week from {today}; manager and staff have two drafts and three pending requests. Manager can plan and decide; admin can independently decide the manager request; viewer has neither permission."
+    );
     Ok(())
 }
 

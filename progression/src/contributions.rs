@@ -46,11 +46,11 @@ macro_rules! provenance {
         }
     };
 }
-inventory::submit! { Contribution::new(ROUTES, "people/progression.policies", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/progression.policies", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/progression", service: PAGES, operation: "policies",
     access: Access::Capability(POLICY_VIEW), framed: true,
 }) }
-inventory::submit! { Contribution::new(ROUTES, "people/progression.my", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/progression.my", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/progression/my", service: PAGES, operation: "my",
     access: Access::AnyOf(&[SELF_VIEW, bilibi_people_performance::SELF_VIEW]), framed: true,
 }) }
@@ -66,6 +66,7 @@ bilibi_menu::contribute!(
         "Progression",
         "/people/progression"
     )
+    .company_scoped()
     .under("people.development")
     .requires(Requirement::Capability(POLICY_VIEW))
     .icon("flag")
@@ -78,6 +79,7 @@ bilibi_menu::contribute!(
         "My standing",
         "/people/progression/my"
     )
+    .company_scoped()
     .under("people.my_work")
     .requires(Requirement::AnyOf(&[
         SELF_VIEW,

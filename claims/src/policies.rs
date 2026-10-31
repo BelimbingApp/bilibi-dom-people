@@ -46,7 +46,7 @@ impl Policy {
 }
 
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Policy>> {
@@ -63,7 +63,7 @@ pub(crate) async fn list(
 }
 
 pub(crate) async fn find(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -84,7 +84,7 @@ pub(crate) async fn find(
 }
 
 pub(crate) async fn lock(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -104,7 +104,7 @@ pub(crate) async fn lock(
 /// Whether another policy of the claim type covers any day of the period
 /// (Bilimbi `no_overlap/3`).
 pub(crate) async fn overlaps(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     claim_type_id: i64,
@@ -130,7 +130,7 @@ pub(crate) async fn overlaps(
 /// Whether a live claim under the policy was incurred after `effective_to`
 /// (Bilimbi `requests_after?/4`).
 pub(crate) async fn requests_after(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     policy_id: i64,
@@ -316,7 +316,7 @@ pub(crate) async fn end(tx: &mut Tx<'_>, policy: Policy, effective_to: Date) -> 
 /// With `assigned`, an `assigned_only` type appears only when its id is in
 /// the list.
 pub(crate) async fn open_types(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     on_date: Date,

@@ -98,13 +98,13 @@ inventory::submit! {
 }
 
 inventory::submit! {
-    Contribution::new(ROUTES, "people/reference_data.references", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/reference_data.references", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: REFERENCES_PATH, service: PAGES, operation: "references",
         access: Access::Capability(MANAGE), framed: true,
     })
 }
 inventory::submit! {
-    Contribution::new(ROUTES, "people/reference_data.company_references", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/reference_data.company_references", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: COMPANY_REFERENCES_PATH, service: PAGES, operation: "references",
         access: Access::Capability(MANAGE), framed: true,
     })

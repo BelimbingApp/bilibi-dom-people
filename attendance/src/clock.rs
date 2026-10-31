@@ -353,7 +353,7 @@ fn seconds_between(from: Timestamp, to: Timestamp) -> i64 {
 
 /// The recorded fact for the company, source and key, if any.
 async fn find_event(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     source: &str,
@@ -393,7 +393,7 @@ fn replay(
 
 /// The employee's day row for a date, locked for the transaction.
 async fn locked_day(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -420,7 +420,7 @@ enum Target {
     Create(Date),
 }
 async fn shift_day(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -617,7 +617,7 @@ pub(crate) async fn write(
 
 /// The employee's [`DAYS_SHOWN`] most recent days, newest first.
 pub(crate) async fn days(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
     employee_id: i64,

@@ -17,7 +17,7 @@ const PROVENANCE: Provenance = Provenance {
     source: file!(),
     line: line!(),
 };
-inventory::submit! {Contribution::new(ROUTES,"people/training.insights",PROVENANCE,&Route{method:Method::Get,path:"/people/training/insights",service:PAGES,operation:"insights",access:Access::Capability(INSIGHTS_VIEW),framed:true})}
+inventory::submit! {Contribution::new(ROUTES,"people/training.insights",PROVENANCE,&Route{ company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,method:Method::Get,path:"/people/training/insights",service:PAGES,operation:"insights",access:Access::Capability(INSIGHTS_VIEW),framed:true})}
 bilibi_menu::contribute!(
     "people/training",
     MenuItem::page(

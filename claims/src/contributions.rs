@@ -142,7 +142,7 @@ inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APP
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 
 // Bilimbi Claims.Web.OperationsLive and its Time and expenses menu leaf.
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/claims.operations", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/claims.operations", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get,
     path: "/people/claims/operations", service: "people/claims.operations_pages", operation: "operations",
     access: bilibi_module_registry::contributions::Access::Capability(APPROVE), framed: true,
@@ -166,7 +166,7 @@ bilibi_menu::contribute!(
 
 // Bilimbi Claims.Web.MyClaimsLive and claims/priv/web_routes.exs.
 inventory::submit! {
-    Contribution::new(ROUTES, "people/claims.my_claims", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/claims.my_claims", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
         method: Method::Get, path: "/people/claims", service: crate::web::SERVICE,
         operation: "my_claims", access: Access::Capability(SUBMIT), framed: true,
     })
@@ -180,6 +180,7 @@ inventory::submit! {
 bilibi_menu::contribute!(
     "people/claims",
     MenuItem::page("people.my_work.claims", "My claims", "/people/claims")
+        .company_scoped()
         .under("people.my_work")
         .requires(Requirement::Capability(SUBMIT))
         .order(30)
@@ -187,7 +188,7 @@ bilibi_menu::contribute!(
 
 // Bilimbi Claims.Web.SetupLive and its Settings menu leaf.
 inventory::submit! {
-    Contribution::new(ROUTES, "people/claims.setup", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/claims.setup", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/claims/setup", service: crate::setup_web::SERVICE,
         operation: "setup", access: Access::Capability(MANAGE), framed: true,
     })

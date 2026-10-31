@@ -67,7 +67,7 @@ fn decode<T: DeserializeOwned>(value: Value) -> std::result::Result<T, Error> {
     serde_json::from_value(value).map_err(|_| Error::Internal)
 }
 async fn one<T: DeserializeOwned>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -85,7 +85,7 @@ async fn one<T: DeserializeOwned>(
         .map_err(Into::into)
 }
 pub(crate) async fn profile(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -100,7 +100,7 @@ pub(crate) async fn profile(
     .await
 }
 pub(crate) async fn access(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -108,7 +108,7 @@ pub(crate) async fn access(
     one(client, scope, company, employee, "people_employee_accesses").await
 }
 async fn record<T: DeserializeOwned + Default>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -129,7 +129,7 @@ async fn record<T: DeserializeOwned + Default>(
     }
 }
 pub(crate) async fn profile_record(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -144,7 +144,7 @@ pub(crate) async fn profile_record(
     .await
 }
 pub(crate) async fn access_record(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -152,7 +152,7 @@ pub(crate) async fn access_record(
     record(client, scope, company, employee, "people_employee_accesses").await
 }
 pub(crate) async fn requests(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -160,7 +160,7 @@ pub(crate) async fn requests(
     client.query("SELECT to_jsonb(t) FROM people_employee_change_requests t WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 ORDER BY id DESC", &[&scope.tenant(), &company, &employee]).await.map_err(Error::from)?.into_iter().map(|r| decode(r.get(0)).map_err(Into::into)).collect()
 }
 pub(crate) async fn views(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
 ) -> Result<Vec<SavedView>> {

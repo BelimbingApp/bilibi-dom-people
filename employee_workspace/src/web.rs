@@ -262,7 +262,7 @@ impl Employees {
         let id = if let Some(id) = requested {
             params::positive_id(Some(id))
         } else {
-            scope.actor().organisation().map(|id| id.get())
+            scope.current_company().map(|id| id.get())
         };
         self.company = self.companies.iter().find(|c| Some(c.id) == id).cloned();
         self.can_add = if let Some(company) = &self.company {

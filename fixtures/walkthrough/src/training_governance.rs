@@ -143,15 +143,16 @@ pub async fn run(
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     for user in [MANAGER, STAFF] {
         for capability in [
             REQUESTS_SUBMIT,
@@ -321,15 +322,16 @@ pub async fn run(
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            VIEWER,
-            bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        VIEWER,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     grants
         .set_direct(admin, VIEWER, REQUESTS_REVIEW, Some(true))
         .await?;
@@ -650,19 +652,54 @@ pub async fn run(
         TrainingError::EmployeeUnavailable,
     )?;
     // Database refusals use rollback-only transactions, leaving all facade facts intact.
-    for (label,sql,id) in [
-        ("budget immutable","UPDATE people_training_budget_policies SET amount=0 WHERE id=$1",allocation.id),
-        ("decision append only","DELETE FROM people_training_need_decisions WHERE request_id=$1",draft.id),
-        ("item immutable","UPDATE people_training_team_plan_items SET need='Rewrite' WHERE plan_id=$1",team_plan.id),
-        ("request content immutable","UPDATE people_training_needs SET need='Rewrite' WHERE id=$1",draft.id),
-        ("terminal request immutable","UPDATE people_training_needs SET status='draft' WHERE id=$1",draft.id),
-        ("plan content immutable","UPDATE people_training_team_plans SET objectives='Rewrite' WHERE id=$1",team_plan.id),
-        ("budget overlap SQL","INSERT INTO people_training_budget_policies(tenant_id,company_id,actor_user_id,currency,effective_from,effective_to,amount,reason) SELECT tenant_id,company_id,actor_user_id,currency,effective_from,effective_to,amount,'Overlap' FROM people_training_budget_policies WHERE id=$1",corrected.id),
+    for (label, sql, id) in [
+        (
+            "budget immutable",
+            "UPDATE people_training_budget_policies SET amount=0 WHERE id=$1",
+            allocation.id,
+        ),
+        (
+            "decision append only",
+            "DELETE FROM people_training_need_decisions WHERE request_id=$1",
+            draft.id,
+        ),
+        (
+            "item immutable",
+            "UPDATE people_training_team_plan_items SET need='Rewrite' WHERE plan_id=$1",
+            team_plan.id,
+        ),
+        (
+            "request content immutable",
+            "UPDATE people_training_needs SET need='Rewrite' WHERE id=$1",
+            draft.id,
+        ),
+        (
+            "terminal request immutable",
+            "UPDATE people_training_needs SET status='draft' WHERE id=$1",
+            draft.id,
+        ),
+        (
+            "plan content immutable",
+            "UPDATE people_training_team_plans SET objectives='Rewrite' WHERE id=$1",
+            team_plan.id,
+        ),
+        (
+            "budget overlap SQL",
+            "INSERT INTO people_training_budget_policies(tenant_id,company_id,actor_user_id,currency,effective_from,effective_to,amount,reason) SELECT tenant_id,company_id,actor_user_id,currency,effective_from,effective_to,amount,'Overlap' FROM people_training_budget_policies WHERE id=$1",
+            corrected.id,
+        ),
     ] {
         client.batch_execute("BEGIN").await?;
-        let result=client.execute(sql,&[&id]).await;
+        let result = client.execute(sql, &[&id]).await;
         client.batch_execute("ROLLBACK").await?;
-        proof(label,result.as_ref().err().and_then(|e|e.code()).is_some_and(|c|c.code()=="23514"))?;
+        proof(
+            label,
+            result
+                .as_ref()
+                .err()
+                .and_then(|e| e.code())
+                .is_some_and(|c| c.code() == "23514"),
+        )?;
     }
     proof("admin fixture identity", admin.user() == ADMIN)?;
     println!("PT3 governance proof complete.");

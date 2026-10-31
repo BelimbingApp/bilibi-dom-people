@@ -42,7 +42,7 @@ pub(crate) fn read(row: &Row) -> Result<LedgerEntry> {
 
 /// The entry under a company, source and key, if any.
 pub(crate) async fn find(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     source: &str,
@@ -63,7 +63,7 @@ pub(crate) async fn find(
 /// Whether the company has any ledger entry (each carries its leave year,
 /// which is why the leave year cannot change afterwards).
 pub(crate) async fn in_use(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<bool> {
@@ -79,7 +79,7 @@ pub(crate) async fn in_use(
 
 /// Whether an entitlement of the type was granted on or after `date`.
 pub(crate) async fn granted_on_or_after(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     type_id: i64,
@@ -100,7 +100,7 @@ pub(crate) async fn granted_on_or_after(
 /// a `carried_forward` entry into a later year (Bilimbi
 /// `CarryForward.closed?/5`; a year's closing entry lives in the next year).
 pub(crate) async fn closed(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -120,7 +120,7 @@ pub(crate) async fn closed(
 
 /// One employee's entries of a leave year, latest date first.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -141,7 +141,7 @@ pub(crate) async fn list(
 
 /// The sum of one employee's entries of a leave year, per type and entry type.
 pub(crate) async fn totals(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,
@@ -169,7 +169,7 @@ pub(crate) async fn totals(
 /// The quantity one employee's pending requests of a leave year hold, per
 /// type (Bilimbi `Requests.pending_totals/4`).
 pub(crate) async fn pending_totals(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,

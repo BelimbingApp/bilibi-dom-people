@@ -30,7 +30,7 @@ fn request(r: &Row) -> DbResult<ReassessmentRequest> {
     })
 }
 async fn get(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,

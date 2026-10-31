@@ -73,14 +73,14 @@ fn type_row(r: &Row) -> ActionType {
     }
 }
 pub(crate) async fn types(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
 ) -> Result<Vec<ActionType>> {
     Ok(client.query(&format!("SELECT {TYPE_COLUMNS} FROM people_skill_action_types WHERE tenant_id=$1 AND company_id=$2 ORDER BY active DESC,name,id"), &[&tenant,&company]).await.map_err(Error::from)?.iter().map(type_row).collect())
 }
 pub(crate) async fn get_type(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -463,7 +463,7 @@ pub(crate) async fn close_after_finalization(w: &mut Write<'_>, a: &Assessment) 
 }
 
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     group: ActionGroup,
@@ -483,7 +483,7 @@ pub(crate) async fn list(
 
 pub(crate) async fn present(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     rows: Vec<Action>,

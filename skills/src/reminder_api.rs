@@ -5,7 +5,7 @@ use crate::{
 };
 use bilibi_database::Error;
 use bilibi_people_workforce::authorization;
-use bilibi_queue::execution::Execution;
+use bilibi_queue::Execution;
 use bilibi_tenancy::Scope;
 use jiff::civil::Date;
 use serde_json::json;
@@ -126,7 +126,7 @@ impl Skills {
         }
         let client = self.db.get().await.map_err(Error::from)?;
         self.current_company(scope, company).await?;
-        bilibi_user::company_accounts::get(&**client, scope, company, scope.user())
+        bilibi_user::UserService::company_account_on(&**client, scope, company, scope.user())
             .await
             .map_err(|e| {
                 if matches!(e, Error::NotFound) {

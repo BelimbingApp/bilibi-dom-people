@@ -70,7 +70,7 @@ impl Claims {
     }
     async fn history_of(
         &self,
-        client: &impl GenericClient,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company: i64,
         employee: i64,
@@ -491,7 +491,7 @@ pub(crate) fn reimbursement(old: &Request, actor: i64, input: &Reimbursement) ->
 }
 
 async fn submission_limits(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -516,7 +516,7 @@ async fn submission_limits(
     Ok(())
 }
 async fn duplicates(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,

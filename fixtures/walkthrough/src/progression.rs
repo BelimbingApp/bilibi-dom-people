@@ -699,14 +699,15 @@ pub async fn run(url: &str) -> Result<()> {
     let employment =
         saved(saved(people.employment(&admin, 1, employee.employee_id).await)?.require_current())?;
     saved(
-        users
-            .link_affiliation(
-                &admin,
-                3,
-                bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                    .map_err(|_| Error::Invalid)?,
-            )
-            .await,
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            3,
+            bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await,
     )?;
     db_refused(
         &client,

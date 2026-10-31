@@ -738,7 +738,11 @@ impl Training {
 
 /// The company's writable lock every write holds first: an archived company
 /// is `CompanyUnavailable`, and the lock serializes the company's writes.
-async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
+async fn writable(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
     bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())

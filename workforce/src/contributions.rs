@@ -122,7 +122,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, WORKING_STATUSES_KEY, proven
 // Bilimbi Workforce.Web.SettingsLive; this page has no menu leaf.
 const PAGES: &str = "people/workforce.pages";
 inventory::submit! {
-    Contribution::new(ROUTES, "people/workforce.settings", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/workforce.settings", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/workforce/settings", service: PAGES, operation: "settings",
         access: Access::Capability(SETTINGS_MANAGE), framed: true,
     })

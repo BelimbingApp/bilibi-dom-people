@@ -58,15 +58,16 @@ pub(super) async fn run(services: &Services) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let client = db.get().await?;
     let staff = auth
         .authenticate(&**client, TENANT, STAFF, "claim-operations-proof".into())

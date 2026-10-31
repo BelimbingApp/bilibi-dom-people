@@ -55,10 +55,10 @@ macro_rules! provenance {
         }
     };
 }
-inventory::submit! { Contribution::new(ROUTES, "people/performance.reviews", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/performance.reviews", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/performance", service: PAGES, operation: "reviews", access: Access::Capability(VIEW), framed: true,
 }) }
-inventory::submit! { Contribution::new(ROUTES, "people/performance.my", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/performance.my", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/performance/my", service: PAGES, operation: "my", access: Access::Capability(SELF_VIEW), framed: true,
 }) }
 inventory::submit! { Contribution::new(PAGE_WRITES, PAGES, provenance!(), &PageWrites {
@@ -73,6 +73,7 @@ bilibi_menu::contribute!(
         "Performance reviews",
         "/people/performance"
     )
+    .company_scoped()
     .under("people.development")
     .requires(bilibi_menu::Requirement::Capability(VIEW))
     .icon("clipboard-document-list")

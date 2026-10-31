@@ -613,10 +613,15 @@ async fn setup(services: &Services, admin: &Scope, manager: &Scope) -> Result<()
         .link_person(admin, STAFF, person.id)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(admin, STAFF, affiliation.id)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        affiliation.affiliation.person_id,
+        affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     people
         .create_employment(
             admin,

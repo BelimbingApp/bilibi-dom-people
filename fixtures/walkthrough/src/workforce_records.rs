@@ -103,11 +103,15 @@ async fn pw1(
             {
                 Ok(bilibi_company::DepartmentOutcome::Saved(department)) => Some(department),
                 Ok(bilibi_company::DepartmentOutcome::Refused(errors)) => {
-                    println!("admin adds the Walkthrough operations department to Company 001: refused ({errors:?})");
+                    println!(
+                        "admin adds the Walkthrough operations department to Company 001: refused ({errors:?})"
+                    );
                     None
                 }
                 Err(error) => {
-                    println!("admin adds the Walkthrough operations department to Company 001: refused ({error})");
+                    println!(
+                        "admin adds the Walkthrough operations department to Company 001: refused ({error})"
+                    );
                     None
                 }
             }
@@ -488,7 +492,7 @@ async fn pw1(
     match users.unlink(manager, STAFF).await {
         Ok(links) => println!(
             "manager unlinks staff@example.test from Sam Staff's affiliation: affiliation {:?}",
-            links.affiliation
+            links.person
         ),
         Err(error) => println!("manager unlinks staff@example.test: refused ({error})"),
     }

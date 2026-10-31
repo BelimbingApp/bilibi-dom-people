@@ -194,7 +194,7 @@ impl State {
         self.rows.clear();
         self.total = 0;
         self.profiles.clear();
-        let Some(company) = scope.actor().organisation().map(|id| id.get()) else {
+        let Some(company) = scope.current_company().map(|id| id.get()) else {
             self.unavailable = Some(
                 if self.my {
                     ProgressionError::EmployeeUnavailable
@@ -225,7 +225,7 @@ impl State {
         let client = self.progression.db.get().await?;
         self.clock = self
             .display
-            .display(&**client, scope, scope.actor().organisation(), "en")
+            .display(&**client, scope, scope.current_company(), "en")
             .await?;
         drop(client);
         if self.my {
@@ -324,7 +324,7 @@ impl State {
             return Ok(());
         }
         if matches!(event, "draft" | "request_publish" | "confirm_publish") {
-            let permitted = if let Some(company) = scope.actor().organisation() {
+            let permitted = if let Some(company) = scope.current_company() {
                 !self.my
                     && self.unavailable.is_none()
                     && self
@@ -374,7 +374,7 @@ impl State {
             "confirm_publish" => {
                 // The client chooses neither company nor record at confirmation.
                 if let Some(policy) = self.pending.take() {
-                    let company = scope.actor().organisation().ok_or(Error::Invalid)?.get();
+                    let company = scope.current_company().ok_or(Error::Invalid)?.get();
                     match self.progression.publish(scope, company, policy.id).await {
                         Ok(_) => {
                             self.flash = Some((StatusKind::Success, "Policy published.".into()))
@@ -386,7 +386,7 @@ impl State {
             "draft" => {
                 self.draft_error = None;
                 self.values = params::form_values(payload, "policy");
-                let company = scope.actor().organisation().ok_or(Error::Invalid)?.get();
+                let company = scope.current_company().ok_or(Error::Invalid)?.get();
                 match self.draft_input() {
                     Ok(input) => match self.progression.draft(scope, company, &input).await {
                         Ok(_) => {

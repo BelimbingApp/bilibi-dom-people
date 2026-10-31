@@ -209,15 +209,22 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
         "manager affiliates Sam Staff with Company 001: affiliation {}",
         staff_affiliation.id
     );
-    match users
-        .link_affiliation(&manager, STAFF, staff_affiliation.id)
-        .await
+    match crate::give_staff_desk(
+        &users,
+        &manager,
+        STAFF,
+        staff_affiliation.affiliation.person_id,
+        staff_affiliation.affiliation.organisation_id,
+    )
+    .await
     {
         Ok(links) => println!(
-            "manager links staff@example.test to that affiliation: person {:?} affiliation {:?} organisation {:?}",
-            links.person, links.affiliation, links.organisation
+            "manager links staff@example.test to that affiliation: person {:?}",
+            links.person
         ),
-        Err(error) => println!("manager links staff@example.test to that affiliation: refused ({error})"),
+        Err(error) => {
+            println!("manager links staff@example.test to that affiliation: refused ({error})")
+        }
     }
     show(
         "manager employs Sam Staff with the manager's number",

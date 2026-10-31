@@ -65,15 +65,16 @@ async fn run(url: &str, mode: &str) -> Result<()> {
             )
             .await
             .map_err(|_| Error::Internal)?;
-        users
-            .link_affiliation(
-                &admin,
-                user,
-                bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                    .map_err(|_| Error::Invalid)?,
-            )
-            .await
-            .map_err(|_| Error::Internal)?;
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            user,
+            bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
         return Ok(());
     }
     if mode == "revoke" || mode == "restore" {
@@ -231,7 +232,9 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    println!("PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request.");
+    println!(
+        "PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request."
+    );
     Ok(())
 }
 

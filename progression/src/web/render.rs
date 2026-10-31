@@ -420,9 +420,16 @@ impl State {
         }
         let confirmation = if let Some(policy) = &self.pending {
             render(&ConfirmDialog {
-                id: "progression-confirm", consequence: "Confirm publication",
-                detail: &format!("Publish {} version {}, effective {}? This version and its criteria become permanent. The latest effective publication will apply to employees.", policy.name, policy.version, policy.effective_from),
-                confirm: "Confirm publication", working: "Publishing…", confirm_event: "confirm_publish", cancel_event: "cancel_publish",
+                id: "progression-confirm",
+                consequence: "Confirm publication",
+                detail: &format!(
+                    "Publish {} version {}, effective {}? This version and its criteria become permanent. The latest effective publication will apply to employees.",
+                    policy.name, policy.version, policy.effective_from
+                ),
+                confirm: "Confirm publication",
+                working: "Publishing…",
+                confirm_event: "confirm_publish",
+                cancel_event: "cancel_publish",
             })?
         } else {
             Html::EMPTY

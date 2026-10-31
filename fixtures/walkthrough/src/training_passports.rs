@@ -4,7 +4,7 @@ use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
-use bilibi_party_ids::{AffiliationId, OrganisationId, PersonId};
+use bilibi_party_ids::{OrganisationId, PersonId};
 use bilibi_people_training::*;
 use bilibi_people_workforce::{Employment, EmploymentChange, NewEmployment, Workforce};
 use bilibi_person::{PersonInput, PersonKind, PersonService};
@@ -234,14 +234,17 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             )
             .await
             .map_err(|_| Error::Internal)?;
-        users
-            .link_affiliation(
-                &admin,
-                STAFF,
-                AffiliationId::new(staff_employment.affiliation_id).map_err(|_| Error::Invalid)?,
-            )
-            .await
-            .map_err(|_| Error::Internal)
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            STAFF,
+            bilibi_party_ids::PersonId::new(staff_employment.person_id)
+                .map_err(|_| Error::Invalid)?,
+            bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)
     };
     match action {
         "deny-my" | "allow-my" => {
@@ -702,14 +705,16 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            AffiliationId::new(extra_a.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(extra_a.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(extra_a.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let relinked = auth
         .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
         .await?;
@@ -925,7 +930,10 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
             .await,
         TrainingError::UnsupportedPassportText,
     )?;
-    println!("PT5 browser downloads: my document=/people/training/records/my/document/{COMPANY}/{}; team document=/people/training/records/team/document/{COMPANY}/{}; my evidence=/people/training/records/my/evidence/{COMPANY}/{}; team evidence=/people/training/records/team/evidence/{COMPANY}/{}",first_document.id,team_document.id,evidence.artifact_id,evidence.artifact_id);
+    println!(
+        "PT5 browser downloads: my document=/people/training/records/my/document/{COMPANY}/{}; team document=/people/training/records/team/document/{COMPANY}/{}; my evidence=/people/training/records/my/evidence/{COMPANY}/{}; team evidence=/people/training/records/team/evidence/{COMPANY}/{}",
+        first_document.id, team_document.id, evidence.artifact_id, evidence.artifact_id
+    );
     println!("PT5 proof complete.");
     Ok(())
 }

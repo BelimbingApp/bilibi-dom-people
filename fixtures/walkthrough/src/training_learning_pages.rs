@@ -47,21 +47,24 @@ pub async fn run(
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let training = services.get::<Training>(SERVICE)?;
     if !training.allowed(manager, COMPANY, LEARNING_VIEW).await {
         return Err(Error::Internal);
     }
     // The viewer can open the task hub while requests.submit still refuses.
-    println!("PT8 Learning pages ready: manager and staff have task access; viewer has Learning entry and register read grants. Staff is linked for browser request submission; the independent admin can review and approve.");
+    println!(
+        "PT8 Learning pages ready: manager and staff have task access; viewer has Learning entry and register read grants. Staff is linked for browser request submission; the independent admin can review and approve."
+    );
     Ok(())
 }
 
@@ -153,15 +156,17 @@ pub async fn control(url: &str, action: &str) -> Result<()> {
                 )
                 .await
                 .map_err(|_| Error::Internal)?;
-            users
-                .link_affiliation(
-                    &admin,
-                    STAFF,
-                    bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                        .map_err(|_| Error::Invalid)?,
-                )
-                .await
-                .map_err(|_| Error::Internal)?;
+            crate::give_staff_desk(
+                &users,
+                &admin,
+                STAFF,
+                bilibi_party_ids::PersonId::new(employment.person_id)
+                    .map_err(|_| Error::Invalid)?,
+                bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                    .map_err(|_| Error::Invalid)?,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
         }
         "archive-company-three" => {
             services

@@ -113,7 +113,7 @@ pub(crate) fn event_row(r: &Row) -> DbResult<ActionEvent> {
 }
 
 pub(crate) async fn get(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -210,7 +210,7 @@ pub(crate) async fn comment(
 }
 
 async fn insert_event(
-    sql: &impl GenericClient,
+    sql: &(impl GenericClient + Sync),
     identity: (i64, i64, i64, i64),
     kind: &str,
     statuses: (Option<&str>, Option<&str>),

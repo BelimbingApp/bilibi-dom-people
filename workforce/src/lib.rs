@@ -553,21 +553,20 @@ impl Workforce {
         ))
     }
 
-    /// Matches at most [`LOOKUP_LIMIT`] Core account affiliation ids to
+    /// Matches at most [`LOOKUP_LIMIT`] Core staff Person ids to
     /// employment ids in this company, at any status. Identity references
     /// only: this neither exposes employment facts nor grants authority.
     /// Reminder owners combine this with Core User's proven company accounts.
-    pub async fn employment_links_on(
+    pub async fn employment_people_on(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
-        affiliation_ids: &[i64],
+        person_ids: &[i64],
     ) -> Result<ReadResult<Vec<(i64, i64)>>> {
         let company = live_company(client, scope, company_id).await?;
-        let ids = lookup_ids(affiliation_ids)?;
-        let links =
-            employments::affiliation_links(client, scope.tenant(), company.id, &ids).await?;
+        let ids = lookup_ids(person_ids)?;
+        let links = employments::person_links(client, scope.tenant(), company.id, &ids).await?;
         Ok(ReadResult::current(links))
     }
 

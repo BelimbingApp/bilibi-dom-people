@@ -41,7 +41,7 @@ impl Assignment {
 /// Every assignment of the company with its member ids (Bilimbi
 /// `assignments/2`).
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Assignment>> {
@@ -85,7 +85,7 @@ pub(crate) async fn list(
 }
 
 async fn member_ids(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     table: &str,
@@ -111,7 +111,7 @@ async fn member_ids(
 
 /// One assignment's member ids, sorted (for a row read outside `list`).
 pub(crate) async fn members_of(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     assignment: &mut Assignment,
@@ -142,7 +142,7 @@ pub(crate) async fn members_of(
 
 /// One assignment of the company, locked `FOR UPDATE`, without its members.
 pub(crate) async fn lock(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -189,7 +189,7 @@ pub(crate) fn validate(new: &NewAssignment) -> std::result::Result<Valid, Vec<Fi
 }
 
 pub(crate) async fn check_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     code: &str,
 ) -> Result<()> {
@@ -377,7 +377,7 @@ struct MemberPlan {
 }
 impl MemberPlan {
     async fn new(
-        client: &impl GenericClient,
+        client: &(impl GenericClient + Sync),
         assignment: &Assignment,
         table: &'static str,
         kind: &'static str,
@@ -420,7 +420,7 @@ impl MemberPlan {
 /// Claim types an assignment in effect on `on_date` opens to the employee
 /// (Bilimbi `assigned_type_ids/4`), distinct.
 pub(crate) async fn assigned_type_ids(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     employee_id: i64,

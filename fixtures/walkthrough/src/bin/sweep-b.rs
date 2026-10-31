@@ -6,7 +6,7 @@ use bilibi_module_registry::{
     contributions::{Route, ROUTES},
     Catalog, Services,
 };
-use bilibi_queue::execution::{Config, Executor};
+use bilibi_queue::{Config, Executor};
 use bilibi_tenancy::{Authentication, Scope};
 use bilibi_ui::{
     download::{DownloadRequest, DownloadService},

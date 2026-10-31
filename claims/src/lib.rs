@@ -1011,7 +1011,11 @@ async fn company(
 /// Holds the company's writable lock for the rest of the transaction: an
 /// archived company is `CompanyArchived`, and the lock serializes the
 /// company's writes.
-async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
+async fn writable(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
     bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())

@@ -4,7 +4,7 @@ use crate::{
     MutationTransaction, Result, Rules, Scope, POLICIES_MANAGE,
 };
 use bilibi_database::Change;
-use bilibi_queue::execution::Execution;
+use bilibi_queue::Execution;
 use serde::Serialize;
 use serde_json::json;
 use tokio_postgres::GenericClient;
@@ -294,7 +294,7 @@ impl Leave {
 }
 #[allow(clippy::too_many_arguments)]
 async fn blocking_year(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,

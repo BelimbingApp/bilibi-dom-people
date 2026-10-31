@@ -8,7 +8,7 @@ use bilibi_people_skills::{
     ReviewDecision, Skills, SkillsError, ASSESSMENTS_MANAGE, REMINDERS_SEND,
 };
 use bilibi_people_workforce::{Workforce, EMPLOYMENT_VIEW};
-use bilibi_queue::execution::{Config, Executor};
+use bilibi_queue::{Config, Executor};
 use bilibi_tenancy::Authentication;
 use bilibi_user::UserService;
 use jiff::civil::Date;
@@ -70,15 +70,16 @@ pub async fn run(url: &str) -> Result<()> {
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = auth
         .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
         .await?;
@@ -410,10 +411,15 @@ pub async fn run(url: &str) -> Result<()> {
             .await,
     )?;
     check("missing recipient is a visible failed row", absent.failed == 1 && count(&client,"SELECT count(*) FROM people_skill_reminders WHERE state='failed' AND failure='recipient not found'").await? == 1)?;
-    users
-        .link_affiliation(&admin, recipient, recipient_account.affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        recipient,
+        recipient_account.person,
+        recipient_account.organisation,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     check(
         "stalled pending claim recovers once after recipient returns",
         must(

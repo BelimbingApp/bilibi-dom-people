@@ -152,7 +152,16 @@ pub(super) async fn run_with_pages(url: &str, pages: bool) -> Result<()> {
         )
         .await?;
     let users = services.get::<UserService>("core/user.accounts")?;
-    saved(users.link_affiliation(&admin, 3, affiliation.id).await)?;
+    saved(
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            3,
+            affiliation.affiliation.person_id,
+            affiliation.affiliation.organisation_id,
+        )
+        .await,
+    )?;
     let employee = saved(
         people
             .create_employment(
@@ -802,7 +811,16 @@ pub(super) async fn run_with_pages(url: &str, pages: bool) -> Result<()> {
         |e| matches!(e, PerformanceError::Unavailable),
         "old scope after unlink",
     )?;
-    saved(users.link_affiliation(&admin, 3, affiliation.id).await)?;
+    saved(
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            3,
+            affiliation.affiliation.person_id,
+            affiliation.affiliation.organisation_id,
+        )
+        .await,
+    )?;
     // Database history guards, independently of the facade.
     db_refused(
         &client,

@@ -60,11 +60,15 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
                     },
                 )
                 .await?;
-            services
-                .get::<UserService>("core/user.accounts")?
-                .link_affiliation(&admin, 2, affiliation.id)
-                .await
-                .map_err(|_| Error::Internal)?;
+            crate::give_staff_desk(
+                &services.get::<UserService>("core/user.accounts")?,
+                &admin,
+                2,
+                affiliation.affiliation.person_id,
+                affiliation.affiliation.organisation_id,
+            )
+            .await
+            .map_err(|_| Error::Internal)?;
             for cap in [
                 pg::POLICY_VIEW,
                 pg::POLICY_MANAGE,
@@ -83,7 +87,9 @@ pub async fn run(url: &str, command: &str) -> Result<()> {
             grants
                 .set_direct(&admin, 2, pg::POLICY_MANAGE, Some(false))
                 .await?;
-            println!("PG2 prepared: manager can draft and publish, viewer has read-only history, staff can read both standing sections; no progression policies yet.");
+            println!(
+                "PG2 prepared: manager can draft and publish, viewer has read-only history, staff can read both standing sections; no progression policies yet."
+            );
         }
         "revoke-manage" | "restore-manage" => {
             grants

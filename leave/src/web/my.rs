@@ -102,7 +102,7 @@ impl My {
         })
     }
     fn company(scope: &Scope) -> Option<i64> {
-        scope.actor().organisation().map(|id| id.get())
+        scope.current_company().map(|id| id.get())
     }
     pub(super) async fn load(&mut self, scope: &Scope, rows_changed: bool) -> Result<()> {
         // No employee id is cached: every event re-resolves the account link.

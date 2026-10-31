@@ -29,7 +29,7 @@ const SOURCE: Provenance = Provenance {
 };
 inventory::submit! { Contribution::new(PAGE_WRITES, PAGES, SOURCE, &PageWrites { service: PAGES, contracts: &[], pending: Pending::Every { reason: "Course and session catalog writes use the Training facade; operation contracts await review." } }) }
 macro_rules! route {
-    ($key:literal, $cap:expr) => { inventory::submit! { Contribution::new(ROUTES, concat!("people/training.", $key), SOURCE, &Route { method: Method::Get, path: concat!("/people/training/", $key), service: PAGES, operation: $key, access: Access::Capability($cap), framed: true }) } };
+    ($key:literal, $cap:expr) => { inventory::submit! { Contribution::new(ROUTES, concat!("people/training.", $key), SOURCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant, method: Method::Get, path: concat!("/people/training/", $key), service: PAGES, operation: $key, access: Access::Capability($cap), framed: true }) } };
 }
 route!("courses", COURSES_VIEW);
 route!("sessions", SESSIONS_VIEW);

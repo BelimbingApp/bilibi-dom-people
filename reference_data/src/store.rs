@@ -123,7 +123,7 @@ const EXCEPTION_COLUMNS: &str = "id, to_char(on_date, 'YYYY-MM-DD') AS on_date, 
 /// A company's entries ordered by kind, label and id, narrowed to one kind
 /// when given (Bilimbi `list_entries/2`).
 pub(crate) async fn entries(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     kind: Option<&str>,
@@ -144,7 +144,7 @@ pub(crate) async fn entries(
 
 /// A company's aliases ordered by entry and label (Bilimbi `list_aliases/2`).
 pub(crate) async fn aliases(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Alias>> {
@@ -164,7 +164,7 @@ pub(crate) async fn aliases(
 /// A company's calendar exceptions ordered by date and id (Bilimbi
 /// `list_calendar_exceptions/2`).
 pub(crate) async fn exceptions(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<CalendarException>> {
@@ -183,7 +183,7 @@ pub(crate) async fn exceptions(
 
 /// An entry's kind, when the entry belongs to the company; the alias copies it.
 pub(crate) async fn entry_kind(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     entry_id: i64,

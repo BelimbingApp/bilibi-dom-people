@@ -82,15 +82,16 @@ pub(crate) async fn run(
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     for capability in [SUBMIT, APPROVE, REIMBURSE] {
         grants
             .set_direct(admin, STAFF, capability, Some(true))
@@ -877,15 +878,16 @@ pub(crate) async fn run(
     )?;
     // Relink a different account to prove the employee check independent of submitter.
     users.unlink(admin, 1).await.map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            1,
-            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        1,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let pending = saved(
         "old employee pending claims",
         claims.employee_requests(admin, COMPANY, employees.1).await,
@@ -919,14 +921,15 @@ pub(crate) async fn run(
         ClaimsError::OwnClaim,
     )?;
     users.unlink(admin, 1).await.map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            1,
-            bilibi_affiliation::AffiliationId::new(1).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        1,
+        bilibi_party_ids::PersonId::new(1).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let current = workforce
         .employment(admin, COMPANY, employees.1)
         .await
@@ -945,18 +948,27 @@ pub(crate) async fn run(
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(staff_employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
 
-    for sql in ["UPDATE people_claim_request_events SET reason='changed' WHERE request_id=$1", "DELETE FROM people_claim_request_events WHERE request_id=$1", "UPDATE people_claim_handoff_batches SET total_amount=1 WHERE id=(SELECT handoff_batch_id FROM people_claim_submissions WHERE id=$1)", "UPDATE people_claim_submissions SET handoff_batch_id=NULL WHERE id=$1"] {
-        ensure("database preserves history and hand off",client.execute(sql,&[&first.id]).await.is_err())?;
+    for sql in [
+        "UPDATE people_claim_request_events SET reason='changed' WHERE request_id=$1",
+        "DELETE FROM people_claim_request_events WHERE request_id=$1",
+        "UPDATE people_claim_handoff_batches SET total_amount=1 WHERE id=(SELECT handoff_batch_id FROM people_claim_submissions WHERE id=$1)",
+        "UPDATE people_claim_submissions SET handoff_batch_id=NULL WHERE id=$1",
+    ] {
+        ensure(
+            "database preserves history and hand off",
+            client.execute(sql, &[&first.id]).await.is_err(),
+        )?;
     }
     let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
     companies

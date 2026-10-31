@@ -80,15 +80,17 @@ async fn main() -> Result<()> {
                     )
                     .await
                     .map_err(|_| Error::Internal)?;
-                users
-                    .link_affiliation(
-                        &admin,
-                        3,
-                        bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                            .map_err(|_| Error::Invalid)?,
-                    )
-                    .await
-                    .map_err(|_| Error::Internal)?;
+                bilibi_people_walkthrough::give_staff_desk(
+                    &users,
+                    &admin,
+                    3,
+                    bilibi_party_ids::PersonId::new(employment.person_id)
+                        .map_err(|_| Error::Invalid)?,
+                    bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                        .map_err(|_| Error::Invalid)?,
+                )
+                .await
+                .map_err(|_| Error::Internal)?;
             } else {
                 let manager = services
                     .get::<Authentication>("base/tenancy.authentication")?
@@ -257,10 +259,15 @@ async fn prepare(services: &Services, admin: &bilibi_tenancy::Scope) -> Result<(
         .link_person(admin, 3, person.id)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(admin, 3, affiliation.id)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        admin,
+        3,
+        affiliation.affiliation.person_id,
+        affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let root = std::env::var_os("BILIBI_TRAINING_PROOF_ROOT")
         .map(std::path::PathBuf::from)
         .ok_or(Error::Invalid)?;

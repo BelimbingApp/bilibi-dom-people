@@ -40,7 +40,7 @@ inventory::submit! {
 macro_rules! route {
     ($key:literal,$path:literal,$cap:expr) => {
         inventory::submit! {
-            Contribution::new(ROUTES, concat!("people/training.records_", $key), PROVENANCE, &Route {
+            Contribution::new(ROUTES, concat!("people/training.records_", $key), PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
                 method: Method::Get, path: $path, service: PAGES, operation: $key,
                 access: Access::Capability($cap), framed: true,
             })

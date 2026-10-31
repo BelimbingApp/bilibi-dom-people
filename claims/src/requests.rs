@@ -119,7 +119,7 @@ pub(crate) fn read(row: &Row) -> bilibi_database::Result<Request> {
     })
 }
 pub(crate) async fn find(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -130,7 +130,7 @@ pub(crate) async fn find(
     Ok(read(&row)?)
 }
 pub(crate) async fn of_employee(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     employee: i64,
@@ -228,7 +228,7 @@ pub(crate) async fn transition(
     })).await?)
 }
 async fn history(
-    sql: &impl GenericClient,
+    sql: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     request: &Request,

@@ -169,11 +169,11 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
     service: crate::web::PAGES, contracts: &[],
     pending: bilibi_module_registry::contributions::Pending::Every { reason: "Roster planning, publication and adjustment decisions write through Attendance; their operation contracts have not been reviewed." },
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.rosters", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.rosters", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/attendance/rosters", service: crate::web::PAGES, operation: "rosters",
     access: bilibi_module_registry::contributions::Access::Capability(ROSTER_MANAGE), framed: true,
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.approvals", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.approvals", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/attendance/approvals", service: crate::web::PAGES, operation: "approvals",
     access: bilibi_module_registry::contributions::Access::Capability(ADJUSTMENTS_APPROVE), framed: true,
 }) }
@@ -204,7 +204,7 @@ bilibi_menu::contribute!(
 
 // PA4: Bilimbi Attendance.Web.MyLive and its My work menu leaf.
 inventory::submit! {
-    Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.my", provenance!(), &bilibi_module_registry::contributions::Route {
+    Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/attendance.my", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
         method: bilibi_module_registry::contributions::Method::Get,
         path: "/people/attendance/my", service: crate::web::my::PAGES, operation: "my",
         access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
@@ -223,6 +223,7 @@ bilibi_menu::contribute!(
         "My attendance",
         "/people/attendance/my"
     )
+    .company_scoped()
     .icon("clipboard-document-list")
     .under("people.my_work")
     .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
@@ -233,7 +234,7 @@ bilibi_menu::contribute!(
 macro_rules! settings_route {
     ($id:literal, $path:literal, $op:literal, $cap:expr) => {
         inventory::submit! {
-            Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route {
+            Contribution::new(bilibi_module_registry::contributions::ROUTES, $id, provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
                 method: bilibi_module_registry::contributions::Method::Get,
                 path: $path, service: crate::settings_web::PAGES, operation: $op,
                 access: bilibi_module_registry::contributions::Access::Capability($cap), framed: true,

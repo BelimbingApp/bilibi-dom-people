@@ -33,7 +33,7 @@ pub(crate) fn read(row: &Row) -> Result<Policy> {
 
 /// The company's versions by type, newest version first.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Policy>> {
@@ -52,7 +52,7 @@ pub(crate) async fn list(
 /// The type's latest version, locked for the transaction (a new version
 /// closes it).
 pub(crate) async fn lock_latest(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     type_id: i64,
 ) -> Result<Option<Policy>> {
@@ -70,7 +70,7 @@ pub(crate) async fn lock_latest(
 
 /// The version in force on `date`, if any.
 pub(crate) async fn effective(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     type_id: i64,

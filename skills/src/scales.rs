@@ -77,7 +77,7 @@ fn level_audit(scale_id: i64, level: &Level) -> Value {
 
 /// Scale versions with their levels: by code, newest version first.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Scale>> {
@@ -208,7 +208,10 @@ pub(crate) async fn require_published(w: &Write<'_>, scale_id: i64) -> Result<Sc
     }
 }
 
-async fn level_rows(client: &impl GenericClient, scale_id: i64) -> DbResult<Vec<LevelRow>> {
+async fn level_rows(
+    client: &(impl GenericClient + Sync),
+    scale_id: i64,
+) -> DbResult<Vec<LevelRow>> {
     Ok(client
         .query(
             &format!("SELECT {LEVEL_COLUMNS} FROM people_skill_scale_levels WHERE scale_id = $1 ORDER BY level"),
@@ -221,7 +224,10 @@ async fn level_rows(client: &impl GenericClient, scale_id: i64) -> DbResult<Vec<
 }
 
 /// The scale's levels, lowest first.
-pub(crate) async fn levels_of(client: &impl GenericClient, scale_id: i64) -> Result<Vec<Level>> {
+pub(crate) async fn levels_of(
+    client: &(impl GenericClient + Sync),
+    scale_id: i64,
+) -> Result<Vec<Level>> {
     Ok(level_rows(client, scale_id)
         .await?
         .into_iter()
@@ -230,7 +236,10 @@ pub(crate) async fn levels_of(client: &impl GenericClient, scale_id: i64) -> Res
 }
 
 /// The scale's level numbers, lowest first.
-pub(crate) async fn level_numbers(client: &impl GenericClient, scale_id: i64) -> Result<Vec<i32>> {
+pub(crate) async fn level_numbers(
+    client: &(impl GenericClient + Sync),
+    scale_id: i64,
+) -> Result<Vec<i32>> {
     Ok(level_rows(client, scale_id)
         .await?
         .into_iter()
