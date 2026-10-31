@@ -51,7 +51,7 @@ pub async fn authorize(
 }
 
 /// Company authorization on the caller's transaction for object-safe owner
-/// callbacks (Artifacts). Uses Core Company's same target proof; never opens
+/// callbacks (Artifacts). Uses Core Company's operational desk proof; never opens
 /// a second connection while the owner holds its reservation/publication lock.
 pub async fn authorize_company_proof(
     client: &dyn ProofClient,
@@ -59,17 +59,14 @@ pub async fn authorize_company_proof(
     company_id: i64,
     capability: &str,
 ) -> Result<bilibi_tenancy::NamedOrganisation> {
-    if scope.principal().is_none()
-        && !bilibi_company::reachable(client, scope, OrganisationId::new(company_id)?)
-            .await
-            .map_err(refusal)?
-    {
-        return Err(WorkforceError::Unauthorized);
-    }
-    Directory
-        .target(client, scope, OrganisationId::new(company_id)?, capability)
+    bilibi_company::authorize_work_target(client, scope, company_id, capability)
         .await
-        .map_err(refusal)
+        .map_err(refusal)?;
+    Directory
+        .lookup(client, scope, OrganisationId::new(company_id)?)
+        .await
+        .map_err(refusal)?
+        .ok_or(WorkforceError::NotFound)
 }
 
 /// Authorizes as [`authorize`] does and returns the company summary, for a
@@ -88,8 +85,7 @@ pub async fn authorize_company(
 
 /// The live, unarchived companies the scope's signed-in actor may target for
 /// one capability (Bilimbi `Company.list_selectable_companies/2`), sorted by
-/// name: none without the capability, the actor's own company, or every
-/// company of the tenant with the tenant-wide reach.
+/// name: none without the capability, otherwise the actor's assigned desks.
 pub async fn selectable_companies(
     client: &(impl GenericClient + Sync),
     scope: &Scope,
