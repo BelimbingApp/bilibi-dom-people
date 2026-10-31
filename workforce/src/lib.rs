@@ -613,16 +613,29 @@ impl Workforce {
         company_id: i64,
         employee_id: i64,
     ) -> Result<ReadResult<Vec<Employee>>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        self.direct_reports_on(&**client, scope, company_id, employee_id)
+            .await
+    }
+
+    /// The same direct-report read on the caller's connection. Writes holding
+    /// workplace locks use this entry point instead of reopening the pool.
+    pub async fn direct_reports_on(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+        employee_id: i64,
+    ) -> Result<ReadResult<Vec<Employee>>> {
         if employee_id <= 0 {
             return Err(WorkforceError::NotFound);
         }
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let supervisor = employments::by_ids(
-            &**client,
+            client,
             scope.tenant(),
             company.id,
             &[employee_id],
@@ -632,16 +645,11 @@ impl Workforce {
         if supervisor.is_empty() {
             return Err(WorkforceError::NotFound);
         }
-        let rows = employments::reporting_to(
-            &**client,
-            scope.tenant(),
-            company.id,
-            employee_id,
-            &statuses,
-        )
-        .await?;
+        let rows =
+            employments::reporting_to(client, scope.tenant(), company.id, employee_id, &statuses)
+                .await?;
         let employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
+            .project(client, scope, company.id, &statuses, rows)
             .await?;
         Ok(ReadResult::current(employees))
     }

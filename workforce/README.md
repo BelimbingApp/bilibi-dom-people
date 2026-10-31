@@ -26,6 +26,7 @@ records; the schema is private.
 | `employees_by_ids` | none | The working employees among at most 1,000 positive, deduplicated ids, without reading the whole workforce; more, or a non-positive id, is `InvalidOptions` |
 | `employee` | none | One working employee; another status, another company or missing is `NotFound` |
 | `direct_reports` | none | The working employees reporting to one working employee; a supervisor who is not a working employee is `NotFound` |
+| `direct_reports_on` | none | The same read on the caller's connection; use inside a write that holds workplace locks |
 | `supervisor_chain` | none | A working employee's supervisors, nearest first, through working supervisors only, at most 12 levels (`CHAIN_DEPTH`, Bilimbi's reach depth); an employee who is not working is `NotFound` |
 | `in_reach` | none | Whether one working employee is below another in the supervisor chain (Bilimbi `Access.within?/2` for a team reach): never the manager themselves, `false` for an employee the reads do not expose |
 | `working_statuses` | none | The statuses the company counts as working staff |

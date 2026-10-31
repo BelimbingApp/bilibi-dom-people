@@ -488,7 +488,7 @@ impl Training {
         } else if cap == REQUESTS_RECOMMEND {
             let me = self.learning_self(tx, scope, company, cap).await?;
             if !self
-                .learning_team(scope, company, me)
+                .learning_team_on(tx.sql(), scope, company, me)
                 .await?
                 .contains(&row.employee_id)
             {
@@ -594,7 +594,7 @@ impl Training {
         let me = self
             .learning_self(&tx, scope, company, PLANS_SUBMIT)
             .await?;
-        let team = self.learning_team(scope, company, me).await?;
+        let team = self.learning_team_on(tx.sql(), scope, company, me).await?;
         if team.is_empty() {
             return Err(TrainingError::OutsideTeam);
         }
@@ -751,7 +751,11 @@ impl Training {
             if row.actor_user_id != scope.user() || row.manager_employee_id != me {
                 return Err(TrainingError::NotOwner);
             }
-            if self.learning_team(scope, company, me).await?.is_empty() {
+            if self
+                .learning_team_on(tx.sql(), scope, company, me)
+                .await?
+                .is_empty()
+            {
                 return Err(TrainingError::OutsideTeam);
             }
         } else {
@@ -877,9 +881,20 @@ impl Training {
             .employee_id)
     }
     async fn learning_team(&self, scope: &Scope, company: i64, manager: i64) -> Result<Vec<i64>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        self.learning_team_on(&**client, scope, company, manager)
+            .await
+    }
+    async fn learning_team_on(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company: i64,
+        manager: i64,
+    ) -> Result<Vec<i64>> {
         let read = self
             .workforce
-            .direct_reports(scope, company, manager)
+            .direct_reports_on(client, scope, company, manager)
             .await
             .map_err(learning_employee_error)?;
         Ok(read
