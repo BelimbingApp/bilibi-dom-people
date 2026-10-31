@@ -87,7 +87,7 @@ async fn run(url: &str) -> Result<()> {
         .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
         .await?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**client, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .value
@@ -105,7 +105,7 @@ async fn run(url: &str) -> Result<()> {
     // PW1 deliberately leaves the account unlinked. Restore its Person
     // and affiliation through Core User before proving Attendance reads.
     let employment = workforce
-        .employment(&manager, COMPANY, staff_employee)
+        .employment(&**client, &manager, COMPANY, staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -119,15 +119,16 @@ async fn run(url: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = authentication
         .authenticate(&**client, TENANT, STAFF, "walkthrough".into())
         .await?;

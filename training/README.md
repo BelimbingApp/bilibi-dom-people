@@ -30,8 +30,7 @@ the schema is private.
 
 Every operation authorizes through the Workforce `Authorization` helpers
 (Bilimbi `authorize/3`): the capability now, and the company axis through
-Core Company (the actor's own company, or any company of the tenant with
-`admin.company.tenant-wide.manage`). A denied or unknown capability or a
+Core Company's operational desk proof (an explicit desk in the target company). A denied or unknown capability or a
 company outside the reach is `Unauthorized` ("You cannot do that for this
 company."); a company the scope cannot see is `NotFound`; an archived
 company is `CompanyUnavailable` ("Choose an active company."); and the
@@ -210,7 +209,7 @@ An approval needs an enabled currency and an active policy covering the proposed
 
 A correction retains the prior currency and cannot overlap another active policy, replace an already superseded policy, exclude an earlier commitment's date, or reduce the allocation below commitments. Earlier policy rows and approval snapshots remain unchanged. Removing an enabled currency prevents new requests, policies and approvals in it; it does not erase history.
 
-Migration `people-training-003-learning-governance` creates the six Bilimbi governance tables. Scoped foreign keys keep links in the same company; employee links reference Workforce employment IDs. PostgreSQL guards immutable policies, items and decisions, permanent content, terminal states, valid transitions, effective budgets and commitments. Writes take the company lock, recheck authorization, then use `MutationBoundary`; every inserted or updated record, including histories and superseded plans, produces its own audit change. Self-service writes re-prove the account under Workforce's employment lock. The governance advisory lock also serializes budget trigger checks for the same company.
+Migration `people-training-003-learning-governance` creates the six Bilimbi governance tables. Scoped foreign keys keep links in the same company; employee links reference Workforce employment IDs. PostgreSQL guards immutable policies, items and decisions, permanent content, terminal states, valid transitions, effective budgets and commitments. Writes take the company lock, recheck authorization, then use `MutationBoundary`; every inserted or updated record, including histories and superseded plans, produces its own audit change. Self-service writes re-prove the account under Workforce's employment lock. Direct-report checks use `Workforce::direct_reports` on that same transaction, so they cannot wait on workplace locks held by their own write. The governance advisory lock also serializes budget trigger checks for the same company.
 
 The PT3 proof block is `fixtures/walkthrough/src/training_governance.rs`. It creates records through these methods on a disposable database and fails if an expected transition or refusal differs.
 

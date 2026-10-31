@@ -53,7 +53,7 @@ tenants, accounts, Persons, affiliations and companies), gives
 facade employs the fixture's affiliated accounts: the manager at Company
 001, a new human Person affiliated with Company 001 and linked to
 `staff@example.test` who reports to the manager, and the contractor at
-Company 002 through the manager's tenant-wide reach. It prints the refusals
+Company 002 through the manager's explicitly assigned desk. It prints the refusals
 beside the writes (a viewer without the grant, an affiliation of another
 company, an affiliation already employed, an agent Person, a taken number,
 an unknown status, an end before the start), reads the company, its working

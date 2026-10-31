@@ -1,9 +1,7 @@
 //! PK2: live facade and PostgreSQL proofs on the disposable walkthrough DB.
 //! All records start through their owner's facade; SQL is used only to inspect
 //! outcomes and deliberately attempt writes the database must refuse.
-use bilibi_affiliation::{
-    AffiliationId, AffiliationInput, AffiliationService, EffectiveDates, OrganisationId,
-};
+use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates, OrganisationId};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
@@ -140,19 +138,21 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         .set_direct(c.admin, super::VIEWER, ASSESSMENTS_VIEW, Some(true))
         .await?;
     let staff_employment = workforce
-        .employment(c.admin, company, c.staff_employee)
+        .employment(client, c.admin, company, c.staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            c.admin,
-            super::STAFF,
-            AffiliationId::new(staff_employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = auth
         .authenticate(client, super::TENANT, super::STAFF, "walkthrough".into())
         .await?;
@@ -803,10 +803,15 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         .unlink(c.admin, super::STAFF)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(c.admin, super::STAFF, affiliation.id)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        affiliation.affiliation.person_id,
+        affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     refuses(
         "old scope after relink to the assessed employee",
         skills
@@ -818,14 +823,16 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         .unlink(c.admin, super::STAFF)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            c.admin,
-            super::STAFF,
-            AffiliationId::new(staff_employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     saved(
         skills
             .review_assessment(
@@ -981,14 +988,16 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         skills.standing(&staff, company).await,
         |e| matches!(e, SkillsError::Unavailable),
     )?;
-    users
-        .link_affiliation(
-            c.admin,
-            super::STAFF,
-            AffiliationId::new(staff_employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        bilibi_party_ids::PersonId::new(staff_employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(staff_employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     // Reads are tenant/company bound; a filtered register cannot expose a sibling.
     check(
         "out-of-reach reader sees no assessments or gaps",
@@ -1104,7 +1113,9 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         "score projection changes are audited",
         audit.get::<_, i64>(0) > 0,
     )?;
-    println!("PK2 walkthrough complete; assessment register, standing, gaps, coverage and database refusals proved.");
+    println!(
+        "PK2 walkthrough complete; assessment register, standing, gaps, coverage and database refusals proved."
+    );
     Ok(())
 }
 

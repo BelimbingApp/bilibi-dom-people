@@ -166,7 +166,7 @@ impl MyAttendance {
         })
     }
     async fn load(&mut self, scope: &Scope, rows_changed: bool) -> Result<()> {
-        self.company = scope.actor().organisation().map(|id| id.get());
+        self.company = scope.current_company().map(|id| id.get());
         self.records = match self.company {
             Some(company) => match self.read(scope, company).await {
                 Ok(records) => Some(records),
@@ -638,7 +638,16 @@ impl MyAttendance {
                 body: Html::text("Submit request"),
                 ..Default::default()
             })?;
-            view.adjustment_hint = format!("For a missed clock event in the last {} {}, in {} time. An approver adds it once accepted.",r.rules.adjustment_window_days, if r.rules.adjustment_window_days == 1 { "day" } else { "days" },r.rules.timezone);
+            view.adjustment_hint = format!(
+                "For a missed clock event in the last {} {}, in {} time. An approver adds it once accepted.",
+                r.rules.adjustment_window_days,
+                if r.rules.adjustment_window_days == 1 {
+                    "day"
+                } else {
+                    "days"
+                },
+                r.rules.timezone
+            );
         }
         if self.pending_cancel.is_some() {
             view.confirmation = render(&ConfirmDialog {

@@ -65,15 +65,17 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     // statuses and an empty workforce.
     show(
         &format!("manager reads company {COMPANY}"),
-        workforce.company(&manager, COMPANY).await,
+        workforce.company(&**client, &manager, COMPANY).await,
     );
     show(
         &format!("manager reads company {COMPANY}'s working statuses"),
-        workforce.working_statuses(&manager, COMPANY).await,
+        workforce
+            .working_statuses(&**client, &manager, COMPANY)
+            .await,
     );
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "before any employment",
@@ -209,15 +211,22 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
         "manager affiliates Sam Staff with Company 001: affiliation {}",
         staff_affiliation.id
     );
-    match users
-        .link_affiliation(&manager, STAFF, staff_affiliation.id)
-        .await
+    match crate::give_staff_desk(
+        &users,
+        &manager,
+        STAFF,
+        staff_affiliation.affiliation.person_id,
+        staff_affiliation.affiliation.organisation_id,
+    )
+    .await
     {
         Ok(links) => println!(
-            "manager links staff@example.test to that affiliation: person {:?} affiliation {:?} organisation {:?}",
-            links.person, links.affiliation, links.organisation
+            "manager links staff@example.test to that affiliation: person {:?}",
+            links.person
         ),
-        Err(error) => println!("manager links staff@example.test to that affiliation: refused ({error})"),
+        Err(error) => {
+            println!("manager links staff@example.test to that affiliation: refused ({error})")
+        }
     }
     show(
         "manager employs Sam Staff with the manager's number",
@@ -307,8 +316,12 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             .await,
     );
 
-    // The contractor at Company 002, reached through the manager's
-    // tenant-wide reach; the contractor holds no People grant.
+    // A company-management grant alone is not a desk. This proof explicitly
+    // gives the manager the second workplace before its cross-company work.
+    users
+        .set_desk(&admin, OTHER_COMPANY, MANAGER_PERSON, true)
+        .await?;
+    // The contractor holds no People grant.
     show(
         "contractor employs their own affiliation at Company 002",
         workforce
@@ -326,7 +339,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             .await,
     );
     let contractor_employment = saved(show(
-        "manager, with tenant-wide reach, employs the contractor at Company 002",
+        "manager, with an explicit desk, employs the contractor at Company 002",
         workforce
             .create_employment(
                 &manager,
@@ -350,7 +363,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     // The read seam every People module builds on.
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "working employees of Company 001",
@@ -359,7 +372,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     }
     if let Some(read) = show(
         &format!("viewer lists company {COMPANY}'s employees"),
-        workforce.employees(&viewer, COMPANY).await,
+        workforce.employees(&**client, &viewer, COMPANY).await,
     ) {
         print_employees(
             "working employees of Company 001, as the viewer sees them",
@@ -369,7 +382,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     show(
         &format!("manager reads employee #{}", staff_employment.id),
         workforce
-            .employee(&manager, COMPANY, staff_employment.id)
+            .employee(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     show(
@@ -378,13 +391,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             contractor_employment.id
         ),
         workforce
-            .employee(&manager, COMPANY, contractor_employment.id)
+            .employee(&**client, &manager, COMPANY, contractor_employment.id)
             .await,
     );
     if let Some(read) = show(
         "manager reads employees by id (both, one twice, one that does not exist)",
         workforce
             .employees_by_ids(
+                &**client,
                 &manager,
                 COMPANY,
                 &[
@@ -401,12 +415,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     show(
         "manager reads employees by 1,001 ids",
         workforce
-            .employees_by_ids(&manager, COMPANY, &vec![1; 1_001])
+            .employees_by_ids(&**client, &manager, COMPANY, &vec![1; 1_001])
             .await,
     );
     show(
         "manager reads employees by an id of zero",
-        workforce.employees_by_ids(&manager, COMPANY, &[0]).await,
+        workforce
+            .employees_by_ids(&**client, &manager, COMPANY, &[0])
+            .await,
     );
     if let Some(read) = show(
         &format!(
@@ -414,7 +430,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             manager_employment.id
         ),
         workforce
-            .direct_reports(&manager, COMPANY, manager_employment.id)
+            .direct_reports(&**client, &manager, COMPANY, manager_employment.id)
             .await,
     ) {
         print_employees(
@@ -428,12 +444,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             staff_employment.id
         ),
         workforce
-            .direct_reports(&manager, COMPANY, staff_employment.id)
+            .direct_reports(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     if let Some(read) = show(
         &format!("manager lists company {OTHER_COMPANY}'s employees"),
-        workforce.employees(&manager, OTHER_COMPANY).await,
+        workforce
+            .employees(&**client, &manager, OTHER_COMPANY)
+            .await,
     ) {
         print_employees(
             "working employees of Company 002",
@@ -442,11 +460,13 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     }
     show(
         "manager lists a company that does not exist",
-        workforce.employees(&manager, i64::MAX).await,
+        workforce.employees(&**client, &manager, i64::MAX).await,
     );
     show(
         &format!("manager lists tenant 2's company {OTHER_TENANT_COMPANY}"),
-        workforce.employees(&manager, OTHER_TENANT_COMPANY).await,
+        workforce
+            .employees(&**client, &manager, OTHER_TENANT_COMPANY)
+            .await,
     );
 
     // Working statuses: the admin narrows them to `active`, so Sam Staff
@@ -475,7 +495,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     );
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "working employees with active only",
@@ -488,7 +508,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             staff_employment.id
         ),
         workforce
-            .employee(&manager, COMPANY, staff_employment.id)
+            .employee(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     show(
@@ -499,7 +519,9 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     );
     show(
         &format!("manager reads company {COMPANY}'s working statuses"),
-        workforce.working_statuses(&manager, COMPANY).await,
+        workforce
+            .working_statuses(&**client, &manager, COMPANY)
+            .await,
     );
 
     // The Authorization helpers: who may reach which company for what.

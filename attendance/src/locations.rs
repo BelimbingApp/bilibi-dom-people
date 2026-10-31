@@ -130,7 +130,7 @@ fn read(row: &Row) -> ClockingLocation {
 
 /// The company's locations, active first then by code.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
 ) -> Result<Vec<ClockingLocation>> {
@@ -150,7 +150,7 @@ pub(crate) async fn list(
 /// location whose radius contains the point, or none; with no coordinates
 /// or no containing location, the company's rule decides.
 pub(crate) async fn place(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
     point: Option<(Decimal, Decimal)>,
@@ -182,7 +182,7 @@ pub(crate) async fn place(
 
 /// A taken code, decided on the transaction before the insert.
 pub(crate) async fn check_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     code: &str,

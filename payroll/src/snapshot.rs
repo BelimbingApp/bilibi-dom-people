@@ -27,7 +27,7 @@ impl Payroll {
             )
             .await?;
         self.workforce
-            .company_on(tx.sql(), scope, company)
+            .company(tx.sql(), scope, company)
             .await?
             .require_current()
             .map_err(|e| PayrollError::NotCurrent(e.0))?;

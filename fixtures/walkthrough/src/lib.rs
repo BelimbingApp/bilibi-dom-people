@@ -134,7 +134,7 @@ fn print_employment(step: &str, employment: &Employment) {
 }
 
 async fn tenant_owner_role(
-    client: &impl tokio_postgres::GenericClient,
+    client: &(impl tokio_postgres::GenericClient + Sync),
     actor: &Scope,
 ) -> Result<i64> {
     let page = roles::list(
@@ -213,4 +213,23 @@ pub async fn command(name: &str, url: &str, argument: Option<&str>) -> Result<()
 /// Prints the validated default order and standalone commands without a database.
 pub fn list() -> Result<()> {
     registry::list()
+}
+
+/// Disposable proof setup: bind a tenant account to a Person and give that
+/// Person an explicit desk. Business employment remains a separate record.
+pub async fn give_staff_desk(
+    users: &UserService,
+    scope: &Scope,
+    user: i64,
+    person: PersonId,
+    company: OrganisationId,
+) -> Result<bilibi_user::AccountLinks> {
+    let links = users
+        .link_person(scope, user, person)
+        .await
+        .map_err(|_| Error::Invalid)?;
+    users
+        .set_desk(scope, company.get(), person.get(), true)
+        .await?;
+    Ok(links)
 }

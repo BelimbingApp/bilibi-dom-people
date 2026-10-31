@@ -107,7 +107,7 @@ pub(super) fn decode<T: DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(|_| TrainingError::Failed(Error::Internal))
 }
 pub(super) async fn fetch<T: DeserializeOwned>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     table: Table,
@@ -129,7 +129,7 @@ pub(super) async fn fetch<T: DeserializeOwned>(
     decode(value)
 }
 pub(super) async fn list<T: DeserializeOwned>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     table: Table,
@@ -235,7 +235,11 @@ pub(super) async fn decision(
     Ok(())
 }
 /// The same advisory lock the database triggers take, after the company lock.
-pub(super) async fn lock(client: &impl GenericClient, scope: &Scope, company: i64) -> Result<()> {
+pub(super) async fn lock(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company: i64,
+) -> Result<()> {
     let key = format!("people.training:{}:{company}", scope.tenant());
     client
         .query_one(

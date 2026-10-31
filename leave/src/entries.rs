@@ -49,9 +49,9 @@ impl Leave {
     ) -> Result<EntryFacts> {
         authorization::authorize(client, scope, company_id, POLICIES_MANAGE).await?;
         bilibi_company::require_writable(client, scope, company_id, false).await?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(client, scope, company_id).await?;
         let employee = self
-            .current_employee(scope, company_id, employee_id)
+            .current_employee(client, scope, company_id, employee_id)
             .await?;
         let (quantity, note) = validate_entry(new)?;
         let leave_type = types::list(client, scope.tenant(), company_id)

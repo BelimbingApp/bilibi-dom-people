@@ -82,7 +82,7 @@ impl Table {
     }
 }
 pub(super) async fn rows<T: DeserializeOwned>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     table: Table,
@@ -108,7 +108,7 @@ pub(super) async fn rows<T: DeserializeOwned>(
         .collect()
 }
 pub(super) async fn fetch<T: DeserializeOwned>(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     table: Table,
@@ -188,7 +188,7 @@ pub(super) enum TaskFilter {
 /// A confirmed correction preserves the original obligation; a latest absent
 /// revision hides it until attendance is confirmed again (Bilimbi parity).
 pub(super) async fn tasks(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     filter: TaskFilter,

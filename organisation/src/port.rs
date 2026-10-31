@@ -79,7 +79,7 @@ impl PortProvider for PositionsPort {
                 (Some(page), None) => {
                     let page = page.as_i64().ok_or(Error::Invalid)?;
                     let positions = on_client!(client, |c| facade
-                        .positions_on(c, scope, company_id, as_of, page, page_size)
+                        .positions(c, scope, company_id, as_of, page, page_size)
                         .await)
                     .map_err(refused)?;
                     Answer {

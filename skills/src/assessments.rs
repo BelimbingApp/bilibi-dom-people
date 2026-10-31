@@ -105,7 +105,7 @@ fn assessment(r: &Row) -> DbResult<Assessment> {
 }
 
 pub(crate) async fn get(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -174,6 +174,7 @@ pub(crate) async fn insert(
     let assessed_on = input.assessed_on.ok_or(SkillsError::InvalidAssessment)?;
     let position = crate::positions::position_of(
         &skills.workforce,
+        w.sql().into(),
         scope,
         w.company_id,
         input.employee_id,
@@ -261,7 +262,7 @@ pub(crate) async fn insert(
 }
 
 async fn insert_decision(
-    sql: &impl GenericClient,
+    sql: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -348,7 +349,7 @@ pub(crate) fn score(r: &Row) -> DbResult<Score> {
 }
 
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     reach: &access::Reach,
@@ -379,7 +380,7 @@ pub(crate) async fn list(
 /// Bilimbi bounds the oldest 200 candidates before rejecting work by the
 /// assessor or subject. Returned work is filtered to the actor before its bound.
 pub(crate) async fn queue_rows(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     ids: Option<Vec<i64>>,
@@ -400,13 +401,14 @@ pub(crate) async fn queue_rows(
 
 pub(crate) async fn present(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     rows: Vec<Assessment>,
 ) -> Result<Vec<AssessmentView>> {
     let names = access::names(
         skills,
+        client,
         scope,
         company,
         &rows.iter().map(|a| a.employee_id).collect::<Vec<_>>(),
@@ -437,7 +439,7 @@ pub(crate) async fn present(
 }
 
 pub(crate) async fn decisions(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,

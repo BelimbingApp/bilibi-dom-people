@@ -93,13 +93,11 @@ async fn main() -> Result<()> {
     let skills = services.get::<Skills>(bilibi_people_skills::SERVICE)?;
     let employee: i64 = client.query_one("SELECT id FROM people_workforce_employments WHERE tenant_id=1 AND company_id=1 AND employee_number='E-002'", &[]).await?.get(0);
     let employment = workforce
-        .employment(&admin, 1, employee)
+        .employment(&**client, &admin, 1, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    let affiliation = bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-        .map_err(|_| Error::Invalid)?;
     if mode == "revoke-review" || mode == "restore-review" {
         grants
             .set_direct(
@@ -115,10 +113,15 @@ async fn main() -> Result<()> {
         users.unlink(&admin, 3).await.map_err(|_| Error::Internal)?;
         return Ok(());
     }
-    users
-        .link_affiliation(&admin, 3, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        &admin,
+        3,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     if mode == "relink-staff" {
         return Ok(());
     }
@@ -302,10 +305,15 @@ async fn main() -> Result<()> {
             && !html.contains("id=\"my-skills-section\""),
         "unlinking the account removes scores on the next table event",
     )?;
-    users
-        .link_affiliation(&admin, 3, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        &admin,
+        3,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let mut restricted = mount(&services, &viewer, "assessments").await?;
     let html = event(
         &mut restricted,

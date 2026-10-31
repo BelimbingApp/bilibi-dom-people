@@ -367,7 +367,7 @@ impl State {
     }
     async fn load(&mut self, scope: &Scope) -> UiResult<()> {
         // The current company belongs to the authenticated account; forms never choose it.
-        self.company = match scope.actor().organisation() {
+        self.company = match scope.current_company() {
             Some(id) => id.get(),
             None => {
                 let client = self.service.db.get().await?;

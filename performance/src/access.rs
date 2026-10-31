@@ -22,7 +22,7 @@ impl Performance {
     ) -> Result<()> {
         authorization::authorize(client, scope, company, capability).await?;
         self.workforce
-            .company_on(client, scope, company)
+            .company(client, scope, company)
             .await?
             .require_current()?;
         Ok(())
@@ -76,7 +76,7 @@ impl Performance {
             .await?;
         let employee = self
             .workforce
-            .employee(scope, w.company, employee)
+            .employee(w.tx.sql(), scope, w.company, employee)
             .await?
             .require_current()?;
         if employee
@@ -110,6 +110,7 @@ impl Performance {
     }
     pub(crate) async fn position(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
         id: i64,
@@ -119,7 +120,7 @@ impl Performance {
         loop {
             let rows = self
                 .organisation
-                .positions(scope, company, day, page, 100)
+                .positions(client, scope, company, day, page, 100)
                 .await
                 .map_err(|e| match e {
                     bilibi_people_organisation::OrganisationError::Failed(error) => E::from(error),

@@ -137,11 +137,11 @@ inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APP
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 
 // One list and one record home for staff and authorized reviewers.
-inventory::submit! { Contribution::new(ROUTES, "people/claims.list", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/claims.list", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/claims", service: crate::operations_web::SERVICE, operation: "list",
     access: Access::AnyOf(&[SUBMIT, APPROVE]), framed: true,
 }) }
-inventory::submit! { Contribution::new(ROUTES, "people/claims.record", provenance!(), &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/claims.record", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/claims/{id}", service: crate::operations_web::SERVICE, operation: "record",
     access: Access::AnyOf(&[SUBMIT, APPROVE]), framed: true,
 }) }
@@ -155,6 +155,7 @@ inventory::submit! { Contribution::new(PAGE_WRITES, crate::operations_web::SERVI
 bilibi_menu::contribute!(
     "people/claims",
     MenuItem::page("people.my_work.claims", "Claims", "/people/claims")
+        .company_scoped()
         .under("people.my_work")
         .requires(Requirement::AnyOf(&[SUBMIT, APPROVE]))
         .order(30)
@@ -162,7 +163,7 @@ bilibi_menu::contribute!(
 
 // Bilimbi Claims.Web.SetupLive and its Settings menu leaf.
 inventory::submit! {
-    Contribution::new(ROUTES, "people/claims.setup", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/claims.setup", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/claims/setup", service: crate::setup_web::SERVICE,
         operation: "setup", access: Access::Capability(MANAGE), framed: true,
     })

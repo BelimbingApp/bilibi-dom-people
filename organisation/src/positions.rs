@@ -121,7 +121,7 @@ pub(crate) fn validate_position(
 
 /// One position of the company, or `None` (a non-positive id included).
 pub(crate) async fn find(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     id: i64,
 ) -> Result<Option<Position>> {
@@ -141,7 +141,7 @@ pub(crate) async fn find(
 
 /// A code already used in the company is "has already been taken".
 pub(crate) async fn check_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     code: &str,
 ) -> Result<()> {
@@ -197,7 +197,7 @@ pub(crate) async fn insert_position(
 /// Walks up from `parent`: reaching `id` is a `Cycle`, an ancestor that is
 /// not a position of the company is `NotFound`, the root is fine.
 pub(crate) async fn reject_cycle(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     id: i64,
     parent: Option<i64>,
@@ -249,7 +249,7 @@ pub(crate) async fn update_parent(
 
 /// The company's positions by id: one offset page.
 pub(crate) async fn page(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     page: i64,
     size: i64,
@@ -270,7 +270,7 @@ pub(crate) async fn page(
 /// The company's positions with ids above `last_id` and at or below
 /// `high_water_id`, by id, at most `limit`.
 pub(crate) async fn keyset(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     last_id: i64,
     high_water_id: i64,
@@ -288,7 +288,7 @@ pub(crate) async fn keyset(
         .collect())
 }
 
-pub(crate) async fn count(client: &impl GenericClient, company_id: i64) -> Result<i64> {
+pub(crate) async fn count(client: &(impl GenericClient + Sync), company_id: i64) -> Result<i64> {
     let row = client
         .query_one(
             "SELECT count(*) FROM people_positions WHERE company_id = $1",
@@ -347,7 +347,7 @@ pub(crate) fn validate_version(
 /// version number already used ("has already been taken") and an interval
 /// overlapping an existing version ("violates an exclusion constraint").
 pub(crate) async fn check_version(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     position_id: i64,
     valid: &ValidVersion,
 ) -> Result<()> {
@@ -427,7 +427,7 @@ pub(crate) async fn insert_version(
 
 /// The version of each position effective on `day`: `(title, version)`.
 pub(crate) async fn effective_versions(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     ids: &[i64],
     day: Date,
 ) -> Result<HashMap<i64, (String, i32)>> {
@@ -522,7 +522,7 @@ pub(crate) fn validate_end(
 /// and still run on it, locked for the transaction: the holders a new
 /// substantive assignment may have to release.
 pub(crate) async fn releasable(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     position_id: i64,
     start: Date,
 ) -> Result<Vec<Assignment>> {
@@ -547,7 +547,7 @@ pub(crate) async fn releasable(
 /// constraint" on `effective_from`); the constraint stays the guarantee for
 /// a writer that bypasses the company lock.
 pub(crate) async fn check_substantive(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     position_id: i64,
     from: Date,
     to: Option<Date>,
@@ -610,7 +610,7 @@ pub(crate) async fn insert_assignment(
 /// One assignment of a position of the company, locked for the transaction,
 /// or `None`.
 pub(crate) async fn lock_assignment(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     id: i64,
 ) -> Result<Option<Assignment>> {
@@ -693,7 +693,7 @@ pub(crate) async fn end_placements(
 /// at most [`ASSIGNMENT_LIMIT`]; past it, the position id of the first
 /// omitted row, from which holders are incomplete.
 pub(crate) async fn effective_assignments(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     ids: &[i64],
     day: Date,
 ) -> Result<(Vec<Assignment>, Option<i64>)> {
@@ -722,7 +722,7 @@ pub(crate) async fn effective_assignments(
 
 /// The substantive assignments of the positions effective on `day`.
 pub(crate) async fn substantive_assignments(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     ids: &[i64],
     day: Date,
 ) -> Result<Vec<Assignment>> {

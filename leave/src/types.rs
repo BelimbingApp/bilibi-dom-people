@@ -23,7 +23,7 @@ pub(crate) fn read(row: &Row) -> LeaveType {
 /// The company's types as the Policies page lists them: active first, then
 /// by name and id.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<LeaveType>> {
@@ -41,7 +41,7 @@ pub(crate) async fn list(
 
 /// The company's types by name and id, for balances.
 pub(crate) async fn by_name(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<LeaveType>> {
@@ -59,7 +59,7 @@ pub(crate) async fn by_name(
 
 /// One type of the company at any status, locked for the transaction.
 pub(crate) async fn lock(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     type_id: i64,
@@ -78,7 +78,7 @@ pub(crate) async fn lock(
 /// One active type of the company, locked for the transaction; an archived
 /// or missing type is `None`.
 pub(crate) async fn lock_active(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     type_id: i64,
@@ -97,7 +97,7 @@ pub(crate) async fn lock_active(
 /// Every type of the company by id, locked for the transaction: what a grant
 /// run and a leave-year change serialize on.
 pub(crate) async fn lock_all(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<LeaveType>> {
@@ -115,7 +115,7 @@ pub(crate) async fn lock_all(
 
 /// Whether the company already has a type with this code.
 pub(crate) async fn code_taken(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     code: &str,
 ) -> Result<bool> {

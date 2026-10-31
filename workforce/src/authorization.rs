@@ -15,13 +15,12 @@
 //! acts through `bilibi_authz::SystemScope`, a different type, so a system
 //! scope cannot reach these helpers at all, which is Bilimbi's "system scope
 //! refused". The capability is evaluated now, by Base Authz, and the company
-//! axis by Core Company's `bilibi_company::authorize_target` with that same
-//! actor: the actor's own company, or any other company of the tenant with
-//! `admin.company.tenant-wide.manage`.
+//! axis by Core Company's `bilibi_company::authorize_work_target`: an explicit desk
+//! plus the existing operation capability.
 //!
 //! Self-service operations act on the employee the login account is linked
 //! to *now*. [`Workforce::self_employee`] re-proves the account through
-//! Base Tenancy on every call and reads `Scope::actor().affiliation()` from
+//! Base Tenancy on every call and reads `Scope::actor().person()` from
 //! that fresh scope (Bilimbi read `User.get_user/3`'s employee link), and
 //! [`Workforce::lock_self_employee`] proves it again inside the transaction
 //! that holds the employment row's lock, so a self-service write cannot
@@ -46,13 +45,13 @@ pub async fn authorize(
     company_id: i64,
     capability: &str,
 ) -> Result<i64> {
-    bilibi_company::authorize_target(client, scope, company_id, capability)
+    bilibi_company::authorize_work_target(client, scope, company_id, capability)
         .await
         .map_err(refusal)
 }
 
 /// Company authorization on the caller's transaction for object-safe owner
-/// callbacks (Artifacts). Uses Core Company's same target proof; never opens
+/// callbacks (Artifacts). Uses Core Company's operational desk proof; never opens
 /// a second connection while the owner holds its reservation/publication lock.
 pub async fn authorize_company_proof(
     client: &dyn ProofClient,
@@ -60,10 +59,14 @@ pub async fn authorize_company_proof(
     company_id: i64,
     capability: &str,
 ) -> Result<bilibi_tenancy::NamedOrganisation> {
-    Directory
-        .target(client, scope, OrganisationId::new(company_id)?, capability)
+    bilibi_company::authorize_work_target(client, scope, company_id, capability)
         .await
-        .map_err(refusal)
+        .map_err(refusal)?;
+    Directory
+        .lookup(client, scope, OrganisationId::new(company_id)?)
+        .await
+        .map_err(refusal)?
+        .ok_or(WorkforceError::NotFound)
 }
 
 /// Authorizes as [`authorize`] does and returns the company summary, for a
@@ -82,15 +85,17 @@ pub async fn authorize_company(
 
 /// The live, unarchived companies the scope's signed-in actor may target for
 /// one capability (Bilimbi `Company.list_selectable_companies/2`), sorted by
-/// name: none without the capability, the actor's own company, or every
-/// company of the tenant with the tenant-wide reach.
+/// name: none without the capability, otherwise the actor's assigned desks.
 pub async fn selectable_companies(
     client: &(impl GenericClient + Sync),
     scope: &Scope,
     capability: &str,
 ) -> Result<Vec<CompanySummary>> {
+    bilibi_authz::authorize_key(client, scope, capability)
+        .await
+        .map_err(refusal)?;
     let named = Directory
-        .selectable(client as &dyn ProofClient, scope, capability)
+        .reachable(client as &dyn ProofClient, scope)
         .await
         .map_err(refusal)?;
     let mut companies = Vec::with_capacity(named.len());
@@ -210,7 +215,7 @@ impl Workforce {
             .await?
             .filter(|c| !c.archived)
             .ok_or(WorkforceError::NotFound)?;
-        let affiliation = match self.fresh_affiliation(client, scope).await {
+        let person = match self.fresh_person(client, scope).await {
             Ok(id) => id,
             Err(WorkforceError::NotLinked) => return Ok(None),
             Err(error) => return Err(error),
@@ -219,15 +224,11 @@ impl Workforce {
             .iter()
             .map(|s| (*s).into())
             .collect();
-        Ok(crate::employments::by_affiliation(
-            client,
-            scope.tenant(),
-            company.id,
-            affiliation,
-            &statuses,
+        Ok(
+            crate::employments::by_person(client, scope.tenant(), company.id, person, &statuses)
+                .await?
+                .map(|row| row.employment.id),
         )
-        .await?
-        .map(|row| row.employment.id))
     }
 
     /// Locks a workflow subject at any employment status without exposing
@@ -271,31 +272,17 @@ impl Workforce {
         Ok(())
     }
 
-    /// The working employee the signed-in account is linked to in this
-    /// company, resolved now (Bilimbi `self_employee/2`): the account is
-    /// re-proved through Base Tenancy on this call, its affiliation facet
-    /// read from the fresh scope, and the employment holding that
-    /// affiliation in this company found in the company's working statuses.
-    /// `NotLinked` covers a frozen account, an account without an
-    /// affiliation link, an affiliation of another company, and a linked
-    /// employee who is not a current working employee; a company the scope
-    /// cannot see is `NotFound`.
-    pub async fn self_employee(&self, scope: &Scope, company_id: i64) -> Result<SelfEmployee> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.self_employee_on(&**client, scope, company_id).await
-    }
-
     /// Authorizes the self-service capability for the company, then resolves
     /// the actor's own employee (Bilimbi `authorize_self/3`).
     pub async fn authorize_self(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         capability: &str,
     ) -> Result<SelfEmployee> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorize(&**client, scope, company_id, capability).await?;
-        self.self_employee_on(&**client, scope, company_id).await
+        authorize_company_proof(client, scope, company_id, capability).await?;
+        self.self_employee(client, scope, company_id).await
     }
 
     /// Proves the actor's own employee inside the caller's mutation
@@ -316,17 +303,17 @@ impl Workforce {
         capability: &str,
     ) -> Result<SelfEmployee> {
         authorize(tx.sql(), scope, company_id, capability).await?;
-        let me = self.self_employee_on(tx.sql(), scope, company_id).await?;
+        let me = self.self_employee(tx.sql(), scope, company_id).await?;
         bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, me.employee_id)
             .await?
             .ok_or(WorkforceError::NotLinked)?;
         // The link and the working status, proved again under the lock.
-        let fresh = self.fresh_affiliation(tx.sql(), scope).await?;
+        let fresh = self.fresh_person(tx.sql(), scope).await?;
         let statuses = self
             .working_statuses_of(tx.sql(), scope, company_id)
             .await?;
-        if fresh != locked.affiliation_id || !statuses.contains(&locked.status) {
+        if fresh != locked.person_id || !statuses.contains(&locked.status) {
             return Err(WorkforceError::NotLinked);
         }
         Ok(me)
@@ -353,8 +340,8 @@ impl Workforce {
         let fresh = self.authentication.reprove(tx.sql(), scope).await?;
         Ok(fresh
             .actor()
-            .affiliation()
-            .is_some_and(|id| id.get() == employee.affiliation_id))
+            .person()
+            .is_some_and(|id| id.get() == employee.person_id))
     }
 
     /// Runs a self-service write under the actor's own employment lock
@@ -391,8 +378,8 @@ impl Workforce {
         Ok(value)
     }
 
-    /// The account's affiliation facet, re-proved now on this client.
-    async fn fresh_affiliation(
+    /// The staff account's Person, re-proved now on this client.
+    async fn fresh_person(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
@@ -404,12 +391,21 @@ impl Workforce {
             .map_err(|_| WorkforceError::NotLinked)?;
         fresh
             .actor()
-            .affiliation()
-            .map(|affiliation| affiliation.get())
+            .person()
+            .map(|person| person.get())
             .ok_or(WorkforceError::NotLinked)
     }
 
-    pub(crate) async fn self_employee_on(
+    /// The working employee the signed-in account is linked to in this
+    /// company, resolved now (Bilimbi `self_employee/2`): the account is
+    /// re-proved through Base Tenancy on this call, its Person identity
+    /// read from the fresh scope, and the employment holding that
+    /// affiliation in this company found in the company's working statuses.
+    /// `NotLinked` covers a frozen account, an account without an
+    /// Person link, an affiliation of another company, and a linked
+    /// employee who is not a current working employee; a company the scope
+    /// cannot see is `NotFound`.
+    pub async fn self_employee(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
@@ -419,17 +415,28 @@ impl Workforce {
             Some(company) if !company.archived => company,
             _ => return Err(WorkforceError::NotFound),
         };
-        let affiliation = self.fresh_affiliation(client, scope).await?;
+        if !bilibi_company::reachable(client, scope, OrganisationId::new(company_id)?)
+            .await
+            .map_err(refusal)?
+        {
+            return Err(WorkforceError::NotLinked);
+        }
+        let person = self.fresh_person(client, scope).await?;
         let statuses = self.working_statuses_of(client, scope, company.id).await?;
-        let row = crate::employments::by_affiliation(
-            client,
-            scope.tenant(),
-            company.id,
-            affiliation,
-            &statuses,
-        )
-        .await?
-        .ok_or(WorkforceError::NotLinked)?;
+        let row =
+            crate::employments::by_person(client, scope.tenant(), company.id, person, &statuses)
+                .await?
+                .ok_or(WorkforceError::NotLinked)?;
+        let affiliation = bilibi_party_ids::AffiliationId::new(row.employment.affiliation_id)?;
+        if bilibi_affiliation::identity::account_standing(client, scope.tenant(), affiliation)
+            .await?
+            != Some((
+                bilibi_party_ids::PersonId::new(person)?,
+                OrganisationId::new(company_id)?,
+            ))
+        {
+            return Err(WorkforceError::NotLinked);
+        }
         Ok(SelfEmployee {
             employee_id: row.employment.id,
             person_id: row.employment.person_id,
@@ -453,9 +460,9 @@ impl Workforce {
         employee_id: i64,
         direct_report: bool,
     ) -> Result<()> {
-        let affiliation = scope
+        let person = scope
             .actor()
-            .affiliation()
+            .person()
             .ok_or(WorkforceError::NotLinked)?
             .get();
         // ProofClient only offers single-row reads; Settings needs ReadClient.
@@ -471,10 +478,10 @@ impl Workforce {
         let row = client.query_opt(
             "SELECT me.id FROM people_workforce_employments me
              JOIN people_workforce_employments subject ON subject.tenant_id=me.tenant_id AND subject.company_id=me.company_id
-             WHERE me.tenant_id=$1 AND me.company_id=$2 AND me.affiliation_id=$3
+             WHERE me.tenant_id=$1 AND me.company_id=$2 AND me.person_id=$3
              AND me.status=ANY($4) AND subject.status=ANY($4) AND subject.id=$5
              AND (($6 AND subject.supervisor_employment_id=me.id AND subject.id<>me.id) OR (NOT $6 AND subject.id=me.id))",
-            &[&scope.tenant(),&company_id,&affiliation,&statuses,&employee_id,&direct_report],
+            &[&scope.tenant(),&company_id,&person,&statuses,&employee_id,&direct_report],
         ).await?;
         row.ok_or(WorkforceError::NotLinked)?;
         Ok(())

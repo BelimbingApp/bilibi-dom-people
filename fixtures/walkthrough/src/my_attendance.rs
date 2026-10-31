@@ -37,7 +37,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         let user = if mode == "link" { MANAGER } else { STAFF };
         let number = if mode == "link" { "E-001" } else { "E-002" };
         let employees = workforce
-            .employees(&admin, COMPANY)
+            .employees(&**c, &admin, COMPANY)
             .await
             .map_err(|_| Error::Internal)?
             .require_current()
@@ -51,7 +51,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
             .parse()
             .map_err(|_| Error::Invalid)?;
         let employment = workforce
-            .employment(&admin, COMPANY, id)
+            .employment(&**c, &admin, COMPANY, id)
             .await
             .map_err(|_| Error::Internal)?
             .require_current()
@@ -65,15 +65,16 @@ async fn run(url: &str, mode: &str) -> Result<()> {
             )
             .await
             .map_err(|_| Error::Internal)?;
-        users
-            .link_affiliation(
-                &admin,
-                user,
-                bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                    .map_err(|_| Error::Invalid)?,
-            )
-            .await
-            .map_err(|_| Error::Internal)?;
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            user,
+            bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
         return Ok(());
     }
     if mode == "revoke" || mode == "restore" {
@@ -115,7 +116,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         return Ok(());
     }
     let employee = workforce
-        .authorize_self(&manager, COMPANY, SELF_VIEW)
+        .authorize_self(&**c, &manager, COMPANY, SELF_VIEW)
         .await
         .map_err(|_| Error::Internal)?
         .employee_id;
@@ -231,7 +232,9 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    println!("PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request.");
+    println!(
+        "PA4 browser fixture: 32 days (31 visible), two published shifts (draft replacement hidden), day 15 outside the window, and one pending request."
+    );
     Ok(())
 }
 

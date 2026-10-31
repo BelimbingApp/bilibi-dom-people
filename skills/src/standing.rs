@@ -15,13 +15,14 @@ fn columns() -> String {
 
 async fn present(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     records: Vec<Row>,
 ) -> Result<Vec<ScoreView>> {
     let names = access::names(
         skills,
+        client,
         scope,
         company,
         &records
@@ -78,7 +79,7 @@ async fn present(
 
 pub(crate) async fn gaps(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     reach: &access::Reach,
@@ -90,7 +91,7 @@ pub(crate) async fn gaps(
 
 pub(crate) async fn own(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -121,7 +122,7 @@ pub(crate) async fn coverage(
     let policy = policy::get(&skills.settings, client, scope, company).await?;
     let working = skills
         .workforce
-        .employees(scope, company)
+        .employees(client, scope, company)
         .await?
         .require_current()?
         .iter()

@@ -215,7 +215,6 @@ impl Explorer {
         } else {
             false
         };
-        drop(client);
         if let Some(company) = &self.company {
             let id = company.id;
             self.list
@@ -227,6 +226,7 @@ impl Explorer {
                     .core
                     .organisation
                     .positions(
+                        &**client,
                         scope,
                         id,
                         self.day(),
@@ -309,6 +309,12 @@ impl Explorer {
         Ok(())
     }
     async fn event(&mut self, scope: &Scope, payload: &Value) -> Result<()> {
+        let client = self
+            .core
+            .db
+            .get()
+            .await
+            .map_err(bilibi_database::Error::from)?;
         let event = payload.get("type").and_then(Value::as_str).unwrap_or("");
         if matches!(
             event,
@@ -347,7 +353,12 @@ impl Explorer {
                         .find(|p| Some(p.reference.stable_id.as_str()) == id)
                         .and_then(|p| p.reference.stable_id.parse::<i64>().ok());
                     if let Some(position) = position {
-                        match self.core.workforce.employees(scope, company).await {
+                        match self
+                            .core
+                            .workforce
+                            .employees(&**client, scope, company)
+                            .await
+                        {
                             Ok(read) => match read.require_current() {
                                 Ok(employees) => self.employees = employees,
                                 Err(_) => {

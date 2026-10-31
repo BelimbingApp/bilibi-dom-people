@@ -37,7 +37,7 @@ const CURSOR_LIMIT: usize = 256;
 /// The bounds of the next step: from the sequence for a fresh scan, from the
 /// cursor for a resume.
 pub(crate) async fn bounds(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     boundary: &Boundary,
     cursor: Option<&str>,
 ) -> Result<Bounds> {

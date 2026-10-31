@@ -18,7 +18,7 @@ const PROVENANCE: Provenance = Provenance {
     source: file!(),
     line: line!(),
 };
-inventory::submit! {Contribution::new(ROUTES,"people/training.effectiveness",PROVENANCE,&Route{method:Method::Get,path:"/people/training/effectiveness",service:PAGES,operation:"effectiveness",access:Access::Capability(EFFECTIVENESS_VIEW),framed:true})}
+inventory::submit! {Contribution::new(ROUTES,"people/training.effectiveness",PROVENANCE,&Route{ company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,method:Method::Get,path:"/people/training/effectiveness",service:PAGES,operation:"effectiveness",access:Access::Capability(EFFECTIVENESS_VIEW),framed:true})}
 inventory::submit! {Contribution::new(PAGE_WRITES,PAGES,PROVENANCE,&PageWrites{service:PAGES,contracts:&[],pending:Pending::Every{reason:"Evaluation policy, reviews, reminders and frozen periods call the Training facade; operation contracts are not yet reviewed."}})}
 bilibi_menu::contribute!(
     "people/training",
@@ -434,7 +434,13 @@ impl Effectiveness {
                             .training
                             .prepare_evaluation_reviews(scope, company, session, Timestamp::now())
                             .await;
-                        let message=match &result{Ok(r)if r.unknown>0=>format!("Session reviews prepared. {} attendee(s) are no longer current employees and were skipped.",r.unknown),_=>"Session reviews prepared.".into()};
+                        let message = match &result {
+                            Ok(r) if r.unknown > 0 => format!(
+                                "Session reviews prepared. {} attendee(s) are no longer current employees and were skipped.",
+                                r.unknown
+                            ),
+                            _ => "Session reviews prepared.".into(),
+                        };
                         self.finish(result, &message);
                     }
                     PendingAction::Reminders => {
@@ -729,7 +735,14 @@ impl Effectiveness {
                 }
             }
         }
-        table("effectiveness-summary",&self.columns["effectiveness-summary"],rows,"table-effectiveness-summary","No frozen reporting period","A period's summary appears once it ends, its answer grace window passes and an operator freezes it.")
+        table(
+            "effectiveness-summary",
+            &self.columns["effectiveness-summary"],
+            rows,
+            "table-effectiveness-summary",
+            "No frozen reporting period",
+            "A period's summary appears once it ends, its answer grace window passes and an operator freezes it.",
+        )
     }
     fn render(&self) -> DbResult<String> {
         let mut body = self.reviews.render(flash(&self.flash))?;
@@ -802,11 +815,39 @@ impl Effectiveness {
         }
         body.push(&self.policy_dialog()?);
         if let Some(pending) = &self.pending {
-            let (id,consequence,detail,confirm,working,event)=match pending{
-                PendingAction::Policy(_)=>("evaluation-policy-confirm","This criteria version will be published permanently.","It applies to sessions ending in its effective period. Settings are captured at publication.","Publish","Publishing…","confirm_policy"),
-                PendingAction::Prepare(_)=>("evaluation-prepare-confirm","Prepare reviews for this completed session?","Reviews preserve the published criteria version and checkpoints.","Prepare reviews","Preparing…","confirm_maintenance"),
-                PendingAction::Reminders=>("evaluation-reminders-confirm","Refresh the due reminder worklist?","Available reminders are recorded permanently. This does not send email.","Refresh reminders","Refreshing…","confirm_maintenance"),
-                PendingAction::Freeze=>("effectiveness-freeze-confirm","Freeze closed reporting periods permanently?","Summaries preserve the current disclosure minimum. Later answers will not change a frozen summary.","Freeze closed periods","Freezing…","confirm_maintenance"),
+            let (id, consequence, detail, confirm, working, event) = match pending {
+                PendingAction::Policy(_) => (
+                    "evaluation-policy-confirm",
+                    "This criteria version will be published permanently.",
+                    "It applies to sessions ending in its effective period. Settings are captured at publication.",
+                    "Publish",
+                    "Publishing…",
+                    "confirm_policy",
+                ),
+                PendingAction::Prepare(_) => (
+                    "evaluation-prepare-confirm",
+                    "Prepare reviews for this completed session?",
+                    "Reviews preserve the published criteria version and checkpoints.",
+                    "Prepare reviews",
+                    "Preparing…",
+                    "confirm_maintenance",
+                ),
+                PendingAction::Reminders => (
+                    "evaluation-reminders-confirm",
+                    "Refresh the due reminder worklist?",
+                    "Available reminders are recorded permanently. This does not send email.",
+                    "Refresh reminders",
+                    "Refreshing…",
+                    "confirm_maintenance",
+                ),
+                PendingAction::Freeze => (
+                    "effectiveness-freeze-confirm",
+                    "Freeze closed reporting periods permanently?",
+                    "Summaries preserve the current disclosure minimum. Later answers will not change a frozen summary.",
+                    "Freeze closed periods",
+                    "Freezing…",
+                    "confirm_maintenance",
+                ),
             };
             let detail = if let PendingAction::Prepare(session) = pending {
                 format!("Completed session {session}. {detail}")

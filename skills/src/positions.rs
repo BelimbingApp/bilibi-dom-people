@@ -15,6 +15,7 @@ const MAX_PAGES: usize = 20;
 /// pages so concurrent additions cannot extend the scan indefinitely.
 pub(crate) async fn options(
     workforce: &Workforce,
+    client: bilibi_ports::PortClient<'_>,
     scope: &Scope,
     company_id: i64,
 ) -> Result<Vec<PositionOption>> {
@@ -28,7 +29,7 @@ pub(crate) async fn options(
     let mut options = Vec::new();
     for _ in 0..MAX_PAGES {
         let page = workforce
-            .positions(scope, company_id, &scan)
+            .positions(client, scope, company_id, &scan)
             .await
             .map_err(|_| SkillsError::PositionUnavailable)?
             .require_current()
@@ -56,6 +57,7 @@ pub(crate) async fn options(
 /// day. An absent Organisation is `None`; other read failures are refused.
 pub(crate) async fn position_of(
     workforce: &Workforce,
+    client: bilibi_ports::PortClient<'_>,
     scope: &Scope,
     company_id: i64,
     employee_id: i64,
@@ -67,7 +69,7 @@ pub(crate) async fn position_of(
         ..PositionScan::from_start(as_of)
     };
     for _ in 0..MAX_PAGES {
-        let page = match workforce.positions(scope, company_id, &scan).await {
+        let page = match workforce.positions(client, scope, company_id, &scan).await {
             Ok(read) => read.require_current()?,
             Err(WorkforceError::Unavailable) => return Ok(None),
             Err(error) => return Err(error.into()),

@@ -17,11 +17,12 @@ pub const REQUEST_REIMBURSED: &str = "people/claims.request_reimbursed";
 impl Claims {
     /// Self-service: resolve the signed-in employee on every read.
     pub async fn self_requests(&self, scope: &Scope, company_id: i64) -> Result<Vec<Request>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SUBMIT)
+            .authorize_self(&**client, scope, company_id, SUBMIT)
             .await?;
-        let client = self.db.get().await.map_err(Error::from)?;
         requests::of_employee(&**client, scope.tenant(), company_id, me.employee_id).await
     }
     /// Other employees' claims require APPROVE; any employment status is visible.
@@ -35,7 +36,7 @@ impl Claims {
         authorization::authorize(&**client, scope, company_id, APPROVE).await?;
         let employees = self
             .workforce
-            .employees_at_any_status(scope, company_id, Some(&[employee_id]))
+            .employees_at_any_status(&**client, scope, company_id, Some(&[employee_id]))
             .await?;
         if employees.value.unwrap_or_default().is_empty() {
             return Err(ClaimsError::NotFound);
@@ -60,17 +61,18 @@ impl Claims {
         company_id: i64,
         request_id: i64,
     ) -> Result<Vec<RequestEvent>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SUBMIT)
+            .authorize_self(&**client, scope, company_id, SUBMIT)
             .await?;
-        let client = self.db.get().await.map_err(Error::from)?;
         self.history_of(&**client, scope, company_id, me.employee_id, request_id)
             .await
     }
     async fn history_of(
         &self,
-        client: &impl GenericClient,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company: i64,
         employee: i64,
@@ -384,18 +386,17 @@ impl Claims {
                 "is invalid",
             )]));
         }
+        let client = self.db.get().await.map_err(Error::from)?;
         let employee = if team {
-            let client = self.db.get().await.map_err(Error::from)?;
             authorization::authorize(&**client, scope, company_id, APPROVE).await?;
             employee_id
         } else {
-            let me = self.self_service_employee(scope, company_id).await?;
+            let me = self.self_employee(&**client, scope, company_id).await?;
             if employee_id.is_some_and(|id| id != me.id) {
                 return Err(ClaimsError::NotFound);
             }
             Some(me.id)
         };
-        let client = self.db.get().await.map_err(Error::from)?;
         let order = if status == "submitted" { "ASC" } else { "DESC" };
         let limit = if team { " LIMIT 500" } else { "" };
         let rows = client.query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND ($3='' OR r.status=$3) AND ($4::bigint IS NULL OR r.employee_id=$4) AND ($5::bigint IS NULL OR r.id=$5) ORDER BY r.id {order}{limit}", requests::COLUMNS), &[&scope.tenant(), &company_id, &status, &employee, &request_id]).await.map_err(Error::from)?;
@@ -403,8 +404,7 @@ impl Claims {
             .iter()
             .map(requests::read)
             .collect::<bilibi_database::Result<Vec<_>>>()?;
-        drop(client);
-        self.decorate(scope, company_id, requests).await
+        self.decorate(&**client, scope, company_id, requests).await
     }
     /// Employees a reviewer may select independently of the bounded queue.
     pub async fn request_employees(
@@ -431,12 +431,12 @@ impl Claims {
             .iter()
             .map(|row| row.get(0))
             .collect();
-        drop(client);
-        self.employee_options(scope, company_id, Some(&employee_ids))
+        self.employee_options(&**client, scope, company_id, Some(&employee_ids))
             .await
     }
     pub(crate) async fn decorate(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
         requests: Vec<Request>,
@@ -451,7 +451,7 @@ impl Claims {
         for page in ids.chunks(crate::MEMBER_LIMIT) {
             employees.extend(
                 self.workforce
-                    .employees_at_any_status(scope, company, Some(page))
+                    .employees_at_any_status(client, scope, company, Some(page))
                     .await?
                     .require_current()
                     .map_err(|_| ClaimsError::EmployeeNotFound)?,
@@ -577,7 +577,7 @@ pub(crate) fn reimbursement(old: &Request, actor: i64, input: &Reimbursement) ->
 }
 
 async fn submission_limits(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,
@@ -602,7 +602,7 @@ async fn submission_limits(
     Ok(())
 }
 async fn duplicates(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,

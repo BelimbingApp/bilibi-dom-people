@@ -161,18 +161,26 @@ async fn main() -> Result<()> {
                 },
             )
             .await?;
-        services
-            .get::<bilibi_user::UserService>("core/user.accounts")?
-            .link_affiliation(&admin, 2, affiliation.id)
-            .await
-            .map_err(|_| Error::Internal)?;
+        bilibi_people_walkthrough::give_staff_desk(
+            services
+                .get::<bilibi_user::UserService>("core/user.accounts")?
+                .as_ref(),
+            &admin,
+            2,
+            affiliation.affiliation.person_id,
+            affiliation.affiliation.organisation_id,
+        )
+        .await
+        .map_err(|_| Error::Internal)?;
         grants
             .set_direct(&admin, 2, CATALOG_VIEW, Some(true))
             .await?;
         for cap in [CATALOG_MANAGE, PROFILES_PUBLISH] {
             grants.set_direct(&admin, 2, cap, Some(false)).await?;
         }
-        println!("PK4 prepared: manager can manage and publish; viewer has a linked affiliation and read-only catalog access. No Skills records added.");
+        println!(
+            "PK4 prepared: manager can manage and publish; viewer has a linked affiliation and read-only catalog access. No Skills records added."
+        );
         return Ok(());
     }
     let skills = services.get::<Skills>(bilibi_people_skills::SERVICE)?;

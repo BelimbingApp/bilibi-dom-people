@@ -87,7 +87,7 @@ fn selector_audit(profile_id: i64, selector: &Selector) -> Value {
 
 /// Profile versions: by code, newest version first.
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Profile>> {
@@ -106,7 +106,7 @@ pub(crate) async fn list(
 
 /// One profile version of the company, or `None`.
 pub(crate) async fn get(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -210,7 +210,10 @@ pub(crate) async fn uses_scale(w: &Write<'_>, scale_id: i64) -> Result<bool> {
 }
 
 /// The version's requirements in sequence order.
-pub(crate) async fn items(client: &impl GenericClient, profile_id: i64) -> Result<Vec<Item>> {
+pub(crate) async fn items(
+    client: &(impl GenericClient + Sync),
+    profile_id: i64,
+) -> Result<Vec<Item>> {
     Ok(client
         .query(
             &format!("SELECT {ITEM_COLUMNS} FROM people_skill_profile_items WHERE profile_id = $1 ORDER BY sequence"),
@@ -225,7 +228,7 @@ pub(crate) async fn items(client: &impl GenericClient, profile_id: i64) -> Resul
 
 /// The version's targets by id.
 pub(crate) async fn selectors(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     profile_id: i64,
 ) -> Result<Vec<Selector>> {
     Ok(client
@@ -241,7 +244,10 @@ pub(crate) async fn selectors(
 }
 
 /// Bilimbi `full_profile_view/2`.
-pub(crate) async fn detail(client: &impl GenericClient, profile: Profile) -> Result<ProfileDetail> {
+pub(crate) async fn detail(
+    client: &(impl GenericClient + Sync),
+    profile: Profile,
+) -> Result<ProfileDetail> {
     let items = items(client, profile.id).await?;
     let selectors = selectors(client, profile.id).await?;
     Ok(ProfileDetail {
@@ -254,7 +260,7 @@ pub(crate) async fn detail(client: &impl GenericClient, profile: Profile) -> Res
 /// Bilimbi `requirements/4`'s query: the published or retired versions in
 /// force on the day whose targets cover the company, or the position.
 pub(crate) async fn in_force(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     position_id: Option<i64>,

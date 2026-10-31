@@ -316,7 +316,7 @@ async fn revoke_queued_settings(
     use bilibi_people_workforce::{Workforce, WorkforceError, SETTINGS_MANAGE};
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let previous = workforce
-        .working_statuses(admin, 1)
+        .working_statuses(&**db.get().await?, admin, 1)
         .await
         .map_err(|_| Error::Internal)?
         .value

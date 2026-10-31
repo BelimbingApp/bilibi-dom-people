@@ -22,6 +22,7 @@ bilibi-notifications.workspace = true
 bilibi-queue.workspace = true
 bilibi-user.workspace = true
 bilibi-party-ids.workspace = true
+bilibi-ports.workspace = true
 bilibi-people-settings = { path = "../settings" }
 bilibi-people-workforce = { path = "../workforce" }
 bilibi-settings.workspace = true

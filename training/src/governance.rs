@@ -404,9 +404,9 @@ impl Training {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, request_cap(audience))
             .await?;
-        drop(client);
-        let ids = self.learning_audience(scope, company, audience).await?;
-        let client = self.db.get().await.map_err(Error::from)?;
+        let ids = self
+            .learning_audience(&**client, scope, company, audience)
+            .await?;
         store::list(&**client,scope,company,Table::Request,"AND ($3::bigint[] IS NULL OR r.employee_id=ANY($3)) AND ($4 OR EXISTS(SELECT 1 FROM people_training_need_decisions d WHERE d.tenant_id=r.tenant_id AND d.company_id=r.company_id AND d.request_id=r.id AND d.action='submit')) ORDER BY r.id DESC",&[&ids,&(audience==LearningAudience::SelfService)]).await
     }
     /// Reads one request through the same audience boundary as the list.
@@ -420,9 +420,9 @@ impl Training {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, request_cap(audience))
             .await?;
-        drop(client);
-        let ids = self.learning_audience(scope, company, audience).await?;
-        let client = self.db.get().await.map_err(Error::from)?;
+        let ids = self
+            .learning_audience(&**client, scope, company, audience)
+            .await?;
         let mut rows:Vec<LearningRequest>=store::list(&**client,scope,company,Table::Request,"AND r.id=$3 AND ($4::bigint[] IS NULL OR r.employee_id=ANY($4)) AND ($5 OR EXISTS(SELECT 1 FROM people_training_need_decisions d WHERE d.tenant_id=r.tenant_id AND d.company_id=r.company_id AND d.request_id=r.id AND d.action='submit'))",&[&id,&ids,&(audience==LearningAudience::SelfService)]).await?;
         rows.pop().ok_or(TrainingError::NotFound)
     }
@@ -488,7 +488,7 @@ impl Training {
         } else if cap == REQUESTS_RECOMMEND {
             let me = self.learning_self(tx, scope, company, cap).await?;
             if !self
-                .learning_team(scope, company, me)
+                .learning_team(tx.sql(), scope, company, me)
                 .await?
                 .contains(&row.employee_id)
             {
@@ -594,7 +594,7 @@ impl Training {
         let me = self
             .learning_self(&tx, scope, company, PLANS_SUBMIT)
             .await?;
-        let team = self.learning_team(scope, company, me).await?;
+        let team = self.learning_team(tx.sql(), scope, company, me).await?;
         if team.is_empty() {
             return Err(TrainingError::OutsideTeam);
         }
@@ -680,7 +680,7 @@ impl Training {
         let manager = if audience == LearningAudience::Team {
             Some(
                 self.workforce
-                    .self_employee(scope, company)
+                    .self_employee(&**client, scope, company)
                     .await
                     .map_err(learning_employee_error)?
                     .employee_id,
@@ -751,7 +751,11 @@ impl Training {
             if row.actor_user_id != scope.user() || row.manager_employee_id != me {
                 return Err(TrainingError::NotOwner);
             }
-            if self.learning_team(scope, company, me).await?.is_empty() {
+            if self
+                .learning_team(tx.sql(), scope, company, me)
+                .await?
+                .is_empty()
+            {
                 return Err(TrainingError::OutsideTeam);
             }
         } else {
@@ -876,10 +880,16 @@ impl Training {
             .map_err(learning_employee_error)?
             .employee_id)
     }
-    async fn learning_team(&self, scope: &Scope, company: i64, manager: i64) -> Result<Vec<i64>> {
+    async fn learning_team(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company: i64,
+        manager: i64,
+    ) -> Result<Vec<i64>> {
         let read = self
             .workforce
-            .direct_reports(scope, company, manager)
+            .direct_reports(client, scope, company, manager)
             .await
             .map_err(learning_employee_error)?;
         Ok(read
@@ -891,6 +901,7 @@ impl Training {
     }
     async fn learning_audience(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
         audience: LearningAudience,
@@ -900,14 +911,14 @@ impl Training {
         }
         let me = self
             .workforce
-            .self_employee(scope, company)
+            .self_employee(client, scope, company)
             .await
             .map_err(learning_employee_error)?
             .employee_id;
         if audience == LearningAudience::SelfService {
             Ok(Some(vec![me]))
         } else {
-            Ok(Some(self.learning_team(scope, company, me).await?))
+            Ok(Some(self.learning_team(client, scope, company, me).await?))
         }
     }
     async fn learning_current(

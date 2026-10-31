@@ -82,7 +82,7 @@ fn session(row: &Row) -> std::result::Result<Session, Error> {
 
 /// The company's courses, active or not, by name then id.
 pub(crate) async fn courses(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Course>> {
@@ -100,7 +100,7 @@ pub(crate) async fn courses(
 
 /// The company's active courses as `(id, name)` choices, by name then id.
 pub(crate) async fn active_courses(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<CourseOption>> {
@@ -121,7 +121,7 @@ pub(crate) async fn active_courses(
 
 /// One course of the company, or `None`; `lock` takes the row `FOR UPDATE`.
 async fn find_course(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -141,7 +141,7 @@ async fn find_course(
 
 /// The company's events with their course names, by event name then id.
 pub(crate) async fn events(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Event>> {
@@ -160,7 +160,7 @@ pub(crate) async fn events(
 /// One event of the company, or `None`; `lock` takes the row `FOR UPDATE`
 /// so a capacity judged holds until the writing transaction commits.
 async fn find_event(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -181,7 +181,7 @@ async fn find_event(
 /// The sessions overlapping the half-open UTC window (`starts_at < until`
 /// and `ends_at > from`), by instant then id, at most [`CALENDAR_LIMIT`].
 pub(crate) async fn calendar(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     from: Timestamp,
@@ -382,7 +382,7 @@ pub(crate) fn validate_session(new: &NewSession) -> Result<ValidSession> {
 
 /// A code already used by another course of the company (`unique_constraint`).
 async fn code_taken(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     code: &str,
@@ -460,7 +460,7 @@ pub(crate) async fn insert_course(
 
 /// Finds the course of the company for a change, locked; missing is `NotFound`.
 pub(crate) async fn lock_course(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -649,7 +649,7 @@ pub(crate) async fn insert_session(
 
 /// Bilimbi Participation.sessions: latest sessions for records, at most 500.
 pub(crate) async fn record_sessions(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Session>> {

@@ -98,7 +98,7 @@ pub async fn run(url: &str) -> Result<()> {
     grants
         .set_direct(&admin, 3, sk::SELF_VIEW, Some(true))
         .await?;
-    let employee = saved(people.self_employee(&staff, 1).await)?;
+    let employee = saved(people.self_employee(&**client, &staff, 1).await)?;
     let profile = saved(skills.list_profiles(&manager, 1).await)?
         .into_iter()
         .find(|p| p.code == "pm1_profile")
@@ -696,17 +696,24 @@ pub async fn run(url: &str) -> Result<()> {
         "old scope after unlink",
     )?;
     // Restore the same account through its known employment affiliation.
-    let employment =
-        saved(saved(people.employment(&admin, 1, employee.employee_id).await)?.require_current())?;
+    let employment = saved(
+        saved(
+            people
+                .employment(&**client, &admin, 1, employee.employee_id)
+                .await,
+        )?
+        .require_current(),
+    )?;
     saved(
-        users
-            .link_affiliation(
-                &admin,
-                3,
-                bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                    .map_err(|_| Error::Invalid)?,
-            )
-            .await,
+        crate::give_staff_desk(
+            &users,
+            &admin,
+            3,
+            bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+            bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                .map_err(|_| Error::Invalid)?,
+        )
+        .await,
     )?;
     db_refused(
         &client,

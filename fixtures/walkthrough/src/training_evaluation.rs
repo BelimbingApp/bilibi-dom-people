@@ -4,7 +4,7 @@ use bilibi_affiliation::{AffiliationInput, AffiliationService, EffectiveDates};
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
-use bilibi_party_ids::{AffiliationId, OrganisationId, PersonId};
+use bilibi_party_ids::{OrganisationId, PersonId};
 use bilibi_people_training::*;
 use bilibi_people_workforce::{EmploymentChange, NewEmployment, Workforce};
 use bilibi_person::{PersonInput, PersonKind, PersonService};
@@ -118,7 +118,7 @@ pub(crate) async fn run(
         }
     }
     let employment = workforce
-        .employment(manager, COMPANY, employees.1)
+        .employment(client, manager, COMPANY, employees.1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -131,14 +131,16 @@ pub(crate) async fn run(
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = auth
         .authenticate(client, TENANT, STAFF, "walkthrough".into())
         .await?;
@@ -745,18 +747,20 @@ pub(crate) async fn run(
             .await,
         TrainingError::AttendanceEmployeeUnavailable,
     )?;
-    users
-        .link_affiliation(
-            admin,
-            STAFF,
-            AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
 
     // Current reporting lines and competing answers are rechecked under the company lock.
     let report = workforce
-        .employment(manager, COMPANY, second.id)
+        .employment(client, manager, COMPANY, second.id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -819,7 +823,7 @@ pub(crate) async fn run(
     )?;
     // Leavers remain attendance history, but never get new review obligations.
     let current = workforce
-        .employment(manager, COMPANY, second.id)
+        .employment(client, manager, COMPANY, second.id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -851,19 +855,54 @@ pub(crate) async fn run(
         leavers.unknown == 1 && leavers.reviews.len() == 6,
     )?;
     // The owner tables reject all rewrites and direct out-of-bounds answers.
-    for (label,sql,id) in [
-        ("immutable policy","UPDATE people_training_evaluation_policies SET reason='rewrite' WHERE id=$1",published.id),
-        ("immutable review","DELETE FROM people_training_evaluation_reviews WHERE id=$1",delayed),
-        ("immutable answer","DELETE FROM people_training_evaluation_answers WHERE review_id=$1",own_id),
-        ("immutable reminder","DELETE FROM people_training_review_reminders WHERE review_id=$1",delayed),
-        ("immutable summary","UPDATE people_training_effectiveness_summaries SET status='suppressed' WHERE id=$1",first.id),
-        ("database score bounds","INSERT INTO people_training_evaluation_answers (tenant_id,company_id,actor_user_id,review_id,values,reason) SELECT tenant_id,company_id,actor_user_id,id,'{\"outcome\":10001,\"uncertain\":null}'::jsonb,'invalid' FROM people_training_evaluation_reviews WHERE id=$1",own_manager[0].review.id),
-        ("duplicate obligation on corrected fact","INSERT INTO people_training_evaluation_reviews (tenant_id,company_id,actor_user_id,policy_id,fact_id,kind,checkpoint_days,due_on) SELECT r.tenant_id,r.company_id,r.actor_user_id,r.policy_id,(SELECT max(f.id) FROM people_training_attendance_facts f JOIN people_training_attendance_facts original ON original.id=r.fact_id AND original.tenant_id=f.tenant_id AND original.company_id=f.company_id WHERE f.tenant_id=r.tenant_id AND f.company_id=r.company_id AND f.session_id=original.session_id AND f.employee_id=original.employee_id),r.kind,r.checkpoint_days,r.due_on FROM people_training_evaluation_reviews r WHERE r.id=$1",own_id),
+    for (label, sql, id) in [
+        (
+            "immutable policy",
+            "UPDATE people_training_evaluation_policies SET reason='rewrite' WHERE id=$1",
+            published.id,
+        ),
+        (
+            "immutable review",
+            "DELETE FROM people_training_evaluation_reviews WHERE id=$1",
+            delayed,
+        ),
+        (
+            "immutable answer",
+            "DELETE FROM people_training_evaluation_answers WHERE review_id=$1",
+            own_id,
+        ),
+        (
+            "immutable reminder",
+            "DELETE FROM people_training_review_reminders WHERE review_id=$1",
+            delayed,
+        ),
+        (
+            "immutable summary",
+            "UPDATE people_training_effectiveness_summaries SET status='suppressed' WHERE id=$1",
+            first.id,
+        ),
+        (
+            "database score bounds",
+            "INSERT INTO people_training_evaluation_answers (tenant_id,company_id,actor_user_id,review_id,values,reason) SELECT tenant_id,company_id,actor_user_id,id,'{\"outcome\":10001,\"uncertain\":null}'::jsonb,'invalid' FROM people_training_evaluation_reviews WHERE id=$1",
+            own_manager[0].review.id,
+        ),
+        (
+            "duplicate obligation on corrected fact",
+            "INSERT INTO people_training_evaluation_reviews (tenant_id,company_id,actor_user_id,policy_id,fact_id,kind,checkpoint_days,due_on) SELECT r.tenant_id,r.company_id,r.actor_user_id,r.policy_id,(SELECT max(f.id) FROM people_training_attendance_facts f JOIN people_training_attendance_facts original ON original.id=r.fact_id AND original.tenant_id=f.tenant_id AND original.company_id=f.company_id WHERE f.tenant_id=r.tenant_id AND f.company_id=r.company_id AND f.session_id=original.session_id AND f.employee_id=original.employee_id),r.kind,r.checkpoint_days,r.due_on FROM people_training_evaluation_reviews r WHERE r.id=$1",
+            own_id,
+        ),
     ] {
         client.batch_execute("BEGIN").await?;
-        let result=client.execute(sql,&[&id]).await;
+        let result = client.execute(sql, &[&id]).await;
         client.batch_execute("ROLLBACK").await?;
-        proof(label,result.as_ref().err().and_then(|e|e.code()).is_some_and(|c|c.code()=="23514"))?;
+        proof(
+            label,
+            result
+                .as_ref()
+                .err()
+                .and_then(|e| e.code())
+                .is_some_and(|c| c.code() == "23514"),
+        )?;
     }
     let audit:i64=client.query_one("SELECT count(*) FROM base_audit_mutations WHERE tenant_id=1 AND auditable_type LIKE 'people_training_evaluation_%'",&[]).await?.get(0);
     proof("writes captured by audit", audit > 0)?;

@@ -833,7 +833,7 @@ impl Claims {
         if !employee_ids.is_empty() {
             let found = self
                 .workforce
-                .employees_at_any_status(scope, company_id, Some(&employee_ids))
+                .employees_at_any_status(&**client, scope, company_id, Some(&employee_ids))
                 .await?
                 .value
                 .unwrap_or_default();
@@ -884,12 +884,13 @@ impl Claims {
     ) -> Result<Vec<AssignableEmployee>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, MANAGE).await?;
-        drop(client);
-        self.employee_options(scope, company_id, None).await
+        self.employee_options(&**client, scope, company_id, None)
+            .await
     }
 
     async fn employee_options(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_ids: Option<&[i64]>,
@@ -899,7 +900,7 @@ impl Claims {
             for page in ids.chunks(MEMBER_LIMIT) {
                 employees.extend(
                     self.workforce
-                        .employees_at_any_status(scope, company_id, Some(page))
+                        .employees_at_any_status(client, scope, company_id, Some(page))
                         .await?
                         .value
                         .unwrap_or_default(),
@@ -908,7 +909,7 @@ impl Claims {
         } else {
             employees = self
                 .workforce
-                .employees_at_any_status(scope, company_id, None)
+                .employees_at_any_status(client, scope, company_id, None)
                 .await?
                 .value
                 .unwrap_or_default();
@@ -998,12 +999,12 @@ impl Claims {
         authorization::authorize(client, scope, company_id, SUBMIT).await?;
         let employee_id = self
             .workforce
-            .authorize_self(scope, company_id, SUBMIT)
+            .authorize_self(client, scope, company_id, SUBMIT)
             .await?
             .employee_id;
         match self
             .workforce
-            .employee(scope, company_id, employee_id)
+            .employee(client, scope, company_id, employee_id)
             .await
         {
             Ok(read) => match read.require_current() {
@@ -1035,7 +1036,11 @@ async fn company(
 /// Holds the company's writable lock for the rest of the transaction: an
 /// archived company is `CompanyArchived`, and the lock serializes the
 /// company's writes.
-async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
+async fn writable(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
     bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())

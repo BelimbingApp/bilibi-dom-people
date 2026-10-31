@@ -53,7 +53,10 @@ async fn main() -> Outcome<()> {
     }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     if std::env::args().nth(2).as_deref() == Some("directory") {
-        let employees = workforce.employees(&admin, 1).await?.require_current()?;
+        let employees = workforce
+            .employees(&**db.get().await?, &admin, 1)
+            .await?
+            .require_current()?;
         let supervisor = employees
             .iter()
             .find(|e| e.employee_number == "PV3-001")
@@ -268,7 +271,12 @@ async fn companion(
     admin: &Scope,
     supervisor: i64,
 ) -> Outcome<()> {
-    let employees = workforce.employees(admin, 1).await?.require_current()?;
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let client = db.get().await?;
+    let employees = workforce
+        .employees(&**client, admin, 1)
+        .await?
+        .require_current()?;
     if employees.iter().any(|e| e.employee_number == "PV3-002") {
         return Ok(());
     }

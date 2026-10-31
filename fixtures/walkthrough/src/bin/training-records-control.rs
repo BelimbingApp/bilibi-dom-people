@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
             let workforce = services
                 .get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
             let people = workforce
-                .employees_at_any_status(&admin, 1, None)
+                .employees_at_any_status(&**client, &admin, 1, None)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
                 .parse::<i64>()
                 .map_err(|_| Error::Invalid)?;
             let employment = workforce
-                .employment(&admin, 1, employee_id)
+                .employment(&**client, &admin, 1, employee_id)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()
@@ -80,22 +80,24 @@ async fn main() -> Result<()> {
                     )
                     .await
                     .map_err(|_| Error::Internal)?;
-                users
-                    .link_affiliation(
-                        &admin,
-                        3,
-                        bilibi_party_ids::AffiliationId::new(employment.affiliation_id)
-                            .map_err(|_| Error::Invalid)?,
-                    )
-                    .await
-                    .map_err(|_| Error::Internal)?;
+                bilibi_people_walkthrough::give_staff_desk(
+                    &users,
+                    &admin,
+                    3,
+                    bilibi_party_ids::PersonId::new(employment.person_id)
+                        .map_err(|_| Error::Invalid)?,
+                    bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+                        .map_err(|_| Error::Invalid)?,
+                )
+                .await
+                .map_err(|_| Error::Internal)?;
             } else {
                 let manager = services
                     .get::<Authentication>("base/tenancy.authentication")?
                     .authenticate(&**client, 1, 1, "training-records-proof".into())
                     .await?;
                 let manager_id = workforce
-                    .self_employee(&manager, 1)
+                    .self_employee(&**client, &manager, 1)
                     .await
                     .map_err(|_| Error::Internal)?
                     .employee_id;
@@ -257,10 +259,15 @@ async fn prepare(services: &Services, admin: &bilibi_tenancy::Scope) -> Result<(
         .link_person(admin, 3, person.id)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(admin, 3, affiliation.id)
-        .await
-        .map_err(|_| Error::Internal)?;
+    bilibi_people_walkthrough::give_staff_desk(
+        &users,
+        admin,
+        3,
+        affiliation.affiliation.person_id,
+        affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let root = std::env::var_os("BILIBI_TRAINING_PROOF_ROOT")
         .map(std::path::PathBuf::from)
         .ok_or(Error::Invalid)?;

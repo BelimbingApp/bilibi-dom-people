@@ -55,7 +55,7 @@ impl ClaimType {
 // Categories
 
 pub(crate) async fn categories(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Category>> {
@@ -72,7 +72,7 @@ pub(crate) async fn categories(
 }
 
 pub(crate) async fn find_category(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -92,7 +92,7 @@ pub(crate) async fn find_category(
 }
 
 pub(crate) async fn lock_category(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -133,7 +133,7 @@ pub(crate) fn validate_category(
 
 /// `has already been taken` for a code another category of the company holds.
 pub(crate) async fn check_category_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     code: &str,
 ) -> Result<()> {
@@ -211,7 +211,7 @@ pub(crate) async fn set_category_active(
 // Claim types
 
 pub(crate) async fn claim_types(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<ClaimType>> {
@@ -230,7 +230,7 @@ pub(crate) async fn claim_types(
 /// One claim type of the company, locked `FOR UPDATE` for the rest of the
 /// transaction: the lock every policy write of the type takes.
 pub(crate) async fn lock_claim_type(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     id: i64,
@@ -251,7 +251,7 @@ pub(crate) async fn lock_claim_type(
 
 /// Whether every id is a claim type of the company (Bilimbi `all_in_company/5`).
 pub(crate) async fn all_claim_types_in_company(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     ids: &[i64],
@@ -317,7 +317,7 @@ pub(crate) fn validate_claim_type(
 }
 
 pub(crate) async fn check_claim_type_code(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     company_id: i64,
     code: &str,
 ) -> Result<()> {

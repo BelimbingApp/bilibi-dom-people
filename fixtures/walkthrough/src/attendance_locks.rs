@@ -169,7 +169,6 @@ pub(super) async fn run(
 
     let users = services.get::<bilibi_user::UserService>("core/user.accounts")?;
     let person = staff.actor().person().ok_or(Error::Invalid)?;
-    let affiliation = staff.actor().affiliation().ok_or(Error::Invalid)?;
     users
         .unlink(admin, STAFF)
         .await
@@ -187,10 +186,15 @@ pub(super) async fn run(
         .link_person(admin, STAFF, person)
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(admin, STAFF, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        admin,
+        STAFF,
+        person,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     attendance
         .self_days(staff, COMPANY)
         .await

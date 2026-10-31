@@ -11,9 +11,12 @@ impl Progression {
     pub async fn explain(&self, scope: &Scope, company: i64) -> Result<Standing> {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, SELF_VIEW).await?;
-        let employee = self.workforce.self_employee(scope, company).await?;
+        let employee = self
+            .workforce
+            .self_employee(&**client, scope, company)
+            .await?;
         self.workforce
-            .employee(scope, company, employee.employee_id)
+            .employee(&**client, scope, company, employee.employee_id)
             .await?
             .require_current()?;
         let today = Timestamp::now()
@@ -120,7 +123,7 @@ impl Progression {
         // A relink during sibling reads must not return the former employee's explanation.
         if self
             .workforce
-            .self_employee(scope, company)
+            .self_employee(&**client, scope, company)
             .await?
             .employee_id
             != employee.employee_id

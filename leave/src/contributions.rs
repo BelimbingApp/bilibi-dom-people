@@ -81,7 +81,7 @@ inventory::submit! {
             ))),
         }, Service {
             id: crate::worker::SERVICE,
-            factory: |services| Ok(Arc::new(bilibi_queue::execution::HandlerService(Arc::new(crate::worker::CarryForwardWorker(services.get(SERVICE)?))))),
+            factory: |services| Ok(Arc::new(bilibi_queue::HandlerService(Arc::new(crate::worker::CarryForwardWorker(services.get(SERVICE)?))))),
         }],
     }
 }
@@ -132,7 +132,7 @@ inventory::submit! { Contribution::new(DEFINITIONS, REQUEST_BACKDATE_DAYS_KEY, p
 
 // Bilimbi CarryForwardWorker: no schedule, five attempts as the operator.
 inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WORKER, provenance!(), &bilibi_queue::Worker { max_attempts: 5, validate: crate::worker::validate }) }
-inventory::submit! { Contribution::new(bilibi_queue::execution::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::execution::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
+inventory::submit! { Contribution::new(bilibi_queue::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
 
 inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
     service: crate::web::PAGES, contracts: &[
@@ -141,22 +141,23 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PA
     ], pending: bilibi_module_registry::contributions::Pending::None,
 }) }
 
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/my", service: crate::web::PAGES, operation: "my",
     access: bilibi_module_registry::contributions::Access::Capability(SELF_VIEW), framed: true,
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/requests", service: crate::web::PAGES, operation: "requests",
     access: bilibi_module_registry::contributions::Access::Capability(REQUESTS_APPROVE), framed: true,
 }) }
 
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES,"people/leave.record",provenance!(),&bilibi_module_registry::contributions::Route {
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES,"people/leave.record",provenance!(),&bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method:bilibi_module_registry::contributions::Method::Get,path:"/people/leave/requests/{id}",service:crate::web::PAGES,operation:"record",access:bilibi_module_registry::contributions::Access::AnyOf(&[SELF_VIEW,REQUESTS_APPROVE]),framed:true,
 }) }
 
 bilibi_menu::contribute!(
     "people/leave",
     bilibi_menu::MenuItem::page("people.leave.my", "My leave", "/people/leave/my")
+        .company_scoped()
         .icon("clipboard-document-list")
         .under("people.my_work")
         .requires(bilibi_menu::Requirement::Capability(SELF_VIEW))
@@ -178,7 +179,7 @@ bilibi_menu::contribute!(
 // Bilimbi Leave.Web.PoliciesLive and priv/web_routes.exs.
 inventory::submit! { Contribution::new(
     bilibi_module_registry::contributions::ROUTES, "people/leave.policies", provenance!(),
-    &bilibi_module_registry::contributions::Route {
+    &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: bilibi_module_registry::contributions::Method::Get,
         path: "/people/leave/policies", service: crate::policy_web::SERVICE, operation: "policies",
         access: bilibi_module_registry::contributions::Access::Capability(POLICIES_MANAGE), framed: true,

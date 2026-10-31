@@ -5,7 +5,7 @@ use crate::{
 };
 use bilibi_database::Error;
 use bilibi_notifications::Notice;
-use bilibi_queue::execution::Execution;
+use bilibi_queue::Execution;
 use bilibi_tenancy::Scope;
 use jiff::civil::Date;
 use std::collections::HashMap;
@@ -77,7 +77,7 @@ pub(super) async fn compute(
     let policy = policy::get(&skills.settings, client, scope, company).await?;
     let employees = skills
         .workforce
-        .employees(scope, company)
+        .employees(client, scope, company)
         .await?
         .require_current()?;
     let mut supervisors = HashMap::new();
@@ -89,12 +89,13 @@ pub(super) async fn compute(
             .transpose()?;
         supervisors.insert(access::employee_id(employee)?, supervisor);
     }
-    let accounts = bilibi_user::company_accounts::list(client, scope, company).await?;
-    let mut by_affiliation = HashMap::<i64, Vec<i64>>::new();
+    let accounts =
+        bilibi_user::UserService::list_company_accounts_on(client, scope, company).await?;
+    let mut by_person = HashMap::<i64, Vec<i64>>::new();
     let mut holders = Vec::new();
     for account in accounts {
-        by_affiliation
-            .entry(account.affiliation.get())
+        by_person
+            .entry(account.person.get())
             .or_default()
             .push(account.id);
         // Audience discovery only; authority for every write remains the caller's
@@ -107,16 +108,16 @@ pub(super) async fn compute(
             holders.push(account.id);
         }
     }
-    let affiliations: Vec<i64> = by_affiliation.keys().copied().collect();
+    let people: Vec<i64> = by_person.keys().copied().collect();
     let mut users = HashMap::<i64, Vec<i64>>::new();
-    for batch in affiliations.chunks(bilibi_people_workforce::LOOKUP_LIMIT) {
-        for (affiliation, employee) in skills
+    for batch in people.chunks(bilibi_people_workforce::LOOKUP_LIMIT) {
+        for (person, employee) in skills
             .workforce
-            .employment_links_on(client, scope, company, batch)
+            .employment_people_on(client, scope, company, batch)
             .await?
             .require_current()?
         {
-            if let Some(accounts) = by_affiliation.get(&affiliation) {
+            if let Some(accounts) = by_person.get(&person) {
                 users.insert(employee, accounts.clone());
             }
         }
@@ -305,9 +306,14 @@ pub(super) async fn deliver(
             return Ok(Delivery::Skipped);
         }
         // The ledger names an account, never the operator. Re-prove that it is
-        // still affiliated with this company before creating its notification.
-        match bilibi_user::company_accounts::get(w.sql(), scope, company, row.recipient_user_id)
-            .await
+        // still holds a desk in this company before creating its notification.
+        match bilibi_user::UserService::company_account_on(
+            w.sql(),
+            scope,
+            company,
+            row.recipient_user_id,
+        )
+        .await
         {
             Ok(_) => {}
             Err(Error::NotFound) => {
@@ -364,7 +370,7 @@ pub(super) async fn deliver(
 }
 
 pub(super) async fn retry_ids(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     as_of: Date,
@@ -373,7 +379,7 @@ pub(super) async fn retry_ids(
     Ok(client.query(&format!("SELECT id FROM people_skill_reminders WHERE tenant_id=$1 AND company_id=$2 AND id>$3 AND {RETRY} ORDER BY id"), &[&scope.tenant(),&company,&0i64,&periods(as_of)]).await.map_err(Error::from)?.iter().map(|r|r.get(0)).collect())
 }
 pub(super) async fn inbox(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     limit: i64,
@@ -383,7 +389,7 @@ pub(super) async fn inbox(
 
 // Policy operators see delivery failures as well as sent rows, always scoped.
 pub(super) async fn ledger(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     limit: i64,

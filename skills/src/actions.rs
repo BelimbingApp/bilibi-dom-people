@@ -73,14 +73,14 @@ fn type_row(r: &Row) -> ActionType {
     }
 }
 pub(crate) async fn types(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
 ) -> Result<Vec<ActionType>> {
     Ok(client.query(&format!("SELECT {TYPE_COLUMNS} FROM people_skill_action_types WHERE tenant_id=$1 AND company_id=$2 ORDER BY active DESC,name,id"), &[&tenant,&company]).await.map_err(Error::from)?.iter().map(type_row).collect())
 }
 pub(crate) async fn get_type(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -152,7 +152,7 @@ pub(crate) async fn validate_plan(
     }
     let people = skills
         .workforce
-        .employees_by_ids(scope, w.company_id, &ids)
+        .employees_by_ids(w.sql(), scope, w.company_id, &ids)
         .await?
         .require_current()?;
     if people.len() != ids.len() {
@@ -258,7 +258,7 @@ pub(crate) async fn propose(
         .await?;
     let employee = skills
         .workforce
-        .employee(scope, w.company_id, employee_id)
+        .employee(w.sql(), scope, w.company_id, employee_id)
         .await?
         .require_current()?;
     validate_plan(skills, w, scope, &plan).await?;
@@ -463,7 +463,7 @@ pub(crate) async fn close_after_finalization(w: &mut Write<'_>, a: &Assessment) 
 }
 
 pub(crate) async fn list(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     group: ActionGroup,
@@ -483,7 +483,7 @@ pub(crate) async fn list(
 
 pub(crate) async fn present(
     skills: &Skills,
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     rows: Vec<Action>,
@@ -492,7 +492,7 @@ pub(crate) async fn present(
         .iter()
         .flat_map(|r| [r.owner_employee_id, r.coordinator_employee_id])
         .collect::<Vec<_>>();
-    let names = access::names(skills, scope, company, &ids).await?;
+    let names = access::names(skills, client, scope, company, &ids).await?;
     let catalog = catalog::skills_by_ids(
         client,
         scope.tenant(),

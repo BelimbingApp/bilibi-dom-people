@@ -4,7 +4,7 @@ use crate::{
     MutationTransaction, Result, Rules, Scope, POLICIES_MANAGE,
 };
 use bilibi_database::Change;
-use bilibi_queue::execution::Execution;
+use bilibi_queue::Execution;
 use serde::Serialize;
 use serde_json::json;
 use tokio_postgres::GenericClient;
@@ -80,7 +80,7 @@ impl Leave {
         ).await.map_err(Error::from)?.get::<_, bool>(0) {
             return Err(LeaveError::Unauthorized);
         }
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(tx.sql(), scope, company_id).await?;
         let rules = self.read_rules(tx.sql(), scope, &company).await?;
         let (_, last_day) = rules.year_range(year)?;
         if last_day >= self.today_on(tx.sql(), scope, &company).await? {
@@ -89,7 +89,7 @@ impl Leave {
         let (first_next, _) = rules.year_range(year + 1)?;
         let employees = self
             .workforce
-            .employees(scope, company_id)
+            .employees(tx.sql(), scope, company_id)
             .await?
             .require_current()
             .map_err(|e| LeaveError::NotCurrent(e.0))?;
@@ -226,9 +226,9 @@ impl Leave {
         company_id: i64,
         from_year: i32,
     ) -> Result<i64> {
-        self.current_company(scope, company_id).await?;
-        let next_year = from_year.checked_add(1).ok_or(LeaveError::InvalidYear)?;
         let client = self.db.get().await.map_err(Error::from)?;
+        self.current_company(&**client, scope, company_id).await?;
+        let next_year = from_year.checked_add(1).ok_or(LeaveError::InvalidYear)?;
         Ok(client.query_one("SELECT count(*) FROM people_leave_ledger_entries WHERE tenant_id=$1 AND company_id=$2 AND source='carry_forward' AND entry_type='carried_forward' AND leave_year=$3",&[&scope.tenant(),&company_id,&next_year]).await.map_err(Error::from)?.get(0))
     }
     /// Latest skipped years, oldest first, bounded to 200 plus the full count.
@@ -239,7 +239,7 @@ impl Leave {
     ) -> Result<CarryForwardSkipped> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         // One snapshot keeps total and rows consistent during a worker run.
         let rows=client.query("SELECT s.from_year,s.employee_id,s.employee_label,s.leave_type_id,t.name,s.reason,s.blocking_year,count(*) OVER() AS total FROM people_leave_carry_forward_skips s JOIN people_leave_catalog_types t ON t.id=s.leave_type_id AND t.tenant_id=s.tenant_id AND t.company_id=s.company_id WHERE s.tenant_id=$1 AND s.company_id=$2 ORDER BY s.from_year,s.employee_label,t.name,s.id LIMIT 200",&[&scope.tenant(),&company_id]).await.map_err(Error::from)?;
         let total = rows.first().map_or(0, |r| r.get("total"));
@@ -294,7 +294,7 @@ impl Leave {
 }
 #[allow(clippy::too_many_arguments)]
 async fn blocking_year(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     employee: i64,

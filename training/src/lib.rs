@@ -726,7 +726,7 @@ impl Training {
             return Err(TrainingError::CompanyUnavailable);
         }
         self.workforce
-            .company_on(client, scope, company_id)
+            .company(client, scope, company_id)
             .await?
             .require_current()
             .map_err(|not_current| TrainingError::WorkforceNotCurrent(not_current.0))?;
@@ -739,7 +739,11 @@ impl Training {
 
 /// The company's writable lock every write holds first: an archived company
 /// is `CompanyUnavailable`, and the lock serializes the company's writes.
-async fn writable(client: &impl GenericClient, scope: &Scope, company_id: i64) -> Result<()> {
+async fn writable(
+    client: &(impl GenericClient + Sync),
+    scope: &Scope,
+    company_id: i64,
+) -> Result<()> {
     bilibi_company::require_writable(client, scope, company_id, true)
         .await
         .map(|_| ())

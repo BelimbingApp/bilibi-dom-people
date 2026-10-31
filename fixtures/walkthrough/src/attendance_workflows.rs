@@ -81,7 +81,7 @@ pub async fn run(url: &str) -> Result<()> {
         .authenticate(&**c, TENANT, MANAGER, "walkthrough".into())
         .await?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**c, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -92,7 +92,7 @@ pub async fn run(url: &str) -> Result<()> {
         .and_then(|e| e.reference.stable_id.parse::<i64>().ok())
         .ok_or(Error::NotFound)?;
     let employment = workforce
-        .employment(&manager, COMPANY, employee)
+        .employment(&**c, &manager, COMPANY, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -114,15 +114,16 @@ pub async fn run(url: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = auth
         .authenticate(&**c, TENANT, STAFF, "walkthrough".into())
         .await?;
@@ -700,15 +701,16 @@ pub async fn run(url: &str) -> Result<()> {
         )
         .await
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            &admin,
-            STAFF,
-            bilibi_affiliation::AffiliationId::new(employment.affiliation_id)
-                .map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let c = db.get().await?;
     let source:String=c.query_one("SELECT source FROM people_attendance_clock_facts WHERE tenant_id=$1 AND company_id=$2 AND id=$3",
 &[&TENANT,

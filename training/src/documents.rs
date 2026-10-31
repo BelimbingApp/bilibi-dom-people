@@ -343,7 +343,7 @@ impl Training {
     }
 }
 async fn require_fact(
-    client: &impl tokio_postgres::GenericClient,
+    client: &(impl tokio_postgres::GenericClient + Sync),
     scope: &Scope,
     company_id: i64,
     fact_id: i64,

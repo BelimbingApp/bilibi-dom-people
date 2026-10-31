@@ -1,6 +1,5 @@
 //! PK3: facade and database proofs, using the disposable People walkthrough.
 //! Bilimbi's reassessment and action flows, including PK3 automatic closure.
-use bilibi_affiliation::AffiliationId;
 use bilibi_authz::grants::Grants;
 use bilibi_database::{Error, Result};
 use bilibi_module_registry::Services;
@@ -117,19 +116,21 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .await?;
     }
     let employment = workforce
-        .employment(c.admin, company, c.staff_employee)
+        .employment(client, c.admin, company, c.staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
         .map_err(|_| Error::Internal)?;
-    users
-        .link_affiliation(
-            c.admin,
-            super::STAFF,
-            AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     let staff = auth
         .authenticate(client, super::TENANT, super::STAFF, "walkthrough".into())
         .await?;
@@ -809,14 +810,16 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .await,
         |e| matches!(e, SkillsError::NotFound | SkillsError::Unavailable),
     )?;
-    users
-        .link_affiliation(
-            c.admin,
-            super::STAFF,
-            AffiliationId::new(employment.affiliation_id).map_err(|_| Error::Invalid)?,
-        )
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        c.admin,
+        super::STAFF,
+        bilibi_party_ids::PersonId::new(employment.person_id).map_err(|_| Error::Invalid)?,
+        bilibi_party_ids::OrganisationId::new(employment.platform_company_id)
+            .map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
     for (label, sql, id) in [
         (
             "event update",
@@ -859,7 +862,9 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .set_direct(c.admin, super::STAFF, capability, Some(true))
             .await?;
     }
-    println!("PK3 walkthrough complete: requests, actions, independent approval, automatic closure, reach, revocation, unlink and database guards proved.");
+    println!(
+        "PK3 walkthrough complete: requests, actions, independent approval, automatic closure, reach, revocation, unlink and database guards proved."
+    );
     Ok(())
 }
 

@@ -97,7 +97,7 @@ inventory::submit! {
 
 // Bilimbi Organisation.Web.ExplorerLive and its Team menu leaf.
 inventory::submit! {
-    Contribution::new(ROUTES, "people/organisation.explorer", provenance!(), &Route {
+    Contribution::new(ROUTES, "people/organisation.explorer", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
         method: Method::Get, path: "/people/organisation", service: PAGES,
         operation: "explorer", access: Access::Capability(VIEW), framed: true,
     })

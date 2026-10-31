@@ -38,7 +38,7 @@ impl Skills {
             .lock_working_employee(&w.tx, scope, company_id, input.employee_id)
             .await?;
         self.workforce
-            .employee(scope, company_id, input.employee_id)
+            .employee(w.sql(), scope, company_id, input.employee_id)
             .await?
             .require_current()?;
         if self
@@ -171,7 +171,7 @@ impl Skills {
             &[ASSESSMENTS_SUBMIT, REASSESSMENTS_SUBMIT],
         )
         .await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let reach = access::reach(self, &**client, scope, company_id).await?;
         let own = self
             .workforce
@@ -179,7 +179,7 @@ impl Skills {
             .await?;
         let employees = self
             .workforce
-            .employees(scope, company_id)
+            .employees(&**client, scope, company_id)
             .await?
             .require_current()?;
         let mut options = Vec::new();
@@ -205,7 +205,7 @@ impl Skills {
     ) -> Result<Vec<AssessmentView>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, ASSESSMENTS_VIEW).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let reach = access::reach(self, &**client, scope, company_id).await?;
         let rows =
             assessments::list(&**client, scope.tenant(), company_id, &reach, filters).await?;
@@ -234,7 +234,7 @@ impl Skills {
             ],
         )
         .await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let reach = access::reach(self, &**client, scope, company_id).await?;
         let own = self
             .workforce
@@ -296,7 +296,7 @@ impl Skills {
     ) -> Result<Vec<AssessmentDecision>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, ASSESSMENTS_VIEW).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let reach = access::reach(self, &**client, scope, company_id).await?;
         let row = assessments::get(&**client, scope.tenant(), company_id, assessment_id).await?;
         if !reach.contains(row.employee_id) {
@@ -310,7 +310,7 @@ impl Skills {
     pub async fn gaps(&self, scope: &Scope, company_id: i64) -> Result<Vec<ScoreView>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, ASSESSMENTS_VIEW).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let reach = access::reach(self, &**client, scope, company_id).await?;
         standing::gaps(self, &**client, scope, company_id, &reach).await
     }
@@ -320,10 +320,10 @@ impl Skills {
     pub async fn standing(&self, scope: &Scope, company_id: i64) -> Result<Standing> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, SELF_VIEW).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?;
         standing::own(self, &**client, scope, company_id, me.employee_id).await
     }
@@ -338,7 +338,7 @@ impl Skills {
     ) -> Result<Vec<Coverage>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, ASSESSMENTS_VIEW).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         if !authorization::allowed(&**client, scope, company_id, ASSESSMENTS_MANAGE).await {
             return Err(SkillsError::OutOfReach);
         }

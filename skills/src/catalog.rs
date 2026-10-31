@@ -43,7 +43,7 @@ fn skill(row: &Row) -> Skill {
 
 /// The company's categories: active first, then by name, then by id.
 pub(crate) async fn list_categories(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Category>> {
@@ -112,7 +112,7 @@ pub(crate) async fn require_category(
 }
 
 async fn taken(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     table: &str,
     company_id: i64,
     code: &str,
@@ -210,7 +210,7 @@ pub(crate) async fn set_category_active(
 
 /// The company's skills: active first, then by name, then by id.
 pub(crate) async fn list_skills(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
 ) -> Result<Vec<Skill>> {
@@ -241,7 +241,7 @@ pub(crate) async fn get_skill(w: &Write<'_>, id: i64) -> Result<Option<Skill>> {
 
 /// The company's skills among `ids`, by id.
 pub(crate) async fn skills_by_ids(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company_id: i64,
     ids: &[i64],

@@ -394,11 +394,13 @@ impl Attendance {
     /// actor needs `people.attendance.self.view` for the company, and an
     /// account not linked to a working employee there is `NotLinked`.
     pub async fn self_days(&self, scope: &Scope, company_id: i64) -> Result<Vec<Day>> {
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
         let employee_id = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?
             .employee_id;
+        drop(client);
         self.list_days(scope, company_id, employee_id).await
     }
 

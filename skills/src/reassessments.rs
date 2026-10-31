@@ -30,7 +30,7 @@ fn request(r: &Row) -> DbResult<ReassessmentRequest> {
     })
 }
 async fn get(
-    client: &impl GenericClient,
+    client: &(impl GenericClient + Sync),
     tenant: i64,
     company: i64,
     id: i64,
@@ -74,7 +74,7 @@ impl Skills {
             .lock_working_employee(&w.tx, scope, company, employee)
             .await?;
         self.workforce
-            .employee(scope, company, employee)
+            .employee(w.sql(), scope, company, employee)
             .await?
             .require_current()?;
         if self
@@ -130,12 +130,13 @@ impl Skills {
             &[REASSESSMENTS_EXECUTE, REASSESSMENTS_SUBMIT],
         )
         .await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let performer =
             authorization::allowed(&**client, scope, company, REASSESSMENTS_EXECUTE).await;
         let list=client.query(&format!("SELECT {} FROM people_skill_reassessment_requests WHERE tenant_id=$1 AND company_id=$2 AND status='pending' AND ($3 OR requested_by_user_id=$4) ORDER BY due_on,id LIMIT 200",columns()), &[&scope.tenant(),&company,&performer,&scope.user()]).await.map_err(Error::from)?.iter().map(request).collect::<DbResult<Vec<_>>>()?;
         let names = access::names(
             self,
+            &**client,
             scope,
             company,
             &list.iter().map(|r| r.employee_id).collect::<Vec<_>>(),
@@ -224,7 +225,7 @@ impl Skills {
             .lock_working_employee(&w.tx, scope, company, peek.employee_id)
             .await?;
         self.workforce
-            .employee(scope, company, peek.employee_id)
+            .employee(w.sql(), scope, company, peek.employee_id)
             .await?
             .require_current()?;
         if self

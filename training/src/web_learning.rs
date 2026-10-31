@@ -49,7 +49,7 @@ inventory::submit! {
 macro_rules! route {
     ($key:literal, $path:literal, $cap:expr) => {
         inventory::submit! {
-            Contribution::new(ROUTES, concat!("people/training.learning_", $key), PROVENANCE, &Route {
+            Contribution::new(ROUTES, concat!("people/training.learning_", $key), PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
                 method: Method::Get, path: $path, service: PAGES, operation: $key,
                 access: Access::Capability($cap), framed: true,
             })
@@ -57,11 +57,11 @@ macro_rules! route {
     };
 }
 route!("plans", "/people/training/plans", PLANS_SUBMIT);
-inventory::submit! { Contribution::new(ROUTES, "people/training.learning_requests", PROVENANCE, &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/training.learning_requests", PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/training/requests", service: PAGES, operation: "requests",
     access: Access::AnyOf(&[LEARNING_VIEW, REQUESTS_RECOMMEND, REQUESTS_VIEW]), framed: true,
 }) }
-inventory::submit! { Contribution::new(ROUTES, "people/training.learning_request", PROVENANCE, &Route {
+inventory::submit! { Contribution::new(ROUTES, "people/training.learning_request", PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
     method: Method::Get, path: "/people/training/requests/{id}", service: PAGES, operation: "requests",
     access: Access::AnyOf(&[LEARNING_VIEW, REQUESTS_RECOMMEND, REQUESTS_VIEW]), framed: true,
 }) }
@@ -74,6 +74,7 @@ bilibi_menu::contribute!(
         "Learning requests",
         "/people/training/requests"
     )
+    .company_scoped()
     .icon("users")
     .under("people.my_work")
     .requires(Requirement::AnyOf(&[
@@ -424,7 +425,12 @@ impl Learning {
             .get("company_id")
             .filter(|s| !s.is_empty())
             .cloned();
-        self.company = if let Some(value) = selected.as_deref() {
+        self.company = if self.task.kind() == "request" {
+            scope
+                .current_company()
+                .map(|id| id.get())
+                .filter(|id| self.companies.iter().any(|c| c.id == *id))
+        } else if let Some(value) = selected.as_deref() {
             params::positive_id(Some(value)).filter(|id| self.companies.iter().any(|c| c.id == *id))
         } else {
             scope
@@ -450,7 +456,7 @@ impl Learning {
             self.linked = self
                 .training
                 .workforce
-                .self_employee(scope, company)
+                .self_employee(&**self.training.db.get().await?, scope, company)
                 .await
                 .is_ok();
             let team = self
@@ -606,7 +612,12 @@ impl Learning {
             if let Ok(read) = self
                 .training
                 .workforce
-                .employees_at_any_status(scope, company, Some(ids))
+                .employees_at_any_status(
+                    &**self.training.db.get().await?,
+                    scope,
+                    company,
+                    Some(ids),
+                )
                 .await
             {
                 if let Ok(employees) = read.require_current() {
@@ -1404,7 +1415,10 @@ impl Learning {
             table.zoom = self.columns.zoom;
             table.suggestions = self.columns.flex_suggestions();
             table.add_query = &self.columns.add_query;
-            table.empty=Some(TableEmpty::State(EmptyState::missing("No learning records yet","Choose a company and add a request, plan or budget when you have the required access.")));
+            table.empty = Some(TableEmpty::State(EmptyState::missing(
+                "No learning records yet",
+                "Choose a company and add a request, plan or budget when you have the required access.",
+            )));
             table_html = render(&table)?;
             pagination = render(&Pagination::new(
                 "learning-pagination",
@@ -1576,7 +1590,10 @@ impl Learning {
             read_only: !writable && self.error.is_none(),
             error: self.error.as_deref().unwrap_or(""),
             choose_task: if !show {
-                render(&EmptyState::missing("Choose a learning task", "Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access."))?
+                render(&EmptyState::missing(
+                    "Choose a learning task",
+                    "Use your authorized passport, evidence or evaluation tasks above. Request submission needs separate access.",
+                ))?
             } else {
                 Html::EMPTY
             },

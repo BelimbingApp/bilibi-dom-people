@@ -15,8 +15,7 @@ The settings page is `/people/workforce/settings`. The People connector reads co
 ## Public API
 
 Resolve `Workforce` from the registry as `people/workforce.workforce`
-(`bilibi_people_workforce::SERVICE`) and call it with the sealed `Scope`
-you were handed and an explicit platform company id. Results are typed
+(`bilibi_people_workforce::SERVICE`). Every directory read takes the caller’s connection, the sealed `Scope` and an explicit platform company id. Pass `tx.sql()` inside a write; pass the request’s existing connection for a page or port. These reads never open another pooled connection, so their desk proof cannot wait on a company lock held by their own caller. Results are typed
 records; the schema is private.
 
 | Function | Capability | Does |
@@ -60,7 +59,7 @@ identity never implies a login actor.
 
 ### Reading on a caller's connection
 
-Use `company_on(client, scope, company)` and `working_employee_ids_on(client, scope, company, ids)` inside a port or transaction. They apply the same live-company and working-status rules on that client's view. The ids read is bounded to 1,000 positive ids and returns a current `ReadResult<Vec<i64>>`; it skips names and contacts when you need only membership. Organisation uses these reads so a position scan does not rent nested pool connections or miss a caller's pending employment changes.
+Use `company(client, scope, company)` and `working_employee_ids_on(client, scope, company, ids)` inside a port or transaction. They apply the same live-company and working-status rules on that client's view. The ids read is bounded to 1,000 positive ids and returns a current `ReadResult<Vec<i64>>`; it skips names and contacts when you need only membership. Organisation uses these reads so a position scan does not rent nested pool connections or miss a caller's pending employment changes.
 
 ### Names and contacts through Core
 
@@ -92,9 +91,9 @@ so a system scope cannot reach these helpers at all.
 
 | Function | Does |
 | --- | --- |
-| `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `bilibi_company::authorize_target`: the actor's own company, or any company of the tenant with `admin.company.tenant-wide.manage`). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
+| `authorize(client, scope, company_id, capability)` | The capability now (Base Authz) and the company axis (Core Company's `bilibi_company::authorize_work_target`: an explicit desk in that company). `Unauthorized` for a denied or unknown capability or a company outside the reach; `NotFound` for a company the scope cannot see |
 | `authorize_company(..)` | The same, returning the `CompanySummary` (id, name, code, status, archived) for a page that renders it |
-| `selectable_companies(client, scope, capability)` | The unarchived companies the actor may target with the capability, by name (Bilimbi `list_selectable_companies/2`): none without the capability, the own company, or the whole tenant with the tenant-wide reach |
+| `selectable_companies(client, scope, capability)` | The unarchived companies the actor may target with the capability, by name (Bilimbi `list_selectable_companies/2`): none without the capability, otherwise only the person’s explicit desks |
 | `company_choices(client, scope, capability, selected)` | Active companies for a People company chooser, plus the already-selected pending or suspended company if Core still authorizes it. Archived companies are never offered, even when selected or deep-linked. Keep the selection from server state or the addressed record, never a write form. Record discovery keeps using `selectable_companies` so existing records remain reachable |
 | `allowed(..)` | Whether `authorize` would succeed, for deciding which controls a page renders; never authority for an operation |
 
@@ -116,21 +115,9 @@ module's keys live under it. `view` and `manage` are verbs Base declares.
 
 ### Self-service
 
-Self-service operations act on the employee the login account is linked
-to *now*, never on an employee a page resolved earlier. Bilimbi read the
-link from Core User's `employee_id`; Bilibi's account links a Person and an
-affiliation (`users.affiliation_id`, sealed into `Scope::actor().affiliation()`
-at every authentication), and the employment holding that affiliation is
-the account's employee.
+Self-service resolves the freshly proved staff Person and its employment in the requested workplace. A staff account has no employment-affiliation facet. The employment retains its own Core affiliation, which Workforce proves through the Affiliation owner.
 
-- `self_employee(scope, company_id)` re-proves the account through Base
-  Tenancy's `Authentication::reprove` on this call (the live link, the
-  impersonator kept), reads the affiliation facet from that fresh scope and
-  finds the employment holding it in the company's working statuses. It
-  answers `SelfEmployee` (the employment id, Person and affiliation).
-  `NotLinked` covers a frozen account, an account without an affiliation
-  link, an affiliation of another company and a linked employee who is not
-  a current working employee; a company the scope cannot see is `NotFound`.
+- `self_employee(scope, company_id)` re-proves the account through `Authentication::reprove`, keeping the impersonator, checks its desk, and finds that Person's employment in the company's working statuses. It returns the employment ID, Person and business affiliation. A missing Person, lost desk, unavailable affiliation or non-working employee is `NotLinked`; ambiguous employments also refuse. A missing company is `NotFound`.
 - `authorize_self(scope, company_id, capability)` is `authorize` then
   `self_employee`, for a self-service read.
 - `lock_self_employee(&tx, scope, company_id, capability)` is the half of
@@ -342,13 +329,13 @@ Sibling People workflows can call `lock_working_employee(tx, scope, company, emp
 
 ## Independent decisions
 
-`owns_employee(tx, scope, company_id, employee_id, capability)` lets another People facade refuse decisions on the signed-in account's own employee records. It checks the supplied permission, holds Company → Employment locks, and re-proves the account link on the caller's transaction. It returns true for a matching affiliation at any employment status, false for an unlinked account, and `NotFound` for a missing employee. Claims uses this to keep inactive employees' own claims out of their decision authority. Self-service writes continue to use `lock_self_employee`, which also requires a working status.
+`owns_employee(tx, scope, company_id, employee_id, capability)` lets another People facade refuse decisions on the signed-in account's own employee records. It checks the supplied permission, holds Company → Employment locks, and re-proves the account link on the caller's transaction. It returns true for a matching Person at any employment status, false for an unlinked account, and `NotFound` for a missing employee. Claims uses this to keep inactive employees' own claims out of their decision authority. Self-service writes continue to use `lock_self_employee`, which also requires a working status.
 
 `authorization::authorize_company_proof` provides the same company target authorization on an object-safe `ProofClient`, for owner callbacks such as Training's Artifacts adapter. Pass the callback's client so its proof stays on the reservation or publication transaction. The returned company includes its archived flag; owners must refuse an archived company before granting access.
 
 ### Employment identity links
 
-`employment_links_on(client, scope, company, affiliation_ids)` matches at most `LOOKUP_LIMIT` positive Core affiliation ids to `(affiliation_id, employment_id)` pairs, at any employment status. The company must be live and reachable. It returns a current `ReadResult` and exposes no employment facts. Skills reminders use it with Core User's proven company accounts to find recipient employment references without requiring employment-page permissions. It grants no authority to act on those employees.
+`employment_people_on(client, scope, company, affiliation_ids)` matches at most `LOOKUP_LIMIT` positive Core affiliation ids to `(affiliation_id, employment_id)` pairs, at any employment status. The company must be live and reachable. It returns a current `ReadResult` and exposes no employment facts. Skills reminders use it with Core User's proven company accounts to find recipient employment references without requiring employment-page permissions. It grants no authority to act on those employees.
 
 `prove_self_or_direct_report` is the object-safe subject check for an Artifacts owner callback. The owner first checks its own capability and supplies the live scope Artifacts re-proved. The caller holds the company lock across the file operation and the self employment lock for self-service. Workforce resolves the working statuses through Settings, then checks the linked employment and subject on the callback transaction. It avoids taking the caller's locks again on a second connection. The method proves identity and relationship only; it grants no application permission and exposes no employment facts.
 
@@ -399,7 +386,7 @@ Continue by passing `next_cursor` unchanged with the same company and page size.
 
 `snapshot: true` means a full enumeration, not an MVCC snapshot across calls: names, contacts, status and membership are read live. Apply results and deactivate unseen employees only after all pages succeeded. Never treat an unavailable, refused or interrupted pass as an empty directory. The watermark is an observation token, not an incremental change cursor; a new pass starts with `cursor: null`.
 
-The same scan is available to People callers through `employee_page(scope, company, &EmployeeScan)` and `employee_page_on(client, scope, company, &EmployeeScan)`, returning a current `ReadResult<EmployeePage>`. Both use bounded SQL with one lookahead row rather than loading the whole workforce.
+The same scan is available to People callers through `employee_page(client, scope, company, &EmployeeScan)`, returning a current `ReadResult<EmployeePage>`. It uses bounded SQL with one lookahead row rather than loading the whole workforce.
 
 ### Position pages
 

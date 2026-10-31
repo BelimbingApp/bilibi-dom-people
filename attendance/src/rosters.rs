@@ -81,9 +81,9 @@ impl Attendance {
         days: i32,
         query: Option<&str>,
     ) -> Result<Roster> {
+        let c = self.db.get().await.map_err(Error::from)?;
         let to = period(from, days)?;
         {
-            let c = self.db.get().await.map_err(Error::from)?;
             bilibi_people_workforce::authorization::authorize(
                 &**c,
                 scope,
@@ -94,7 +94,7 @@ impl Attendance {
         }
         let mut matching = self
             .workforce
-            .employees(scope, company_id)
+            .employees(&**c, scope, company_id)
             .await?
             .require_current()?;
         let needle = query.unwrap_or("").to_lowercase();
@@ -358,27 +358,28 @@ impl Attendance {
         from: Date,
         days: i32,
     ) -> Result<Vec<PublishedShift>> {
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
         let to = period(from, days)?;
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?;
-        let c = self.db.get().await.map_err(Error::from)?;
-        c.query(
-            PUBLISHED_SHIFTS,
-            &[
-                &scope.tenant(),
-                &company_id,
-                &me.employee_id,
-                &from.to_string(),
-                &to.to_string(),
-            ],
-        )
-        .await
-        .map_err(Error::from)?
-        .into_iter()
-        .map(|r| decode(r.get(0)))
-        .collect()
+        client
+            .query(
+                PUBLISHED_SHIFTS,
+                &[
+                    &scope.tenant(),
+                    &company_id,
+                    &me.employee_id,
+                    &from.to_string(),
+                    &to.to_string(),
+                ],
+            )
+            .await
+            .map_err(Error::from)?
+            .into_iter()
+            .map(|r| decode(r.get(0)))
+            .collect()
     }
 }
 

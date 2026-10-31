@@ -415,7 +415,7 @@ impl Leave {
     /// The company's leave year rules (Bilimbi `rules/2`); no capability.
     pub async fn rules(&self, scope: &Scope, company_id: i64) -> Result<Rules> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(&**client, scope, company_id).await?;
         self.read_rules(&**client, scope, &company).await
     }
 
@@ -428,7 +428,7 @@ impl Leave {
         }
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(&**client, scope, company_id).await?;
         let mut tx = self
             .begin_policy(&mut client, scope, company_id, "people.leave.put_rules")
             .await?;
@@ -461,7 +461,7 @@ impl Leave {
     /// no capability.
     pub async fn request_rules(&self, scope: &Scope, company_id: i64) -> Result<RequestRules> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(&**client, scope, company_id).await?;
         self.read_request_rules(&**client, scope, &company).await
     }
 
@@ -488,7 +488,7 @@ impl Leave {
         weekdays.dedup();
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let mut tx = self
             .begin_policy(
                 &mut client,
@@ -529,7 +529,7 @@ impl Leave {
     /// `list_types/2`); no capability.
     pub async fn list_types(&self, scope: &Scope, company_id: i64) -> Result<Vec<LeaveType>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         types::list(&**client, scope.tenant(), company_id).await
     }
 
@@ -545,7 +545,7 @@ impl Leave {
     ) -> Result<LeaveType> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let valid = types::validate(new).map_err(LeaveError::Invalid)?;
         let mut tx = self
             .begin_policy(&mut client, scope, company_id, "people.leave.create_type")
@@ -577,7 +577,7 @@ impl Leave {
         }
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let mut tx = self
             .begin_policy(
                 &mut client,
@@ -600,7 +600,7 @@ impl Leave {
     /// first (Bilimbi `list_policies/2`); no capability.
     pub async fn list_policies(&self, scope: &Scope, company_id: i64) -> Result<Vec<Policy>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         policies::list(&**client, scope.tenant(), company_id).await
     }
 
@@ -627,7 +627,7 @@ impl Leave {
             .transpose()?;
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let mut tx = self
             .begin_policy(&mut client, scope, company_id, "people.leave.add_policy")
             .await?;
@@ -681,7 +681,7 @@ impl Leave {
         date: Date,
     ) -> Result<Policy> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         policies::effective(&**client, scope.tenant(), company_id, type_id, date)
             .await?
             .ok_or(LeaveError::NotFound)
@@ -708,10 +708,10 @@ impl Leave {
         }
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, POLICIES_MANAGE).await?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(&**client, scope, company_id).await?;
         let employees = self
             .workforce
-            .employees(scope, company_id)
+            .employees(&**client, scope, company_id)
             .await?
             .require_current()
             .map_err(|not_current| LeaveError::NotCurrent(not_current.0))?;
@@ -833,7 +833,7 @@ impl Leave {
         leave_year: i32,
     ) -> Result<Vec<Balance>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_employee(scope, company_id, employee_id)
+        self.current_employee(&**client, scope, company_id, employee_id)
             .await?;
         let tenant = scope.tenant();
         let totals = ledger::totals(&**client, tenant, company_id, employee_id, leave_year).await?;
@@ -863,7 +863,7 @@ impl Leave {
         leave_year: i32,
     ) -> Result<Vec<LedgerEntry>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_employee(scope, company_id, employee_id)
+        self.current_employee(&**client, scope, company_id, employee_id)
             .await?;
         ledger::list(
             &**client,
@@ -910,9 +910,14 @@ impl Leave {
         Ok(tx)
     }
 
-    async fn current_company(&self, scope: &Scope, company_id: i64) -> Result<Company> {
+    async fn current_company(
+        &self,
+        client: &(impl GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<Company> {
         self.workforce
-            .company(scope, company_id)
+            .company(client, scope, company_id)
             .await?
             .require_current()
             .map_err(|not_current| LeaveError::NotCurrent(not_current.0))
@@ -920,12 +925,13 @@ impl Leave {
 
     async fn current_employee(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_id: i64,
     ) -> Result<Employee> {
         self.workforce
-            .employee(scope, company_id, employee_id)
+            .employee(client, scope, company_id, employee_id)
             .await?
             .require_current()
             .map_err(|not_current| LeaveError::NotCurrent(not_current.0))

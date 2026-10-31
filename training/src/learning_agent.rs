@@ -112,9 +112,16 @@ impl WriteHandler for Write {
             let training = facade()?;
             let facts = if self.action == "create" {
                 let request = input.request.as_ref().ok_or(Error::Invalid)?;
+                // Reviewed previews expose their existing transaction; identity
+                // reproof must share it with the caller's workplace locks.
                 let employee = training
                     .workforce
-                    .authorize_self(scope, input.company_id, REQUESTS_SUBMIT)
+                    .authorize_self(
+                        client.transaction().ok_or(Error::Internal)?,
+                        scope,
+                        input.company_id,
+                        REQUESTS_SUBMIT,
+                    )
                     .await
                     .map_err(TrainingError::from)
                     .map_err(refusal)?;

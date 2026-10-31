@@ -566,7 +566,7 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
     )?;
 
     let users = services.get::<bilibi_user::UserService>("core/user.accounts")?;
-    let affiliation = staff.actor().affiliation().ok_or(Error::Internal)?;
+    let staff_person = staff.actor().person().ok_or(Error::Internal)?;
     refresh(&mut own, &staff).await?;
     users.unlink(&admin, 3).await.map_err(|_| Error::Internal)?;
     let mut unlinked_response = form(
@@ -585,10 +585,15 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
                 .is_empty(),
         "an unlinked account's mounted response form refuses the old employee",
     )?;
-    users
-        .link_affiliation(&admin, 3, affiliation)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        3,
+        staff_person,
+        bilibi_party_ids::OrganisationId::new(1).map_err(|_| Error::Invalid)?,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
 
     // Give the read-only account a company affiliation, without an employment
     // or write grants. An unlinked account deliberately sees the unavailable state.
@@ -622,10 +627,15 @@ pub(super) async fn verify(services: &Services) -> Result<()> {
             },
         )
         .await?;
-    users
-        .link_affiliation(&admin, 2, viewer_affiliation.id)
-        .await
-        .map_err(|_| Error::Internal)?;
+    crate::give_staff_desk(
+        &users,
+        &admin,
+        2,
+        viewer_affiliation.affiliation.person_id,
+        viewer_affiliation.affiliation.organisation_id,
+    )
+    .await
+    .map_err(|_| Error::Internal)?;
 
     // Keep a view-only account available for the browser proof as well.
     grants.set_direct(&admin, 2, pm::VIEW, Some(true)).await?;

@@ -544,7 +544,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     if let Some(read) = read(
         "manager reads positions as of 2026-10-15 while Sam Staff is not working",
         organisation
-            .positions(manager, company, date(2026, 10, 15), 1, 50)
+            .positions(client, manager, company, date(2026, 10, 15), 1, 50)
             .await,
     ) {
         print_positions("as of 2026-10-15, probation not working", &read);
@@ -640,7 +640,9 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     ] {
         if let Some(read) = read(
             &format!("manager reads company {company}'s positions {heading}"),
-            organisation.positions(manager, company, day, 1, 50).await,
+            organisation
+                .positions(client, manager, company, day, 1, 50)
+                .await,
         ) {
             print_positions(heading, &read);
         }
@@ -651,31 +653,35 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     );
     if let Some(read) = read(
         &format!("viewer, without any grant, reads company {company}'s positions"),
-        organisation.positions(viewer, company, today, 1, 50).await,
+        organisation
+            .positions(client, viewer, company, today, 1, 50)
+            .await,
     ) {
         print_positions("as the viewer sees them", &read);
     }
     show(
         "manager reads page 2 of 2 positions",
         organisation
-            .positions(manager, company, today, 2, 2)
+            .positions(client, manager, company, today, 2, 2)
             .await
             .map(|positions| positions.len()),
     );
     show(
         "manager reads 101 positions per page",
         organisation
-            .positions(manager, company, today, 1, 101)
+            .positions(client, manager, company, today, 1, 101)
             .await,
     );
     show(
         "manager reads page 0",
-        organisation.positions(manager, company, today, 0, 50).await,
+        organisation
+            .positions(client, manager, company, today, 0, 50)
+            .await,
     );
     show(
         "manager reads a company that does not exist",
         organisation
-            .positions(manager, i64::MAX, today, 1, 50)
+            .positions(client, manager, i64::MAX, today, 1, 50)
             .await,
     );
 
@@ -738,6 +744,7 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     // Require successful decoding, including assignment references.
     let native = workforce
         .positions(
+            client,
             manager,
             company,
             &bilibi_people_workforce::PositionScan::from_start(today),
@@ -845,18 +852,18 @@ pub(crate) async fn run(services: &Services, client: &Client, cast: Cast<'_>) ->
     }
 
     let db = services.get::<bilibi_database::Db>("base/database.pool")?;
-    // Leave exactly one pool connection free. A position read must use it
-    // throughout, including company and holder membership reads in Workforce.
+    // Occupy every other pool connection. The supplied client must carry the
+    // whole position read, including Workforce company and holder proofs.
     let status = db.status();
     let borrowed = status.size - status.available;
-    let reserve = status.max_size.saturating_sub(borrowed + 1);
+    let reserve = status.max_size.saturating_sub(borrowed);
     let mut held = Vec::with_capacity(reserve);
     for _ in 0..reserve {
         held.push(db.get().await?);
     }
     let page = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        organisation.positions(manager, company, today, 1, 100),
+        organisation.positions(client, manager, company, today, 1, 100),
     )
     .await
     .map_err(|_| Error::Internal)?
