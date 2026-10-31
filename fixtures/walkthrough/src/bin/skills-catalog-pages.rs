@@ -162,7 +162,9 @@ async fn main() -> Result<()> {
             )
             .await?;
         bilibi_people_walkthrough::give_staff_desk(
-            &services.get::<bilibi_user::UserService>("core/user.accounts")?,
+            services
+                .get::<bilibi_user::UserService>("core/user.accounts")?
+                .as_ref(),
             &admin,
             2,
             affiliation.affiliation.person_id,
