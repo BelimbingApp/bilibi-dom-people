@@ -7,6 +7,7 @@ use crate::{
 use bilibi_database::{Error, MutationTransaction};
 use bilibi_tenancy::Scope;
 use serde::{Deserialize, Serialize};
+use tokio_postgres::GenericClient;
 
 /// Public directory facts, distinct from the private employment record.
 #[derive(Clone, Debug, Serialize)]
@@ -29,20 +30,19 @@ impl Workforce {
     /// these are company-scoped summaries; private dates and identity ids stay out.
     pub async fn directory_employees(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
     ) -> Result<ReadResult<Vec<DirectoryEmployee>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let working = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let statuses = EMPLOYEE_STATUSES
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
-        let rows =
-            employments::in_statuses(&**client, scope.tenant(), company_id, &statuses).await?;
+        let rows = employments::in_statuses(client, scope.tenant(), company_id, &statuses).await?;
         let facts = rows
             .iter()
             .map(|row| {
@@ -54,7 +54,7 @@ impl Workforce {
             })
             .collect::<Vec<_>>();
         let employees = self
-            .project(&**client, scope, company_id, &working, rows)
+            .project(client, scope, company_id, &working, rows)
             .await?;
         Ok(ReadResult::current(
             employees
@@ -113,17 +113,24 @@ impl Workforce {
     /// Active `employment_type` reference entries for the employment picker.
     /// No dependency from Employee Workspace
     /// to Reference Data: Workforce owns the employment input contract.
-    pub async fn employment_types(
+    pub async fn employment_types<'a>(
         &self,
+        client: impl Into<bilibi_ports::PortClient<'a>>,
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<EmploymentType>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorization::authorize(&**client, scope, company_id, crate::EMPLOYMENT_MANAGE).await?;
+        let client = client.into();
+        bilibi_ports::on_client!(client, |c| authorization::authorize(
+            c,
+            scope,
+            company_id,
+            crate::EMPLOYMENT_MANAGE
+        )
+        .await)?;
         match self
             .ports
             .call(
-                &client,
+                client,
                 scope,
                 "people/reference_data.employment_types",
                 &serde_json::json!({"company_id":company_id}),

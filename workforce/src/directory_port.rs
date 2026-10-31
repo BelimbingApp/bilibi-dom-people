@@ -67,9 +67,8 @@ impl PortProvider for DirectoryPort {
                 .ok_or(Error::Internal)?;
             match request {
                 Request::Company { company_id } => {
-                    let read =
-                        on_client!(client, |c| facade.company_on(c, scope, company_id).await)
-                            .map_err(refused)?;
+                    let read = on_client!(client, |c| facade.company(c, scope, company_id).await)
+                        .map_err(refused)?;
                     Ok(json!({"value": read.value, "freshness": "current"}))
                 }
                 Request::Employees {
@@ -79,7 +78,7 @@ impl PortProvider for DirectoryPort {
                 } => {
                     let scan = EmployeeScan { cursor, page_size };
                     let read = on_client!(client, |c| facade
-                        .employee_page_on(c, scope, company_id, &scan)
+                        .employee_page(c, scope, company_id, &scan)
                         .await)
                     .map_err(refused)?;
                     let mut page = answer(&read.value.ok_or(Error::Internal)?)?;
@@ -94,7 +93,7 @@ impl PortProvider for DirectoryPort {
                 } => {
                     // The same live-company proof as every Workforce read,
                     // before even deciding whether Organisation is mounted.
-                    on_client!(client, |c| facade.company_on(c, scope, company_id).await)
+                    on_client!(client, |c| facade.company(c, scope, company_id).await)
                         .map_err(refused)?;
                     let day: Date = as_of.parse().map_err(|_| Error::Invalid)?;
                     let (inner, watermark) = if let Some(cursor) = cursor {

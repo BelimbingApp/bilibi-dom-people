@@ -65,15 +65,17 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     // statuses and an empty workforce.
     show(
         &format!("manager reads company {COMPANY}"),
-        workforce.company(&manager, COMPANY).await,
+        workforce.company(&**client, &manager, COMPANY).await,
     );
     show(
         &format!("manager reads company {COMPANY}'s working statuses"),
-        workforce.working_statuses(&manager, COMPANY).await,
+        workforce
+            .working_statuses(&**client, &manager, COMPANY)
+            .await,
     );
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "before any employment",
@@ -361,7 +363,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     // The read seam every People module builds on.
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "working employees of Company 001",
@@ -370,7 +372,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     }
     if let Some(read) = show(
         &format!("viewer lists company {COMPANY}'s employees"),
-        workforce.employees(&viewer, COMPANY).await,
+        workforce.employees(&**client, &viewer, COMPANY).await,
     ) {
         print_employees(
             "working employees of Company 001, as the viewer sees them",
@@ -380,7 +382,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     show(
         &format!("manager reads employee #{}", staff_employment.id),
         workforce
-            .employee(&manager, COMPANY, staff_employment.id)
+            .employee(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     show(
@@ -389,13 +391,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             contractor_employment.id
         ),
         workforce
-            .employee(&manager, COMPANY, contractor_employment.id)
+            .employee(&**client, &manager, COMPANY, contractor_employment.id)
             .await,
     );
     if let Some(read) = show(
         "manager reads employees by id (both, one twice, one that does not exist)",
         workforce
             .employees_by_ids(
+                &**client,
                 &manager,
                 COMPANY,
                 &[
@@ -412,12 +415,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     show(
         "manager reads employees by 1,001 ids",
         workforce
-            .employees_by_ids(&manager, COMPANY, &vec![1; 1_001])
+            .employees_by_ids(&**client, &manager, COMPANY, &vec![1; 1_001])
             .await,
     );
     show(
         "manager reads employees by an id of zero",
-        workforce.employees_by_ids(&manager, COMPANY, &[0]).await,
+        workforce
+            .employees_by_ids(&**client, &manager, COMPANY, &[0])
+            .await,
     );
     if let Some(read) = show(
         &format!(
@@ -425,7 +430,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             manager_employment.id
         ),
         workforce
-            .direct_reports(&manager, COMPANY, manager_employment.id)
+            .direct_reports(&**client, &manager, COMPANY, manager_employment.id)
             .await,
     ) {
         print_employees(
@@ -439,12 +444,14 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             staff_employment.id
         ),
         workforce
-            .direct_reports(&manager, COMPANY, staff_employment.id)
+            .direct_reports(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     if let Some(read) = show(
         &format!("manager lists company {OTHER_COMPANY}'s employees"),
-        workforce.employees(&manager, OTHER_COMPANY).await,
+        workforce
+            .employees(&**client, &manager, OTHER_COMPANY)
+            .await,
     ) {
         print_employees(
             "working employees of Company 002",
@@ -453,11 +460,13 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     }
     show(
         "manager lists a company that does not exist",
-        workforce.employees(&manager, i64::MAX).await,
+        workforce.employees(&**client, &manager, i64::MAX).await,
     );
     show(
         &format!("manager lists tenant 2's company {OTHER_TENANT_COMPANY}"),
-        workforce.employees(&manager, OTHER_TENANT_COMPANY).await,
+        workforce
+            .employees(&**client, &manager, OTHER_TENANT_COMPANY)
+            .await,
     );
 
     // Working statuses: the admin narrows them to `active`, so Sam Staff
@@ -486,7 +495,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     );
     if let Some(read) = show(
         &format!("manager lists company {COMPANY}'s employees"),
-        workforce.employees(&manager, COMPANY).await,
+        workforce.employees(&**client, &manager, COMPANY).await,
     ) {
         print_employees(
             "working employees with active only",
@@ -499,7 +508,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             staff_employment.id
         ),
         workforce
-            .employee(&manager, COMPANY, staff_employment.id)
+            .employee(&**client, &manager, COMPANY, staff_employment.id)
             .await,
     );
     show(
@@ -510,7 +519,9 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
     );
     show(
         &format!("manager reads company {COMPANY}'s working statuses"),
-        workforce.working_statuses(&manager, COMPANY).await,
+        workforce
+            .working_statuses(&**client, &manager, COMPANY)
+            .await,
     );
 
     // The Authorization helpers: who may reach which company for what.

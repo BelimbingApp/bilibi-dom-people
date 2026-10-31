@@ -118,7 +118,7 @@ pub(crate) async fn run(
         }
     }
     let employment = workforce
-        .employment(manager, COMPANY, employees.1)
+        .employment(client, manager, COMPANY, employees.1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -760,7 +760,7 @@ pub(crate) async fn run(
 
     // Current reporting lines and competing answers are rechecked under the company lock.
     let report = workforce
-        .employment(manager, COMPANY, second.id)
+        .employment(client, manager, COMPANY, second.id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -823,7 +823,7 @@ pub(crate) async fn run(
     )?;
     // Leavers remain attendance history, but never get new review obligations.
     let current = workforce
-        .employment(manager, COMPANY, second.id)
+        .employment(client, manager, COMPANY, second.id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

@@ -153,8 +153,9 @@ impl Claims {
             .iter()
             .map(requests::read)
             .collect::<bilibi_database::Result<Vec<_>>>()?;
-        drop(client);
-        let rows = self.decorate(scope, company_id, requests).await?;
+        let rows = self
+            .decorate(&**client, scope, company_id, requests)
+            .await?;
         Ok(HandoffExport {
             filename: format!("claim-handoff-{batch_id}.csv"),
             content: csv(batch_id, &rows),

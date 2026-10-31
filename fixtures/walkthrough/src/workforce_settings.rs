@@ -445,7 +445,7 @@ pub(super) async fn run(url: &str, action: &str) -> Result<()> {
     .await?;
     prove(
         body.html.contains("Working statuses could not be saved.")
-            && saved(workforce.working_statuses(&admin, 1).await)?.value
+            && saved(workforce.working_statuses(&**c, &admin, 1).await)?.value
                 == Some(vec!["active".into()]),
         "revoked settings grant refuses the next live event",
     )?;

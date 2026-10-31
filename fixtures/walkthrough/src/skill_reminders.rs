@@ -65,7 +65,7 @@ pub async fn run(url: &str) -> Result<()> {
     let users = services.get::<UserService>("core/user.accounts")?;
     let employee: i64 = client.query_one("SELECT id FROM people_workforce_employments WHERE tenant_id=1 AND company_id=1 AND employee_number='E-002'",&[]).await?.get(0);
     let employment = workforce
-        .employment(&admin, COMPANY, employee)
+        .employment(&**client, &admin, COMPANY, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

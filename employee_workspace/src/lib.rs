@@ -119,9 +119,10 @@ impl EmployeeWorkspace {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<DirectoryEmployee>> {
-        self.authorize(scope, company_id, VIEW).await?;
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
+        authorization::authorize(&**client, scope, company_id, VIEW).await?;
         self.workforce
-            .directory_employees(scope, company_id)
+            .directory_employees(&**client, scope, company_id)
             .await?
             .require_current()
             .map_err(|_| WorkforceError::Unavailable.into())

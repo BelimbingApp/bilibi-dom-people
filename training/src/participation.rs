@@ -218,10 +218,10 @@ impl Training {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company_id, RECORDS_MANAGE)
             .await?;
-        // Workforce opens its own connection. Release this read's connection
-        // first so concurrent pickers cannot exhaust the pool waiting for a second.
-        drop(client);
-        let read = self.workforce.employees(scope, company_id).await?;
+        let read = self
+            .workforce
+            .employees(&**client, scope, company_id)
+            .await?;
         let employees = read
             .require_current()
             .map_err(|e| TrainingError::WorkforceNotCurrent(e.0))?;

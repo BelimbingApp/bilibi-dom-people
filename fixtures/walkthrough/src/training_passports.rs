@@ -209,7 +209,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let users = services.get::<UserService>("core/user.accounts")?;
     let employees = workforce
-        .employees_at_any_status(&manager, COMPANY, None)
+        .employees_at_any_status(&**client, &manager, COMPANY, None)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -220,7 +220,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         .and_then(|e| e.reference.stable_id.parse::<i64>().ok())
         .ok_or(Error::NotFound)?;
     let staff_employment = workforce
-        .employment(&manager, COMPANY, staff_id)
+        .employment(&**client, &manager, COMPANY, staff_id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -295,7 +295,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
         .await?;
     let own = workforce
-        .self_employee(&manager, COMPANY)
+        .self_employee(&**client, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .employee_id;
@@ -744,7 +744,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
         .map_err(|_| Error::Internal)?;
     relink().await?;
     let current = workforce
-        .employment(&manager, COMPANY, staff_id)
+        .employment(&**client, &manager, COMPANY, staff_id)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

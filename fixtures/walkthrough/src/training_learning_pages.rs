@@ -31,9 +31,11 @@ pub async fn run(
     ] {
         grants.set_direct(admin, VIEWER, cap, Some(true)).await?;
     }
+    let db = services.get::<bilibi_database::Db>("base/database.pool")?;
+    let client = db.get().await?;
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let employment = workforce
-        .employment(manager, COMPANY, staff_employee)
+        .employment(&**client, manager, COMPANY, staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -126,7 +128,7 @@ pub async fn control(url: &str, action: &str) -> Result<()> {
         "relink-staff" => {
             let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
             let people = workforce
-                .employees_at_any_status(&admin, COMPANY, None)
+                .employees_at_any_status(&**client, &admin, COMPANY, None)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()
@@ -141,7 +143,7 @@ pub async fn control(url: &str, action: &str) -> Result<()> {
                 .parse::<i64>()
                 .map_err(|_| Error::Invalid)?;
             let employment = workforce
-                .employment(&admin, COMPANY, id)
+                .employment(&**client, &admin, COMPANY, id)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()

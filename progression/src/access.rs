@@ -20,7 +20,7 @@ impl Progression {
     ) -> Result<()> {
         authorization::authorize(client, scope, company, capability).await?;
         self.workforce
-            .company_on(client, scope, company)
+            .company(client, scope, company)
             .await?
             .require_current()?;
         Ok(())

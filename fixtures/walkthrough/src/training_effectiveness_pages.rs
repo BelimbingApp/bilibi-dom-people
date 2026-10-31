@@ -163,7 +163,7 @@ pub async fn run(url: &str, action: &str) -> Result<()> {
     }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let staff_id = workforce
-        .self_employee(&staff, COMPANY)
+        .self_employee(&**client, &staff, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .employee_id;

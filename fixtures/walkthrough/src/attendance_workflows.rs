@@ -81,7 +81,7 @@ pub async fn run(url: &str) -> Result<()> {
         .authenticate(&**c, TENANT, MANAGER, "walkthrough".into())
         .await?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**c, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -92,7 +92,7 @@ pub async fn run(url: &str) -> Result<()> {
         .and_then(|e| e.reference.stable_id.parse::<i64>().ok())
         .ok_or(Error::NotFound)?;
     let employment = workforce
-        .employment(&manager, COMPANY, employee)
+        .employment(&**c, &manager, COMPANY, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

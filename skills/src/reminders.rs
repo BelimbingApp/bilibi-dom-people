@@ -77,7 +77,7 @@ pub(super) async fn compute(
     let policy = policy::get(&skills.settings, client, scope, company).await?;
     let employees = skills
         .workforce
-        .employees(scope, company)
+        .employees(client, scope, company)
         .await?
         .require_current()?;
     let mut supervisors = HashMap::new();

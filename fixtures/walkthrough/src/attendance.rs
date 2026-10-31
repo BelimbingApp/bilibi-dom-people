@@ -87,7 +87,7 @@ async fn run(url: &str) -> Result<()> {
         .authenticate(&**client, TENANT, VIEWER, "walkthrough".into())
         .await?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**client, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .value
@@ -105,7 +105,7 @@ async fn run(url: &str) -> Result<()> {
     // PW1 deliberately leaves the account unlinked. Restore its Person
     // and affiliation through Core User before proving Attendance reads.
     let employment = workforce
-        .employment(&manager, COMPANY, staff_employee)
+        .employment(&**client, &manager, COMPANY, staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

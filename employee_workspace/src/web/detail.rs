@@ -163,6 +163,7 @@ impl Detail {
             self.clear();
             return Ok(());
         }
+        drop(client);
         // Bind the company from an authorized directory result. Never accept a
         // company or employee from a write event, and keep this mount bound.
         let mut found = None;
@@ -185,6 +186,7 @@ impl Detail {
             self.clear();
             return Ok(());
         };
+        let client = self.core.db.get().await?;
         self.company = Some(company);
         self.list
             .filters
@@ -223,13 +225,12 @@ impl Detail {
         } else {
             vec![]
         };
-        drop(client);
         self.employee = Some(employee);
         self.employment = if may_read_employment {
             match self
                 .core
                 .workforce
-                .employment(scope, company, self.id)
+                .employment(&**client, scope, company, self.id)
                 .await
             {
                 Ok(row) => row.require_current().ok(),
@@ -241,7 +242,12 @@ impl Detail {
         };
         self.can_employ &= self.employment.is_some();
         self.types = if self.can_employ {
-            match self.core.workforce.employment_types(scope, company).await {
+            match self
+                .core
+                .workforce
+                .employment_types(&**client, scope, company)
+                .await
+            {
                 Ok(types) => types
                     .into_iter()
                     .map(|t| Choice::new(t.label, t.code))
@@ -254,7 +260,12 @@ impl Detail {
         };
         self.supervisors.clear();
         if self.can_employ {
-            if let Ok(statuses) = self.core.workforce.working_statuses(scope, company).await {
+            if let Ok(statuses) = self
+                .core
+                .workforce
+                .working_statuses(&**client, scope, company)
+                .await
+            {
                 if let Ok(statuses) = statuses.require_current() {
                     self.supervisors = rows
                         .iter()
@@ -272,6 +283,7 @@ impl Detail {
                 }
             }
         }
+        drop(client);
         self.load_identity(scope).await?;
         let facts = async {
             Ok::<_, WorkspaceError>((

@@ -139,7 +139,7 @@ pub async fn run(url: &str) -> Result<()> {
         .find(|i| i.code == "py1-item")
         .ok_or(Error::Internal)?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**c, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -389,7 +389,7 @@ pub async fn run(url: &str) -> Result<()> {
     );
     check("concurrent intake serializes", must(a)?.id == must(b)?.id)?;
     let employment = workforce
-        .employment(&manager, COMPANY, employee)
+        .employment(&**c, &manager, COMPANY, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

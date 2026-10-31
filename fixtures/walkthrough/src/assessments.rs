@@ -138,7 +138,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
         .set_direct(c.admin, super::VIEWER, ASSESSMENTS_VIEW, Some(true))
         .await?;
     let staff_employment = workforce
-        .employment(c.admin, company, c.staff_employee)
+        .employment(client, c.admin, company, c.staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

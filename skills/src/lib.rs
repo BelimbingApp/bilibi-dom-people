@@ -545,7 +545,7 @@ impl Skills {
     /// The company's categories, active first, then by name.
     pub async fn list_categories(&self, scope: &Scope, company_id: i64) -> Result<Vec<Category>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         catalog::list_categories(&**client, scope.tenant(), company_id).await
     }
 
@@ -639,7 +639,7 @@ impl Skills {
     /// The company's skills, active first, then by name.
     pub async fn list_skills(&self, scope: &Scope, company_id: i64) -> Result<Vec<Skill>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         catalog::list_skills(&**client, scope.tenant(), company_id).await
     }
 
@@ -736,7 +736,7 @@ impl Skills {
     /// Scale versions with their levels: by code, newest version first.
     pub async fn list_scales(&self, scope: &Scope, company_id: i64) -> Result<Vec<Scale>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         scales::list(&**client, scope.tenant(), company_id).await
     }
 
@@ -963,7 +963,7 @@ impl Skills {
     /// Profile versions: by code, newest version first.
     pub async fn list_profiles(&self, scope: &Scope, company_id: i64) -> Result<Vec<Profile>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         profiles::list(&**client, scope.tenant(), company_id).await
     }
 
@@ -975,7 +975,7 @@ impl Skills {
         profile_id: i64,
     ) -> Result<ProfileDetail> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let profile = profiles::get(&**client, scope.tenant(), company_id, profile_id)
             .await?
             .ok_or(SkillsError::NotFound)?;
@@ -1207,9 +1207,10 @@ impl Skills {
     ) -> Result<Selector> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, CATALOG_MANAGE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         if let Target::Position(position_id) = target {
-            let options = positions::options(&self.workforce, scope, company_id).await?;
+            let options =
+                positions::options(&self.workforce, (&**client).into(), scope, company_id).await?;
             if !options.iter().any(|option| option.id == position_id) {
                 return Err(SkillsError::PositionUnavailable);
             }
@@ -1319,7 +1320,7 @@ impl Skills {
     ) -> Result<Profile> {
         let mut client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, PROFILES_PUBLISH).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         // The positions the company exposes today, read before the
         // transaction so the lock is not held across the read.
         let draft = profiles::get(&**client, scope.tenant(), company_id, profile_id)
@@ -1328,7 +1329,7 @@ impl Skills {
         let wanted = profiles::selectors(&**client, draft.id).await?;
         let known_positions = if wanted.iter().any(|selector| selector.position_id.is_some()) {
             Some(
-                positions::options(&self.workforce, scope, company_id)
+                positions::options(&self.workforce, (&**client).into(), scope, company_id)
                     .await
                     .map_err(|_| SkillsError::PositionUnavailable)?,
             )
@@ -1418,7 +1419,7 @@ impl Skills {
         as_of: Date,
     ) -> Result<Option<ProfileDetail>> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let mut matches =
             profiles::in_force(&**client, scope.tenant(), company_id, position_id, as_of).await?;
         match matches.len() {
@@ -1437,8 +1438,9 @@ impl Skills {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<PositionOption>> {
-        self.current_company(scope, company_id).await?;
-        positions::options(&self.workforce, scope, company_id).await
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
+        self.current_company(&**client, scope, company_id).await?;
+        positions::options(&self.workforce, (&**client).into(), scope, company_id).await
     }
 
     /// The position an employee substantively holds on a day, as the
@@ -1451,8 +1453,17 @@ impl Skills {
         employee_id: i64,
         as_of: Date,
     ) -> Result<Option<i64>> {
-        self.current_company(scope, company_id).await?;
-        positions::position_of(&self.workforce, scope, company_id, employee_id, as_of).await
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
+        self.current_company(&**client, scope, company_id).await?;
+        positions::position_of(
+            &self.workforce,
+            (&**client).into(),
+            scope,
+            company_id,
+            employee_id,
+            as_of,
+        )
+        .await
     }
 
     // ---- Company policy --------------------------------------------------
@@ -1460,7 +1471,7 @@ impl Skills {
     /// The company's assessment, priority and reminder policy values.
     pub async fn policy(&self, scope: &Scope, company_id: i64) -> Result<Policy> {
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         policy::get(&self.settings, &**client, scope, company_id).await
     }
 
@@ -1487,9 +1498,14 @@ impl Skills {
     // ---- Private ---------------------------------------------------------
 
     /// The company through the Workforce read, which must be current.
-    async fn current_company(&self, scope: &Scope, company_id: i64) -> Result<()> {
+    async fn current_company(
+        &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
+        scope: &Scope,
+        company_id: i64,
+    ) -> Result<()> {
         self.workforce
-            .company(scope, company_id)
+            .company(client, scope, company_id)
             .await?
             .require_current()?;
         Ok(())
@@ -1507,7 +1523,7 @@ impl Skills {
         action: &str,
     ) -> Result<Write<'a>> {
         authorization::authorize(&*client, scope, company_id, capability).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&*client, scope, company_id).await?;
         let tx = self
             .mutations
             .begin(

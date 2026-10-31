@@ -463,20 +463,21 @@ impl Attendance {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<AdjustmentRequest>> {
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?;
-        let c = self.db.get().await.map_err(Error::from)?;
-        c.query(
-            SELF_REQUESTS,
-            &[&scope.tenant(), &company_id, &me.employee_id],
-        )
-        .await
-        .map_err(Error::from)?
-        .into_iter()
-        .map(|r| decode(r.get(0)))
-        .collect()
+        client
+            .query(
+                SELF_REQUESTS,
+                &[&scope.tenant(), &company_id, &me.employee_id],
+            )
+            .await
+            .map_err(Error::from)?
+            .into_iter()
+            .map(|r| decode(r.get(0)))
+            .collect()
     }
     /// The 200 oldest proposed times, for an authorized approver.
     pub async fn pending_adjustments(
@@ -484,8 +485,8 @@ impl Attendance {
         scope: &Scope,
         company_id: i64,
     ) -> Result<Vec<PendingAdjustment>> {
+        let c = self.db.get().await.map_err(Error::from)?;
         let requests: Vec<AdjustmentRequest> = {
-            let c = self.db.get().await.map_err(Error::from)?;
             bilibi_people_workforce::authorization::authorize(
                 &**c,
                 scope,
@@ -506,7 +507,7 @@ impl Attendance {
         ids.dedup();
         let employees = self
             .workforce
-            .employees_by_ids(scope, company_id, &ids)
+            .employees_by_ids(&**c, scope, company_id, &ids)
             .await?
             .require_current()?;
         Ok(requests

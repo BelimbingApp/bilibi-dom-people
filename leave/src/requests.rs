@@ -128,7 +128,7 @@ impl Leave {
     /// Today's date in the company's configured `localization.timezone`.
     pub async fn today(&self, scope: &Scope, company_id: i64) -> Result<Date> {
         let client = self.db.get().await.map_err(Error::from)?;
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(&**client, scope, company_id).await?;
         self.today_on(&**client, scope, &company).await
     }
     pub(super) async fn today_on(
@@ -162,10 +162,12 @@ impl Leave {
         company_id: i64,
         on: Option<Date>,
     ) -> Result<SelfSummary> {
+        let client = self.db.get().await.map_err(bilibi_database::Error::from)?;
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?;
+        drop(client);
         let rules = self.rules(scope, company_id).await?;
         let year = rules.leave_year(match on {
             Some(date) => date,
@@ -186,11 +188,12 @@ impl Leave {
     }
     /// Latest 50 own requests, newest start first. Resolves the link again.
     pub async fn self_requests(&self, scope: &Scope, company_id: i64) -> Result<Vec<Request>> {
+        let client = self.db.get().await.map_err(Error::from)?;
+
         let me = self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await?;
-        let client = self.db.get().await.map_err(Error::from)?;
         client.query(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND employee_id=$3 ORDER BY starts_on DESC, id DESC LIMIT 50"), &[&scope.tenant(), &company_id, &me.employee_id]).await.map_err(Error::from)?.iter().map(read).collect()
     }
     /// One leave request home. Self ownership is resolved anew for every read.
@@ -202,10 +205,9 @@ impl Leave {
                 Err(crate::WorkforceError::Unauthorized | crate::WorkforceError::NotFound) => false,
                 Err(error) => return Err(error.into()),
             };
-        drop(client);
         let owner = match self
             .workforce
-            .authorize_self(scope, company_id, SELF_VIEW)
+            .authorize_self(&**client, scope, company_id, SELF_VIEW)
             .await
         {
             Ok(employee) => Some(employee.employee_id),
@@ -216,14 +218,12 @@ impl Leave {
             ) if reviewer => None,
             Err(error) => return Err(error.into()),
         };
-        let client = self.db.get().await.map_err(Error::from)?;
         let row=client.query_opt(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND id=$3 AND (employee_id=$4 OR ($5 AND status='pending'))"),&[&scope.tenant(),&company_id,&id,&owner,&reviewer]).await.map_err(Error::from)?.ok_or(LeaveError::NotFound)?;
         let request = read(&row)?;
-        drop(client);
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let employees = self
             .workforce
-            .employees_by_ids(scope, company_id, &[request.employee_id])
+            .employees_by_ids(&**client, scope, company_id, &[request.employee_id])
             .await?
             .require_current()
             .map_err(|e| LeaveError::NotCurrent(e.0))?;
@@ -244,14 +244,14 @@ impl Leave {
     ) -> Result<Vec<PendingRequest>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company_id, REQUESTS_APPROVE).await?;
-        self.current_company(scope, company_id).await?;
+        self.current_company(&**client, scope, company_id).await?;
         let requests: Vec<Request> = client.query(&format!("SELECT {COLUMNS} FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND status='pending' ORDER BY starts_on, id LIMIT 200"), &[&scope.tenant(), &company_id]).await.map_err(Error::from)?.iter().map(read).collect::<Result<_>>()?;
         let mut ids: Vec<i64> = requests.iter().map(|r| r.employee_id).collect();
         ids.sort_unstable();
         ids.dedup();
         let employees = self
             .workforce
-            .employees_by_ids(scope, company_id, &ids)
+            .employees_by_ids(&**client, scope, company_id, &ids)
             .await?
             .require_current()
             .map_err(|e| LeaveError::NotCurrent(e.0))?;
@@ -277,8 +277,8 @@ impl Leave {
         from: Date,
         to: Date,
     ) -> Result<Vec<i64>> {
-        self.current_company(scope, company_id).await?;
         let client = self.db.get().await.map_err(Error::from)?;
+        self.current_company(&**client, scope, company_id).await?;
         Ok(client.query("SELECT DISTINCT leave_type_id FROM people_leave_applications WHERE tenant_id=$1 AND company_id=$2 AND status IN ('pending','approved') AND starts_on <= $4::text::date AND ends_on >= $3::text::date ORDER BY leave_type_id", &[&scope.tenant(), &company_id, &from.to_string(), &to.to_string()]).await.map_err(Error::from)?.iter().map(|r| r.get(0)).collect())
     }
     /// Submits for the signed-in employee, re-proved under the employment lock.
@@ -337,7 +337,7 @@ impl Leave {
         if (leave_type.unit == "hour") != (new.day_part == "hours") {
             return Err(LeaveError::InvalidRequest);
         }
-        let company = self.current_company(scope, company_id).await?;
+        let company = self.current_company(tx.sql(), scope, company_id).await?;
         let rules = self.read_rules(tx.sql(), scope, &company).await?;
         let request_rules = self.read_request_rules(tx.sql(), scope, &company).await?;
         let today = self.today_on(tx.sql(), scope, &company).await?;
@@ -475,7 +475,11 @@ impl Leave {
         if request.requested_by_user_id == scope.actor().user() {
             return Err(LeaveError::SelfApproval);
         }
-        match self.workforce.self_employee(scope, company_id).await {
+        match self
+            .workforce
+            .self_employee(tx.sql(), scope, company_id)
+            .await
+        {
             Ok(me) if me.employee_id == request.employee_id => {
                 return Err(LeaveError::SelfApproval)
             }
@@ -483,7 +487,7 @@ impl Leave {
             Err(e) => return Err(e.into()),
         }
         if decision == Decision::Approve {
-            self.current_employee(scope, company_id, request.employee_id)
+            self.current_employee(tx.sql(), scope, company_id, request.employee_id)
                 .await
                 .map_err(|e| match e {
                     LeaveError::NotCurrent(_) | LeaveError::NotFound => {
@@ -578,7 +582,7 @@ impl Leave {
         match request.status.as_str() {
             "pending" => (),
             "approved" => {
-                let company = self.current_company(scope, company_id).await?;
+                let company = self.current_company(tx.sql(), scope, company_id).await?;
                 if request.starts_on <= self.today_on(tx.sql(), scope, &company).await? {
                     return Err(LeaveError::NotCancellable);
                 }

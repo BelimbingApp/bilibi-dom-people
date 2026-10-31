@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
             let leave = services.get::<Leave>(bilibi_people_leave::SERVICE)?;
             let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
             let employee = workforce
-                .employees(&manager, 1)
+                .employees(&**client, &manager, 1)
                 .await
                 .map_err(|_| Error::Invalid)?
                 .require_current()

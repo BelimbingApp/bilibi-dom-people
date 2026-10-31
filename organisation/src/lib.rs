@@ -603,21 +603,8 @@ impl Organisation {
     /// included, by id (Bilimbi `positions/4` without `cursor:`): `page` from
     /// 1 and `page_size` from 1 to 100, else `InvalidOptions`. No capability:
     /// a company the scope cannot see is `NotFound`.
-    pub async fn positions(
-        &self,
-        scope: &Scope,
-        company_id: i64,
-        as_of: Date,
-        page: i64,
-        page_size: i64,
-    ) -> Result<Vec<PositionProjection>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.positions_on(&**client, scope, company_id, as_of, page, page_size)
-            .await
-    }
-
     /// [`Organisation::positions`] on the caller's client (the port's read).
-    pub(crate) async fn positions_on(
+    pub async fn positions(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
@@ -714,7 +701,7 @@ impl Organisation {
         company_id: i64,
     ) -> Result<()> {
         self.workforce
-            .company_on(client, scope, company_id)
+            .company(client, scope, company_id)
             .await?
             .require_current()?;
         Ok(())

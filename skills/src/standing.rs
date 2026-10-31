@@ -22,6 +22,7 @@ async fn present(
 ) -> Result<Vec<ScoreView>> {
     let names = access::names(
         skills,
+        client,
         scope,
         company,
         &records
@@ -121,7 +122,7 @@ pub(crate) async fn coverage(
     let policy = policy::get(&skills.settings, client, scope, company).await?;
     let working = skills
         .workforce
-        .employees(scope, company)
+        .employees(client, scope, company)
         .await?
         .require_current()?
         .iter()

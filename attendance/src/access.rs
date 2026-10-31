@@ -16,7 +16,7 @@ pub(crate) async fn current_company(
     company_id: i64,
 ) -> Result<Company> {
     Ok(workforce
-        .company_on(client, scope, company_id)
+        .company(client, scope, company_id)
         .await?
         .require_current()?)
 }

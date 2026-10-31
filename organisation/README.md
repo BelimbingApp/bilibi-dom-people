@@ -108,7 +108,7 @@ drops the runtime registration: Organisation provides the optional port
 their own client and sealed scope, and a caller gets `PortError::Unavailable`
 when Organisation is not mounted. No edge runs from Workforce to
 Organisation. The provider runs the facade's own read: it proves the live
-company and filters holders through Workforce, needs no capability, and runs all reads on the caller's client. Workforce's `company_on` and `working_employee_ids_on` keep both company and holder facts in that same view, without renting nested pool connections. This documented shape is the whole contract.
+company and filters holders through Workforce, needs no capability, and runs all reads on the caller's client. Workforce's `company` and `working_employee_ids_on` keep both company and holder facts in that same view, without renting nested pool connections. This documented shape is the whole contract.
 
 - Request: `{"company_id": <integer>, "as_of": "<YYYY-MM-DD>"}` with an
   optional `"page_size"` (1 to 100, default 50) and **exactly one** of

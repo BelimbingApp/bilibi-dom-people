@@ -71,12 +71,11 @@ impl Record {
                 .notice();
         let review_allowed =
             authorization::allowed(&**client, scope, self.company, REQUESTS_APPROVE).await;
-        drop(client);
         let mine = self
             .core
             .leave
             .workforce
-            .authorize_self(scope, self.company, SELF_VIEW)
+            .authorize_self(&**client, scope, self.company, SELF_VIEW)
             .await
             .ok()
             .is_some_and(|me| me.employee_id == row.request.employee_id);

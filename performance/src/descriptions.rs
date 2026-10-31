@@ -43,6 +43,7 @@ impl Performance {
         value["effective_to"] = last.map_or(Value::Null, |s| json!(s));
         value["competency_links"] = json!({"profiles": input.competency_links});
         self.validate_description(
+            w.tx.sql(),
             scope,
             company,
             input.position_id,
@@ -78,6 +79,7 @@ impl Performance {
             return Err(PerformanceError::NotPending);
         }
         self.validate_description(
+            w.tx.sql(),
             scope,
             company,
             prior.position_id,
@@ -104,8 +106,10 @@ impl Performance {
         w.tx.commit().await?;
         Ok(saved)
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn validate_description(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
         position: i64,
@@ -114,7 +118,7 @@ impl Performance {
         links: &Value,
     ) -> Result<()> {
         let position = self
-            .position(scope, company, position, v::date(first)?)
+            .position(client, scope, company, position, v::date(first)?)
             .await?;
         if position.version != Some(version) {
             return Err(PerformanceError::PositionVersionUnavailable);

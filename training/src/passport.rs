@@ -125,10 +125,9 @@ impl Training {
         if company_row.archived {
             return Err(TrainingError::CompanyUnavailable);
         }
-        drop(client);
         let own = self
             .workforce
-            .self_employee(scope, company)
+            .self_employee(&**client, scope, company)
             .await
             .map_err(|e| match e {
                 WorkforceError::NotLinked => TrainingError::AttendanceEmployeeUnavailable,
@@ -138,7 +137,7 @@ impl Training {
             PassportAudience::SelfService => {
                 let read = self
                     .workforce
-                    .employee(scope, company, own.employee_id)
+                    .employee(&**client, scope, company, own.employee_id)
                     .await?;
                 ReadResult {
                     value: read.value.map(|e| vec![e]),
@@ -147,7 +146,7 @@ impl Training {
             }
             PassportAudience::Team => {
                 self.workforce
-                    .direct_reports(scope, company, own.employee_id)
+                    .direct_reports(&**client, scope, company, own.employee_id)
                     .await?
             }
         };

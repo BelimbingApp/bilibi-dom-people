@@ -114,6 +114,7 @@ impl Performance {
             return Err(PerformanceError::DescriptionUnavailable);
         }
         self.validate_assignment(
+            w.tx.sql(),
             scope,
             w.company,
             input.employee_id,
@@ -186,8 +187,10 @@ impl Performance {
         }
         Ok(saved)
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn validate_assignment(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
         employee: i64,
@@ -196,12 +199,12 @@ impl Performance {
         description: &Description,
     ) -> Result<()> {
         self.workforce
-            .employee(scope, company, employee)
+            .employee(client, scope, company, employee)
             .await?
             .require_current()?;
         for day in [v::date(start)?, v::date(end)?] {
             let position = self
-                .position(scope, company, description.position_id, day)
+                .position(client, scope, company, description.position_id, day)
                 .await?;
             if position.version != Some(description.position_version)
                 || position.assignments_incomplete
@@ -253,6 +256,7 @@ impl Performance {
         )
         .await?;
         self.validate_assignment(
+            w.tx.sql(),
             scope,
             company,
             prior.employee_id,

@@ -272,31 +272,17 @@ impl Workforce {
         Ok(())
     }
 
-    /// The working employee the signed-in account is linked to in this
-    /// company, resolved now (Bilimbi `self_employee/2`): the account is
-    /// re-proved through Base Tenancy on this call, its Person identity
-    /// read from the fresh scope, and the employment holding that
-    /// affiliation in this company found in the company's working statuses.
-    /// `NotLinked` covers a frozen account, an account without an
-    /// Person link, an affiliation of another company, and a linked
-    /// employee who is not a current working employee; a company the scope
-    /// cannot see is `NotFound`.
-    pub async fn self_employee(&self, scope: &Scope, company_id: i64) -> Result<SelfEmployee> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.self_employee_on(&**client, scope, company_id).await
-    }
-
     /// Authorizes the self-service capability for the company, then resolves
     /// the actor's own employee (Bilimbi `authorize_self/3`).
     pub async fn authorize_self(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         capability: &str,
     ) -> Result<SelfEmployee> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorize(&**client, scope, company_id, capability).await?;
-        self.self_employee_on(&**client, scope, company_id).await
+        authorize_company_proof(client, scope, company_id, capability).await?;
+        self.self_employee(client, scope, company_id).await
     }
 
     /// Proves the actor's own employee inside the caller's mutation
@@ -317,7 +303,7 @@ impl Workforce {
         capability: &str,
     ) -> Result<SelfEmployee> {
         authorize(tx.sql(), scope, company_id, capability).await?;
-        let me = self.self_employee_on(tx.sql(), scope, company_id).await?;
+        let me = self.self_employee(tx.sql(), scope, company_id).await?;
         bilibi_company::require_writable(tx.sql(), scope, company_id, true).await?;
         let locked = crate::employments::lock(tx.sql(), scope.tenant(), company_id, me.employee_id)
             .await?
@@ -410,7 +396,16 @@ impl Workforce {
             .ok_or(WorkforceError::NotLinked)
     }
 
-    pub(crate) async fn self_employee_on(
+    /// The working employee the signed-in account is linked to in this
+    /// company, resolved now (Bilimbi `self_employee/2`): the account is
+    /// re-proved through Base Tenancy on this call, its Person identity
+    /// read from the fresh scope, and the employment holding that
+    /// affiliation in this company found in the company's working statuses.
+    /// `NotLinked` covers a frozen account, an account without an
+    /// Person link, an affiliation of another company, and a linked
+    /// employee who is not a current working employee; a company the scope
+    /// cannot see is `NotFound`.
+    pub async fn self_employee(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,

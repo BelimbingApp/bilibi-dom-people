@@ -49,7 +49,10 @@ impl Performance {
     ) -> Result<MyRecords> {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, SELF_VIEW).await?;
-        let own = self.workforce.self_employee(scope, company).await?;
+        let own = self
+            .workforce
+            .self_employee(&**client, scope, company)
+            .await?;
         let page = review_page(
             &**client,
             scope,
@@ -157,10 +160,14 @@ impl Performance {
         self.authorize(&**client, scope, company, VIEW).await?;
         let people = self
             .workforce
-            .employees(scope, company)
+            .employees(&**client, scope, company)
             .await?
             .require_current()?;
-        let own = match self.workforce.self_employee(scope, company).await {
+        let own = match self
+            .workforce
+            .self_employee(&**client, scope, company)
+            .await
+        {
             Ok(own) => Some(own.employee_id.to_string()),
             Err(bilibi_people_workforce::WorkforceError::NotLinked) => None,
             Err(error) => return Err(error.into()),
@@ -211,7 +218,7 @@ impl Performance {
             .date();
         let positions = self
             .organisation
-            .positions(scope, company, today, 1, 100)
+            .positions(&**client, scope, company, today, 1, 100)
             .await
             .map_err(|_| PerformanceError::PositionUnavailable)?
             .into_iter()

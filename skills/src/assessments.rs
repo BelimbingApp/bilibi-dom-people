@@ -174,6 +174,7 @@ pub(crate) async fn insert(
     let assessed_on = input.assessed_on.ok_or(SkillsError::InvalidAssessment)?;
     let position = crate::positions::position_of(
         &skills.workforce,
+        w.sql().into(),
         scope,
         w.company_id,
         input.employee_id,
@@ -407,6 +408,7 @@ pub(crate) async fn present(
 ) -> Result<Vec<AssessmentView>> {
     let names = access::names(
         skills,
+        client,
         scope,
         company,
         &rows.iter().map(|a| a.employee_id).collect::<Vec<_>>(),

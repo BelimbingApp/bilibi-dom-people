@@ -152,7 +152,7 @@ pub(crate) async fn validate_plan(
     }
     let people = skills
         .workforce
-        .employees_by_ids(scope, w.company_id, &ids)
+        .employees_by_ids(w.sql(), scope, w.company_id, &ids)
         .await?
         .require_current()?;
     if people.len() != ids.len() {
@@ -258,7 +258,7 @@ pub(crate) async fn propose(
         .await?;
     let employee = skills
         .workforce
-        .employee(scope, w.company_id, employee_id)
+        .employee(w.sql(), scope, w.company_id, employee_id)
         .await?
         .require_current()?;
     validate_plan(skills, w, scope, &plan).await?;
@@ -492,7 +492,7 @@ pub(crate) async fn present(
         .iter()
         .flat_map(|r| [r.owner_employee_id, r.coordinator_employee_id])
         .collect::<Vec<_>>();
-    let names = access::names(skills, scope, company, &ids).await?;
+    let names = access::names(skills, client, scope, company, &ids).await?;
     let catalog = catalog::skills_by_ids(
         client,
         scope.tenant(),

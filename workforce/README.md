@@ -15,8 +15,7 @@ The settings page is `/people/workforce/settings`. The People connector reads co
 ## Public API
 
 Resolve `Workforce` from the registry as `people/workforce.workforce`
-(`bilibi_people_workforce::SERVICE`) and call it with the sealed `Scope`
-you were handed and an explicit platform company id. Results are typed
+(`bilibi_people_workforce::SERVICE`). Every directory read takes the caller’s connection, the sealed `Scope` and an explicit platform company id. Pass `tx.sql()` inside a write; pass the request’s existing connection for a page or port. These reads never open another pooled connection, so their desk proof cannot wait on a company lock held by their own caller. Results are typed
 records; the schema is private.
 
 | Function | Capability | Does |
@@ -26,7 +25,6 @@ records; the schema is private.
 | `employees_by_ids` | none | The working employees among at most 1,000 positive, deduplicated ids, without reading the whole workforce; more, or a non-positive id, is `InvalidOptions` |
 | `employee` | none | One working employee; another status, another company or missing is `NotFound` |
 | `direct_reports` | none | The working employees reporting to one working employee; a supervisor who is not a working employee is `NotFound` |
-| `direct_reports_on` | none | The same read on the caller's connection; use inside a write that holds workplace locks |
 | `supervisor_chain` | none | A working employee's supervisors, nearest first, through working supervisors only, at most 12 levels (`CHAIN_DEPTH`, Bilimbi's reach depth); an employee who is not working is `NotFound` |
 | `in_reach` | none | Whether one working employee is below another in the supervisor chain (Bilimbi `Access.within?/2` for a team reach): never the manager themselves, `false` for an employee the reads do not expose |
 | `working_statuses` | none | The statuses the company counts as working staff |
@@ -61,7 +59,7 @@ identity never implies a login actor.
 
 ### Reading on a caller's connection
 
-Use `company_on(client, scope, company)` and `working_employee_ids_on(client, scope, company, ids)` inside a port or transaction. They apply the same live-company and working-status rules on that client's view. The ids read is bounded to 1,000 positive ids and returns a current `ReadResult<Vec<i64>>`; it skips names and contacts when you need only membership. Organisation uses these reads so a position scan does not rent nested pool connections or miss a caller's pending employment changes.
+Use `company(client, scope, company)` and `working_employee_ids_on(client, scope, company, ids)` inside a port or transaction. They apply the same live-company and working-status rules on that client's view. The ids read is bounded to 1,000 positive ids and returns a current `ReadResult<Vec<i64>>`; it skips names and contacts when you need only membership. Organisation uses these reads so a position scan does not rent nested pool connections or miss a caller's pending employment changes.
 
 ### Names and contacts through Core
 
@@ -388,7 +386,7 @@ Continue by passing `next_cursor` unchanged with the same company and page size.
 
 `snapshot: true` means a full enumeration, not an MVCC snapshot across calls: names, contacts, status and membership are read live. Apply results and deactivate unseen employees only after all pages succeeded. Never treat an unavailable, refused or interrupted pass as an empty directory. The watermark is an observation token, not an incremental change cursor; a new pass starts with `cursor: null`.
 
-The same scan is available to People callers through `employee_page(scope, company, &EmployeeScan)` and `employee_page_on(client, scope, company, &EmployeeScan)`, returning a current `ReadResult<EmployeePage>`. Both use bounded SQL with one lookahead row rather than loading the whole workforce.
+The same scan is available to People callers through `employee_page(client, scope, company, &EmployeeScan)`, returning a current `ReadResult<EmployeePage>`. It uses bounded SQL with one lookahead row rather than loading the whole workforce.
 
 ### Position pages
 

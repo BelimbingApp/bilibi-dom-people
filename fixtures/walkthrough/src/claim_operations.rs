@@ -34,7 +34,7 @@ pub(super) async fn run(services: &Services) -> Result<()> {
     let workforce =
         services.get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
     let staff_employee = workforce
-        .employees_at_any_status(&manager, COMPANY, None)
+        .employees_at_any_status(&**db.get().await?, &manager, COMPANY, None)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -44,7 +44,7 @@ pub(super) async fn run(services: &Services) -> Result<()> {
         .and_then(|employee| employee.reference.stable_id.parse::<i64>().ok())
         .ok_or(Error::NotFound)?;
     let employment = workforce
-        .employment(&manager, COMPANY, staff_employee)
+        .employment(&**db.get().await?, &manager, COMPANY, staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

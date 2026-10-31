@@ -321,6 +321,12 @@ impl Employees {
         Ok(())
     }
     async fn open_add(&mut self, scope: &Scope) -> Result<()> {
+        let client = self
+            .core
+            .db
+            .get()
+            .await
+            .map_err(bilibi_database::Error::from)?;
         if !self.can_add {
             self.error("You cannot add an employment for this company.");
             return Ok(());
@@ -331,7 +337,7 @@ impl Employees {
         self.types = match self
             .core
             .workforce
-            .employment_types(scope, company.id)
+            .employment_types(&**client, scope, company.id)
             .await
         {
             Ok(types) => types
@@ -346,7 +352,7 @@ impl Employees {
         self.working_statuses = self
             .core
             .workforce
-            .working_statuses(scope, company.id)
+            .working_statuses(&**client, scope, company.id)
             .await
             .map_err(|e| match e {
                 WorkforceError::Failed(e) => e,
@@ -354,6 +360,7 @@ impl Employees {
             })?
             .require_current()
             .map_err(|_| Error::Invalid)?;
+        drop(client);
         self.persons.clear();
         let mut page = 1;
         loop {
@@ -460,6 +467,12 @@ impl Employees {
         Ok(())
     }
     async fn create(&mut self, scope: &Scope, payload: &Value) -> Result<()> {
+        let client = self
+            .core
+            .db
+            .get()
+            .await
+            .map_err(bilibi_database::Error::from)?;
         if !self.add || !self.can_add {
             self.error("You cannot add an employment for this company.");
             return Ok(());
@@ -486,7 +499,12 @@ impl Employees {
         };
         // Re-read the company's choices for this write; the form cannot
         // submit a type that was never offered or has since been retired.
-        let types = match self.core.workforce.employment_types(scope, company).await {
+        let types = match self
+            .core
+            .workforce
+            .employment_types(&**client, scope, company)
+            .await
+        {
             Ok(types) => types,
             Err(e) => {
                 self.refused(e.into(), "Employment types are unavailable.")?;
@@ -502,6 +520,7 @@ impl Employees {
             self.error("Please check the employment details.");
             return Ok(());
         }
+        drop(client);
         let mut new = NewEmployment::new(
             person,
             affiliation,

@@ -15,8 +15,8 @@ use tokio_postgres::Client;
 
 impl Skills {
     pub async fn list_action_types(&self, scope: &Scope, company: i64) -> Result<Vec<ActionType>> {
-        self.current_company(scope, company).await?;
         let client = self.db.get().await.map_err(Error::from)?;
+        self.current_company(&**client, scope, company).await?;
         actions::types(&**client, scope.tenant(), company).await
     }
 
@@ -77,11 +77,11 @@ impl Skills {
     ) -> Result<Vec<AssessableEmployee>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, ACTIONS_MANAGE).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let mut rows = Vec::new();
         for employee in self
             .workforce
-            .employees(scope, company)
+            .employees(&**client, scope, company)
             .await?
             .require_current()?
         {
@@ -315,7 +315,7 @@ impl Skills {
     ) -> Result<Vec<ActionView>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, ACTIONS_VIEW).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let reach = access::reach_with(self, &**client, scope, company, ACTIONS_MANAGE).await?;
         let own = self
             .workforce
@@ -342,10 +342,10 @@ impl Skills {
     ) -> Result<Vec<ActionView>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, ACTIONS_UPDATE).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let me = self
             .workforce
-            .authorize_self(scope, company, ACTIONS_UPDATE)
+            .authorize_self(&**client, scope, company, ACTIONS_UPDATE)
             .await?;
         let rows = actions::list(
             &**client,
@@ -374,7 +374,7 @@ impl Skills {
             &[ACTIONS_VIEW, ACTIONS_MANAGE, ACTIONS_UPDATE],
         )
         .await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let row = action_rows::get(&**client, scope.tenant(), company, id).await?;
         let own = self
             .workforce

@@ -48,7 +48,7 @@ async fn pw1(
             staff_employment.id
         ),
         workforce
-            .employment(manager, COMPANY, staff_employment.id)
+            .employment(client, manager, COMPANY, staff_employment.id)
             .await,
     ) {
         if let Some(employment) = read.value {
@@ -61,7 +61,7 @@ async fn pw1(
             staff_employment.id
         ),
         workforce
-            .employment(viewer, COMPANY, staff_employment.id)
+            .employment(client, viewer, COMPANY, staff_employment.id)
             .await,
     );
     show(
@@ -70,16 +70,16 @@ async fn pw1(
             contractor_employment.id
         ),
         workforce
-            .employment(manager, COMPANY, contractor_employment.id)
+            .employment(client, manager, COMPANY, contractor_employment.id)
             .await,
     );
     show(
         &format!("manager reads company {COMPANY}'s employment summary"),
-        workforce.employment_summary(manager, COMPANY).await,
+        workforce.employment_summary(client, manager, COMPANY).await,
     );
     show(
         &format!("viewer reads company {COMPANY}'s employment summary"),
-        workforce.employment_summary(viewer, COMPANY).await,
+        workforce.employment_summary(client, viewer, COMPANY).await,
     );
 
     // A department of Company 001, through Core Company, for the change below.
@@ -325,13 +325,13 @@ async fn pw1(
     show(
         &format!("supervisor chain of employee #{}", changed.id),
         workforce
-            .supervisor_chain(manager, COMPANY, changed.id)
+            .supervisor_chain(client, manager, COMPANY, changed.id)
             .await,
     );
     show(
         &format!("supervisor chain of employee #{}", manager_employment.id),
         workforce
-            .supervisor_chain(manager, COMPANY, manager_employment.id)
+            .supervisor_chain(client, manager, COMPANY, manager_employment.id)
             .await,
     );
     show(
@@ -340,7 +340,7 @@ async fn pw1(
             pending_employment.id
         ),
         workforce
-            .supervisor_chain(manager, COMPANY, pending_employment.id)
+            .supervisor_chain(client, manager, COMPANY, pending_employment.id)
             .await,
     );
     show(
@@ -349,7 +349,7 @@ async fn pw1(
             changed.id, manager_employment.id
         ),
         workforce
-            .in_reach(viewer, COMPANY, manager_employment.id, changed.id)
+            .in_reach(client, viewer, COMPANY, manager_employment.id, changed.id)
             .await,
     );
     show(
@@ -358,7 +358,7 @@ async fn pw1(
             manager_employment.id, changed.id
         ),
         workforce
-            .in_reach(viewer, COMPANY, changed.id, manager_employment.id)
+            .in_reach(client, viewer, COMPANY, changed.id, manager_employment.id)
             .await,
     );
     show(
@@ -368,6 +368,7 @@ async fn pw1(
         ),
         workforce
             .in_reach(
+                client,
                 viewer,
                 COMPANY,
                 manager_employment.id,
@@ -380,34 +381,36 @@ async fn pw1(
     println!("\n== PW1: self-service");
     show(
         &format!("manager's own employee in company {COMPANY}"),
-        workforce.self_employee(manager, COMPANY).await,
+        workforce.self_employee(client, manager, COMPANY).await,
     );
     show(
         &format!("staff's own employee in company {COMPANY}"),
-        workforce.self_employee(&staff, COMPANY).await,
+        workforce.self_employee(client, &staff, COMPANY).await,
     );
     show(
         &format!("viewer's (unlinked account) own employee in company {COMPANY}"),
-        workforce.self_employee(viewer, COMPANY).await,
+        workforce.self_employee(client, viewer, COMPANY).await,
     );
     show(
         &format!("contractor's own employee in company {COMPANY} (affiliated with Company 002)"),
-        workforce.self_employee(contractor, COMPANY).await,
+        workforce.self_employee(client, contractor, COMPANY).await,
     );
     show(
         &format!("contractor's own employee in company {OTHER_COMPANY}"),
-        workforce.self_employee(contractor, OTHER_COMPANY).await,
+        workforce
+            .self_employee(client, contractor, OTHER_COMPANY)
+            .await,
     );
     show(
         &format!("staff authorizes employment.view for themselves in company {COMPANY}"),
         workforce
-            .authorize_self(&staff, COMPANY, EMPLOYMENT_VIEW)
+            .authorize_self(client, &staff, COMPANY, EMPLOYMENT_VIEW)
             .await,
     );
     show(
         &format!("manager authorizes employment.view for themselves in company {COMPANY}"),
         workforce
-            .authorize_self(manager, COMPANY, EMPLOYMENT_VIEW)
+            .authorize_self(client, manager, COMPANY, EMPLOYMENT_VIEW)
             .await,
     );
     show(
@@ -477,7 +480,7 @@ async fn pw1(
     print_employment("ended", &ended);
     if let Some(read) = show(
         &format!("manager lists company {OTHER_COMPANY}'s employees"),
-        workforce.employees(manager, OTHER_COMPANY).await,
+        workforce.employees(client, manager, OTHER_COMPANY).await,
     ) {
         print_employees(
             "working employees of Company 002 after the end",
@@ -486,7 +489,9 @@ async fn pw1(
     }
     show(
         &format!("contractor's own employee in company {OTHER_COMPANY} after the end"),
-        workforce.self_employee(contractor, OTHER_COMPANY).await,
+        workforce
+            .self_employee(client, contractor, OTHER_COMPANY)
+            .await,
     );
     // The account unlinked while the employment stands: the next call refuses.
     match users.unlink(manager, STAFF).await {
@@ -498,14 +503,16 @@ async fn pw1(
     }
     show(
         &format!("staff's own employee in company {COMPANY} after the unlink"),
-        workforce.self_employee(&staff, COMPANY).await,
+        workforce.self_employee(client, &staff, COMPANY).await,
     );
     show(
         &format!(
             "manager reads employee #{}'s employment after the unlink",
             changed.id
         ),
-        workforce.employment(manager, COMPANY, changed.id).await,
+        workforce
+            .employment(client, manager, COMPANY, changed.id)
+            .await,
     );
 
     // A sibling company without reach: the contractor holds the employment
@@ -619,7 +626,9 @@ async fn pw1(
     );
     show(
         &format!("manager reads company {OTHER_COMPANY}'s employment summary"),
-        workforce.employment_summary(manager, OTHER_COMPANY).await,
+        workforce
+            .employment_summary(client, manager, OTHER_COMPANY)
+            .await,
     );
 
     // Positions come from Organisation, which is not mounted here.
@@ -632,6 +641,7 @@ async fn pw1(
         &format!("manager scans company {COMPANY}'s positions as of 2026-10-22"),
         workforce
             .positions(
+                client,
                 manager,
                 COMPANY,
                 &PositionScan::from_start(date(2026, 10, 22)),
@@ -642,6 +652,7 @@ async fn pw1(
         "manager scans positions with a page size of 0",
         workforce
             .positions(
+                client,
                 manager,
                 COMPANY,
                 &PositionScan {

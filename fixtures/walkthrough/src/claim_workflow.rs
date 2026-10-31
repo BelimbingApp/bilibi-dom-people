@@ -77,7 +77,7 @@ pub(crate) async fn run(
     let grants = services.get::<Grants>("base/authz.grants")?;
     let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
     let staff_employment = workforce
-        .employment(manager, COMPANY, employees.1)
+        .employment(client, manager, COMPANY, employees.1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -896,7 +896,7 @@ pub(crate) async fn run(
     .find(|r| r.status == "submitted")
     .ok_or(Error::Internal)?;
     let current = workforce
-        .employment(admin, COMPANY, employees.1)
+        .employment(client, admin, COMPANY, employees.1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -931,7 +931,7 @@ pub(crate) async fn run(
     .await
     .map_err(|_| Error::Internal)?;
     let current = workforce
-        .employment(admin, COMPANY, employees.1)
+        .employment(client, admin, COMPANY, employees.1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

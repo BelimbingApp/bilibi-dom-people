@@ -114,8 +114,6 @@ impl SettingsPage {
             authorization::company_choices(&**client, scope, SETTINGS_MANAGE, self.company_id)
                 .await
                 .map_err(failed)?;
-        // The facade rents its own connection for the reads below.
-        drop(client);
         if choose_default && !self.companies.iter().any(|c| Some(c.id) == self.company_id) {
             self.company_id = self.companies.first().map(|c| c.id);
         }
@@ -132,7 +130,7 @@ impl SettingsPage {
         self.statuses = self
             .core
             .workforce
-            .working_statuses(scope, company.id)
+            .working_statuses(&**client, scope, company.id)
             .await
             .map_err(failed)?
             .value
@@ -140,7 +138,7 @@ impl SettingsPage {
         self.counts = match self
             .core
             .workforce
-            .employment_summary(scope, company.id)
+            .employment_summary(&**client, scope, company.id)
             .await
         {
             Ok(read) => read.value,

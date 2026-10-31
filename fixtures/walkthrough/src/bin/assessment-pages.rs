@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
     let skills = services.get::<Skills>(bilibi_people_skills::SERVICE)?;
     let employee: i64 = client.query_one("SELECT id FROM people_workforce_employments WHERE tenant_id=1 AND company_id=1 AND employee_number='E-002'", &[]).await?.get(0);
     let employment = workforce
-        .employment(&admin, 1, employee)
+        .employment(&**client, &admin, 1, employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

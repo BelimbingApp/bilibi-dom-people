@@ -130,7 +130,7 @@ pub async fn run(
     let authentication = services.get::<Authentication>("base/tenancy.authentication")?;
     // Previous slices deliberately unlink this account. Restore through its owner.
     let employment = workforce
-        .employment(manager, COMPANY, staff_employee)
+        .employment(client, manager, COMPANY, staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

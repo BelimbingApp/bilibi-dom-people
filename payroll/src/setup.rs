@@ -221,7 +221,7 @@ impl Payroll {
         let c = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**c, scope, company, VIEW).await?;
         self.workforce
-            .company_on(&**c, scope, company)
+            .company(&**c, scope, company)
             .await?
             .require_current()
             .map_err(|e| PayrollError::NotCurrent(e.0))?;

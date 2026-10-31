@@ -78,7 +78,7 @@ pub(crate) async fn reach_with(
     };
     let employees = skills
         .workforce
-        .employees(scope, company)
+        .employees(client, scope, company)
         .await?
         .require_current()?;
     if !employees
@@ -145,6 +145,7 @@ pub(crate) async fn independent(
 /// retain the reference fallback, matching Bilimbi's current-only lookup.
 pub(crate) async fn names(
     skills: &Skills,
+    client: &(impl GenericClient + Sync),
     scope: &Scope,
     company: i64,
     ids: &[i64],
@@ -155,7 +156,7 @@ pub(crate) async fn names(
     for batch in ids.chunks(bilibi_people_workforce::LOOKUP_LIMIT) {
         for employee in skills
             .workforce
-            .employees_by_ids(scope, company, batch)
+            .employees_by_ids(client, scope, company, batch)
             .await?
             .require_current()?
         {

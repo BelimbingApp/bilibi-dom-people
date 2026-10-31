@@ -456,7 +456,7 @@ impl Learning {
             self.linked = self
                 .training
                 .workforce
-                .self_employee(scope, company)
+                .self_employee(&**self.training.db.get().await?, scope, company)
                 .await
                 .is_ok();
             let team = self
@@ -612,7 +612,12 @@ impl Learning {
             if let Ok(read) = self
                 .training
                 .workforce
-                .employees_at_any_status(scope, company, Some(ids))
+                .employees_at_any_status(
+                    &**self.training.db.get().await?,
+                    scope,
+                    company,
+                    Some(ids),
+                )
                 .await
             {
                 if let Ok(employees) = read.require_current() {

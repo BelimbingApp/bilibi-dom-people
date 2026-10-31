@@ -115,7 +115,7 @@ pub async fn run(url: &str) -> Result<()> {
     }
     let workforce = services.get::<Workforce>(bilibi_people_workforce::SERVICE)?;
     let employees = workforce
-        .employees(&manager, COMPANY)
+        .employees(&**c, &manager, COMPANY)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

@@ -332,12 +332,13 @@ impl Training {
     }
     async fn evaluation_employees(
         &self,
+        client: &(impl tokio_postgres::GenericClient + Sync),
         scope: &Scope,
         company: i64,
     ) -> Result<BTreeMap<i64, Employee>> {
         let employees = self
             .workforce
-            .employees(scope, company)
+            .employees(client, scope, company)
             .await?
             .require_current()
             .map_err(|e| TrainingError::WorkforceNotCurrent(e.0))?;
@@ -396,7 +397,7 @@ impl Training {
         .await?
         .pop()
         .ok_or(TrainingError::EvaluationPolicyUnavailable)?;
-        let employees = self.evaluation_employees(scope, company).await?;
+        let employees = self.evaluation_employees(tx.sql(), scope, company).await?;
         let facts=tx.sql().query("SELECT id,employee_id FROM (SELECT DISTINCT ON (employee_id) id,employee_id,status FROM people_training_attendance_facts WHERE tenant_id=$1 AND company_id=$2 AND session_id=$3 ORDER BY employee_id,revision DESC) latest WHERE status='confirmed'",&[&scope.tenant(),&company,&session_id]).await.map_err(Error::from)?;
         let mut result = PreparedEvaluationReviews {
             reviews: vec![],
@@ -459,11 +460,11 @@ impl Training {
             .await?;
         let me = self
             .workforce
-            .self_employee(scope, company)
+            .self_employee(&**client, scope, company)
             .await
             .map_err(evaluation_employee_error)?
             .employee_id;
-        let employees = self.evaluation_employees(scope, company).await?;
+        let employees = self.evaluation_employees(&**client, scope, company).await?;
         let ids = match kind {
             EvaluationKind::Evaluation => vec![me],
             EvaluationKind::Effectiveness => employees
@@ -527,7 +528,7 @@ impl Training {
         .into_iter()
         .find(|t| t.review.id == review_id)
         .ok_or(TrainingError::AttendanceUnavailable)?;
-        let employees = self.evaluation_employees(scope, company).await?;
+        let employees = self.evaluation_employees(tx.sql(), scope, company).await?;
         let subject = employees
             .get(&task.employee_id)
             .ok_or(TrainingError::AttendanceEmployeeUnavailable)?;
@@ -580,7 +581,7 @@ impl Training {
         writable(tx.sql(), scope, company).await?;
         self.authorize(tx.sql(), scope, company, EVALUATION_REMINDERS_MANAGE)
             .await?;
-        let employees = self.evaluation_employees(scope, company).await?;
+        let employees = self.evaluation_employees(tx.sql(), scope, company).await?;
         let mut result = EvaluationReminders::default();
         for task in store::tasks(
             tx.sql(),
@@ -677,7 +678,7 @@ impl Training {
             .report_grace_days
             .filter(|d| (0..=3650).contains(d))
             .ok_or(TrainingError::EffectivenessReportNotConfigured)?;
-        let employees = self.evaluation_employees(scope, company).await?;
+        let employees = self.evaluation_employees(tx.sql(), scope, company).await?;
         let mut first = next_period(tx.sql(), scope, company, months).await?;
         let mut periods = Vec::new();
         while let Some(start) = first {

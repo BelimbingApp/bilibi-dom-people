@@ -49,19 +49,8 @@ struct Cursor {
 }
 
 impl Workforce {
-    pub async fn employee_page(
-        &self,
-        scope: &Scope,
-        company_id: i64,
-        scan: &EmployeeScan,
-    ) -> Result<ReadResult<EmployeePage>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.employee_page_on(&**client, scope, company_id, scan)
-            .await
-    }
-
     /// The same page on a caller's client, including Core names and contacts.
-    pub async fn employee_page_on(
+    pub async fn employee_page(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,

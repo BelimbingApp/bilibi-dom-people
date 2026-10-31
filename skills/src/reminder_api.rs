@@ -21,7 +21,7 @@ impl Skills {
     ) -> Result<Vec<DueReminder>> {
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, REMINDERS_SEND).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         reminders::compute(
             self,
             &**client,
@@ -84,7 +84,7 @@ impl Skills {
         let as_of = as_of.unwrap_or_else(assessments::today);
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, REMINDERS_SEND).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         let ids = reminders::retry_ids(&**client, scope, company, as_of).await?;
         drop(client);
         let mut counts = ReminderRetryCounts::default();
@@ -110,7 +110,7 @@ impl Skills {
         }
         let client = self.db.get().await.map_err(Error::from)?;
         authorization::authorize(&**client, scope, company, REMINDERS_SEND).await?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         reminders::ledger(&**client, scope, company, limit).await
     }
 
@@ -125,7 +125,7 @@ impl Skills {
             return Err(SkillsError::InvalidReminders);
         }
         let client = self.db.get().await.map_err(Error::from)?;
-        self.current_company(scope, company).await?;
+        self.current_company(&**client, scope, company).await?;
         bilibi_user::UserService::company_account_on(&**client, scope, company, scope.user())
             .await
             .map_err(|e| {
@@ -183,7 +183,7 @@ impl Skills {
                     .await?;
                 bilibi_company::require_writable(tx.sql(), scope, company, true).await?;
                 authorization::authorize(tx.sql(), scope, company, REMINDERS_SEND).await?;
-                self.current_company(scope, company).await?;
+                self.current_company(tx.sql(), scope, company).await?;
                 Ok(Write {
                     tx,
                     tenant: scope.tenant(),

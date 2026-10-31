@@ -57,7 +57,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
             let workforce = services
                 .get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
             let employees = workforce
-                .employees_at_any_status(&manager, 1, None)
+                .employees_at_any_status(&**client, &manager, 1, None)
                 .await
                 .map_err(|_| Error::Invalid)?;
             let employee = employees
@@ -72,7 +72,7 @@ pub(crate) async fn run(url: &str, action: &str) -> Result<()> {
                 .parse()
                 .map_err(|_| Error::Invalid)?;
             let employment = workforce
-                .employment(&manager, 1, id)
+                .employment(&**client, &manager, 1, id)
                 .await
                 .map_err(|_| Error::Invalid)?
                 .require_current()

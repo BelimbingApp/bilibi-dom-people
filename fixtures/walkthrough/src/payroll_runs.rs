@@ -117,7 +117,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
     // Keep this slice independent of the other modules' default proof blocks.
     // Platform fixture account 1 holds human Person 1 and Company 1 affiliation 1.
     if workforce
-        .employees(&manager, 1)
+        .employees(&**db.get().await?, &manager, 1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()
@@ -144,7 +144,7 @@ pub(super) async fn run(url: &str) -> Result<()> {
     }
 
     let employee: i64 = workforce
-        .employees(&manager, 1)
+        .employees(&**db.get().await?, &manager, 1)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

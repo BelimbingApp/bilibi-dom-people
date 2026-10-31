@@ -358,6 +358,8 @@ pub struct CompanySummary {
 }
 
 /// The facade, resolved from the registry as [`SERVICE`].
+/// Directory reads require the caller's connection. A write passes `tx.sql()`
+/// so desk proofs cannot wait on company locks held by that same write.
 pub struct Workforce {
     db: Db,
     mutations: Arc<MutationBoundary>,
@@ -378,13 +380,13 @@ impl Workforce {
     /// (`people.workforce.working_statuses`; default `probation`, `active`).
     pub async fn working_statuses(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
     ) -> Result<ReadResult<Vec<String>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         Ok(ReadResult::current(statuses))
     }
@@ -427,14 +429,9 @@ impl Workforce {
     }
 
     /// The company's native workforce identity (Bilimbi `company/2`).
-    pub async fn company(&self, scope: &Scope, company_id: i64) -> Result<ReadResult<Company>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.company_on(&**client, scope, company_id).await
-    }
-
-    /// The company read on a caller's connection or transaction. Ports use
-    /// this to share the caller's view without renting another connection.
-    pub async fn company_on(
+    ///
+    /// Read the company on the caller's connection or transaction.
+    pub async fn company(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
@@ -454,18 +451,17 @@ impl Workforce {
     /// employments in the company's working statuses, named through Core.
     pub async fn employees(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
     ) -> Result<ReadResult<Vec<Employee>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
-        let rows =
-            employments::in_statuses(&**client, scope.tenant(), company.id, &statuses).await?;
+        let rows = employments::in_statuses(client, scope.tenant(), company.id, &statuses).await?;
         let employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
+            .project(client, scope, company.id, &statuses, rows)
             .await?;
         Ok(ReadResult::current(employees))
     }
@@ -478,14 +474,14 @@ impl Workforce {
     /// lists the company by id. Working-staff reads keep using [`Self::employees`].
     pub async fn employees_at_any_status(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_ids: Option<&[i64]>,
     ) -> Result<ReadResult<Vec<Employee>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let all_statuses: Vec<String> = EMPLOYEE_STATUSES
             .iter()
@@ -494,16 +490,14 @@ impl Workforce {
         let rows = match employee_ids {
             Some(ids) => {
                 let ids = lookup_ids(ids)?;
-                employments::by_ids(&**client, scope.tenant(), company.id, &ids, &all_statuses)
-                    .await?
+                employments::by_ids(client, scope.tenant(), company.id, &ids, &all_statuses).await?
             }
             None => {
-                employments::in_statuses(&**client, scope.tenant(), company.id, &all_statuses)
-                    .await?
+                employments::in_statuses(client, scope.tenant(), company.id, &all_statuses).await?
             }
         };
         let employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
+            .project(client, scope, company.id, &statuses, rows)
             .await?;
         Ok(ReadResult::current(employees))
     }
@@ -513,20 +507,19 @@ impl Workforce {
     /// are not positive, or too many, are `InvalidOptions`.
     pub async fn employees_by_ids(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_ids: &[i64],
     ) -> Result<ReadResult<Vec<Employee>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let ids = lookup_ids(employee_ids)?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
-        let rows =
-            employments::by_ids(&**client, scope.tenant(), company.id, &ids, &statuses).await?;
+        let rows = employments::by_ids(client, scope.tenant(), company.id, &ids, &statuses).await?;
         let employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
+            .project(client, scope, company.id, &statuses, rows)
             .await?;
         Ok(ReadResult::current(employees))
     }
@@ -575,6 +568,7 @@ impl Workforce {
     /// `NotFound`.
     pub async fn employee(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_id: i64,
@@ -582,13 +576,12 @@ impl Workforce {
         if employee_id <= 0 {
             return Err(WorkforceError::NotFound);
         }
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let rows = employments::by_ids(
-            &**client,
+            client,
             scope.tenant(),
             company.id,
             &[employee_id],
@@ -596,7 +589,7 @@ impl Workforce {
         )
         .await?;
         let mut employees = self
-            .project(&**client, scope, company.id, &statuses, rows)
+            .project(client, scope, company.id, &statuses, rows)
             .await?;
         match employees.pop() {
             Some(employee) => Ok(ReadResult::current(employee)),
@@ -607,20 +600,9 @@ impl Workforce {
     /// The working employees who report to one working employee of the
     /// company, by id; a supervisor who is not a working employee is
     /// `NotFound`.
+    ///
+    /// Read direct reports on the caller's connection or transaction.
     pub async fn direct_reports(
-        &self,
-        scope: &Scope,
-        company_id: i64,
-        employee_id: i64,
-    ) -> Result<ReadResult<Vec<Employee>>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        self.direct_reports_on(&**client, scope, company_id, employee_id)
-            .await
-    }
-
-    /// The same direct-report read on the caller's connection. Writes holding
-    /// workplace locks use this entry point instead of reopening the pool.
-    pub async fn direct_reports_on(
         &self,
         client: &(impl GenericClient + Sync),
         scope: &Scope,
@@ -661,6 +643,7 @@ impl Workforce {
     /// working-staff reads: it reveals only ids the reads already expose.
     pub async fn supervisor_chain(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_id: i64,
@@ -668,13 +651,12 @@ impl Workforce {
         if employee_id <= 0 {
             return Err(WorkforceError::NotFound);
         }
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let chain = employments::supervisor_chain(
-            &**client,
+            client,
             scope.tenant(),
             company.id,
             employee_id,
@@ -692,6 +674,7 @@ impl Workforce {
     /// reads do not expose is out of reach, not an error.
     pub async fn in_reach(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         manager_id: i64,
@@ -700,13 +683,12 @@ impl Workforce {
         if manager_id <= 0 || employee_id <= 0 || manager_id == employee_id {
             return Ok(ReadResult::current(false));
         }
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
         let chain = employments::supervisor_chain(
-            &**client,
+            client,
             scope.tenant(),
             company.id,
             employee_id,
@@ -723,17 +705,17 @@ impl Workforce {
     /// of another company or missing is `NotFound`.
     pub async fn employment(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
         employee_id: i64,
     ) -> Result<ReadResult<Employment>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorization::authorize(&**client, scope, company_id, EMPLOYMENT_VIEW).await?;
-        let company = live_company(&**client, scope, company_id).await?;
+        authorization::authorize(client, scope, company_id, EMPLOYMENT_VIEW).await?;
+        let company = live_company(client, scope, company_id).await?;
         if employee_id <= 0 {
             return Err(WorkforceError::NotFound);
         }
-        let row = employments::find(&**client, scope.tenant(), company.id, employee_id)
+        let row = employments::find(client, scope.tenant(), company.id, employee_id)
             .await?
             .ok_or(WorkforceError::NotFound)?;
         Ok(ReadResult::current(row.employment))
@@ -743,17 +725,16 @@ impl Workforce {
     /// `employment_summary/2`): `people.workforce.employment.view` now.
     pub async fn employment_summary(
         &self,
+        client: &(impl GenericClient + Sync),
         scope: &Scope,
         company_id: i64,
     ) -> Result<ReadResult<EmploymentSummary>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        authorization::authorize(&**client, scope, company_id, EMPLOYMENT_VIEW).await?;
-        let company = live_company(&**client, scope, company_id).await?;
+        authorization::authorize(client, scope, company_id, EMPLOYMENT_VIEW).await?;
+        let company = live_company(client, scope, company_id).await?;
         let statuses = self
-            .company_working_statuses(&**client, scope, &company)
+            .company_working_statuses(client, scope, &company)
             .await?;
-        let summary =
-            employments::summary(&**client, scope.tenant(), company.id, &statuses).await?;
+        let summary = employments::summary(client, scope.tenant(), company.id, &statuses).await?;
         Ok(ReadResult::current(summary))
     }
 
@@ -905,15 +886,17 @@ impl Workforce {
     /// `high_water_id` that it did not see as gone. `Unavailable` while no
     /// mounted module answers the port, `InvalidCursor` for a cursor of
     /// another scan, `InvalidOptions` for a page size outside 1 to 100.
-    pub async fn positions(
+    pub async fn positions<'a>(
         &self,
+        client: impl Into<bilibi_ports::PortClient<'a>>,
         scope: &Scope,
         company_id: i64,
         scan: &PositionScan,
     ) -> Result<ReadResult<PositionPage>> {
-        let client = self.db.get().await.map_err(Error::from)?;
-        let company = live_company(&**client, scope, company_id).await?;
-        let page = positions::scan(&self.ports, &**client, scope, company.id, scan).await?;
+        let client = client.into();
+        let company =
+            bilibi_ports::on_client!(client, |c| live_company(c, scope, company_id).await)?;
+        let page = positions::scan(&self.ports, client, scope, company.id, scan).await?;
         Ok(ReadResult::current(page))
     }
 

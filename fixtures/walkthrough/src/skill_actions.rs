@@ -116,7 +116,7 @@ pub(crate) async fn run(services: &Services, client: &Client, c: Context<'_>) ->
             .await?;
     }
     let employment = workforce
-        .employment(c.admin, company, c.staff_employee)
+        .employment(client, c.admin, company, c.staff_employee)
         .await
         .map_err(|_| Error::Internal)?
         .require_current()

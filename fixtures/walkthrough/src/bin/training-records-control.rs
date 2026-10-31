@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
             let workforce = services
                 .get::<bilibi_people_workforce::Workforce>(bilibi_people_workforce::SERVICE)?;
             let people = workforce
-                .employees_at_any_status(&admin, 1, None)
+                .employees_at_any_status(&**client, &admin, 1, None)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
                 .parse::<i64>()
                 .map_err(|_| Error::Invalid)?;
             let employment = workforce
-                .employment(&admin, 1, employee_id)
+                .employment(&**client, &admin, 1, employee_id)
                 .await
                 .map_err(|_| Error::Internal)?
                 .require_current()
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
                     .authenticate(&**client, 1, 1, "training-records-proof".into())
                     .await?;
                 let manager_id = workforce
-                    .self_employee(&manager, 1)
+                    .self_employee(&**client, &manager, 1)
                     .await
                     .map_err(|_| Error::Internal)?
                     .employee_id;

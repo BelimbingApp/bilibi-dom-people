@@ -37,7 +37,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         let user = if mode == "link" { MANAGER } else { STAFF };
         let number = if mode == "link" { "E-001" } else { "E-002" };
         let employees = workforce
-            .employees(&admin, COMPANY)
+            .employees(&**c, &admin, COMPANY)
             .await
             .map_err(|_| Error::Internal)?
             .require_current()
@@ -51,7 +51,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
             .parse()
             .map_err(|_| Error::Invalid)?;
         let employment = workforce
-            .employment(&admin, COMPANY, id)
+            .employment(&**c, &admin, COMPANY, id)
             .await
             .map_err(|_| Error::Internal)?
             .require_current()
@@ -116,7 +116,7 @@ async fn run(url: &str, mode: &str) -> Result<()> {
         return Ok(());
     }
     let employee = workforce
-        .authorize_self(&manager, COMPANY, SELF_VIEW)
+        .authorize_self(&**c, &manager, COMPANY, SELF_VIEW)
         .await
         .map_err(|_| Error::Internal)?
         .employee_id;
