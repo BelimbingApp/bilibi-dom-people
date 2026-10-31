@@ -314,8 +314,12 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             .await,
     );
 
-    // The contractor at Company 002, reached through the manager's
-    // tenant-wide reach; the contractor holds no People grant.
+    // A company-management grant alone is not a desk. This proof explicitly
+    // gives the manager the second workplace before its cross-company work.
+    users
+        .set_desk(&admin, OTHER_COMPANY, MANAGER_PERSON, true)
+        .await?;
+    // The contractor holds no People grant.
     show(
         "contractor employs their own affiliation at Company 002",
         workforce
@@ -333,7 +337,7 @@ pub(super) async fn prepare(url: &str) -> Result<crate::Context> {
             .await,
     );
     let contractor_employment = saved(show(
-        "manager, with tenant-wide reach, employs the contractor at Company 002",
+        "manager, with an explicit desk, employs the contractor at Company 002",
         workforce
             .create_employment(
                 &manager,

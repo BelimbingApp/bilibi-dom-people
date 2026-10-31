@@ -1012,6 +1012,16 @@ async fn live_company(
     scope: &Scope,
     company_id: i64,
 ) -> Result<CompanySummary> {
+    if scope.principal().is_none()
+        && !bilibi_company::reachable(
+            client,
+            scope,
+            bilibi_party_ids::OrganisationId::new(company_id)?,
+        )
+        .await?
+    {
+        return Err(WorkforceError::Unauthorized);
+    }
     match authorization::summary(client, scope, company_id).await? {
         Some(company) if !company.archived => Ok(company),
         _ => Err(WorkforceError::NotFound),
