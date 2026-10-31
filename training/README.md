@@ -233,7 +233,7 @@ Create a request from Mine, then open its record and submit it with a reason. A 
 
 The capability prefix is `people.training.`. `learning.view` opens Learning requests without granting request submission: a reader without `requests.submit` sees their authorized learning tasks. Request, recommendation, review, approval and budget controls each need their separate write grant. My evaluations remains available in the Mine audience. Plans and budget policies keep their own record types and checks.
 
-All registers use `FlexTable` with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). History and plan items also use `FlexTable`. The request list defaults to Mine when authorized, then Team or Company according to available permissions. The company comes from the workspace shell; configuration pages retain their existing chooser.
+All registers use `FlexTable` with column controls, compact rows and URL pagination (`page`, `perPage`; 25, 50, 100 or 300 rows). History and plan items also use `FlexTable`. Mine and Team require a current linked employee; the request list defaults to Mine, then Team or Company according to available access, and an unavailable copied audience normalizes to Company only when that audience is authorized. The company comes from the workspace shell; configuration pages retain their existing chooser.
 
 The creation form makes requests without a course through `people.training.request.create`. The shared input omits the absent `course_id` when serialized, matching the operation's optional integer field.
 

@@ -283,6 +283,7 @@ struct Learning {
     contracts: Arc<bilibi_agent_api::page::PageContracts>,
     record: Option<i64>,
     workspace: bool,
+    linked: bool,
     employees: BTreeMap<i64, String>,
     task: Task,
     list: ListState,
@@ -323,6 +324,7 @@ impl Learning {
         Ok(Self {
             record: params::positive_id(query.get("id").map(String::as_str)),
             workspace: false,
+            linked: false,
             employees: BTreeMap::new(),
             training,
             contracts,
@@ -434,6 +436,7 @@ impl Learning {
         self.histories.clear();
         self.flags.clear();
         self.tabs.clear();
+        self.linked = false;
         self.error = None;
         let Some(company) = self.company else {
             self.modal = false;
@@ -444,7 +447,7 @@ impl Learning {
         };
         if self.task.kind() == "request" {
             let mine = self.training.allowed(scope, company, LEARNING_VIEW).await;
-            let linked = self
+            self.linked = self
                 .training
                 .workforce
                 .self_employee(scope, company)
@@ -457,13 +460,13 @@ impl Learning {
             let hr = self.training.allowed(scope, company, REQUESTS_VIEW).await;
             let requested = self.list.filters["audience"].as_str();
             self.task = match requested {
-                "mine" if mine => Task::My,
-                "team" if team => Task::Team,
+                "mine" if mine && self.linked => Task::My,
+                "team" if team && self.linked => Task::Team,
                 "hr" if hr => Task::Requests,
-                _ if mine && linked => Task::My,
-                _ if team => Task::Team,
+                _ if mine && self.linked => Task::My,
+                _ if team && self.linked => Task::Team,
                 _ if hr => Task::Requests,
-                _ => Task::My,
+                _ => return Err(Error::Unauthorized),
             };
             self.list.filters.insert(
                 "audience".into(),
@@ -713,7 +716,7 @@ impl Learning {
             (
                 LearningAudience::SelfService,
                 Task::My,
-                self.can(LEARNING_VIEW) && self.can(REQUESTS_SUBMIT),
+                self.linked && self.can(LEARNING_VIEW) && self.can(REQUESTS_SUBMIT),
             ),
             (
                 LearningAudience::Hr,
@@ -723,7 +726,7 @@ impl Learning {
             (
                 LearningAudience::Team,
                 Task::Team,
-                self.can(REQUESTS_RECOMMEND),
+                self.linked && self.can(REQUESTS_RECOMMEND),
             ),
         ] {
             if !permitted {
@@ -738,6 +741,7 @@ impl Learning {
                     let mut task = task;
                     if task == Task::Requests
                         && row.status == "pending_hod"
+                        && self.linked
                         && self.can(REQUESTS_RECOMMEND)
                         && self
                             .training
@@ -1463,10 +1467,10 @@ impl Learning {
         let mut controls = vec![];
         if self.task.kind() == "request" {
             let mut audiences = vec![];
-            if self.can(LEARNING_VIEW) {
+            if self.linked && self.can(LEARNING_VIEW) {
                 audiences.push(Choice::new("Mine", "mine"));
             }
-            if self.can(REQUESTS_RECOMMEND) {
+            if self.linked && self.can(REQUESTS_RECOMMEND) {
                 audiences.push(Choice::new("Team", "team"));
             }
             if self.can(REQUESTS_VIEW) {
