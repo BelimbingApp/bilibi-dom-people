@@ -336,6 +336,26 @@ impl Training {
         let mut client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, REQUESTS_SUBMIT)
             .await?;
+        let mut tx = self
+            .mutations
+            .begin(
+                &mut client,
+                scope.mutation_context("people.training.create_learning_request"),
+            )
+            .await?;
+        let row = self
+            .create_learning_request_in(&mut tx, scope, company, input)
+            .await?;
+        tx.commit().await?;
+        Ok(row)
+    }
+    pub(super) async fn create_learning_request_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company: i64,
+        input: &NewLearningRequest,
+    ) -> Result<LearningRequest> {
         let mut data = values(input)?;
         fields(
             &mut data,
@@ -344,18 +364,11 @@ impl Training {
         date(&input.proposed_on)?;
         let cost = money(&input.estimated_cost)?;
         data["estimated_cost"] = json!(cost.to_string());
-        let mut tx = self
-            .mutations
-            .begin(
-                &mut client,
-                scope.mutation_context("people.training.create_learning_request"),
-            )
-            .await?;
         writable(tx.sql(), scope, company).await?;
         self.authorize(tx.sql(), scope, company, REQUESTS_SUBMIT)
             .await?;
         let me = self
-            .learning_self(&tx, scope, company, REQUESTS_SUBMIT)
+            .learning_self(tx, scope, company, REQUESTS_SUBMIT)
             .await?;
         if let Some(id) = input.course_id {
             let course:Option<bool>=tx.sql().query_opt("SELECT active FROM people_training_courses WHERE tenant_id=$1 AND company_id=$2 AND id=$3",&[&scope.tenant(),&company,&id]).await.map_err(Error::from)?.map(|r|r.get(0));
@@ -374,13 +387,11 @@ impl Training {
         .await?;
         data["employee_id"] = json!(me);
         data["status"] = json!("draft");
-        let row: LearningRequest =
-            store::insert(&mut tx, scope, company, Table::Request, data).await?;
+        let row: LearningRequest = store::insert(tx, scope, company, Table::Request, data).await?;
         request_decision(
-            &mut tx, scope, company, row.id, "create", "new", "draft", "Created",
+            tx, scope, company, row.id, "create", "new", "draft", "Created",
         )
         .await?;
-        tx.commit().await?;
         Ok(row)
     }
     /// Own drafts and decisions; submitted direct-report requests; or HR's submitted register.
@@ -393,8 +404,27 @@ impl Training {
         let client = self.db.get().await.map_err(Error::from)?;
         self.authorize(&**client, scope, company, request_cap(audience))
             .await?;
+        drop(client);
         let ids = self.learning_audience(scope, company, audience).await?;
+        let client = self.db.get().await.map_err(Error::from)?;
         store::list(&**client,scope,company,Table::Request,"AND ($3::bigint[] IS NULL OR r.employee_id=ANY($3)) AND ($4 OR EXISTS(SELECT 1 FROM people_training_need_decisions d WHERE d.tenant_id=r.tenant_id AND d.company_id=r.company_id AND d.request_id=r.id AND d.action='submit')) ORDER BY r.id DESC",&[&ids,&(audience==LearningAudience::SelfService)]).await
+    }
+    /// Reads one request through the same audience boundary as the list.
+    pub async fn learning_request(
+        &self,
+        scope: &Scope,
+        company: i64,
+        id: i64,
+        audience: LearningAudience,
+    ) -> Result<LearningRequest> {
+        let client = self.db.get().await.map_err(Error::from)?;
+        self.authorize(&**client, scope, company, request_cap(audience))
+            .await?;
+        drop(client);
+        let ids = self.learning_audience(scope, company, audience).await?;
+        let client = self.db.get().await.map_err(Error::from)?;
+        let mut rows:Vec<LearningRequest>=store::list(&**client,scope,company,Table::Request,"AND r.id=$3 AND ($4::bigint[] IS NULL OR r.employee_id=ANY($4)) AND ($5 OR EXISTS(SELECT 1 FROM people_training_need_decisions d WHERE d.tenant_id=r.tenant_id AND d.company_id=r.company_id AND d.request_id=r.id AND d.action='submit'))",&[&id,&ids,&(audience==LearningAudience::SelfService)]).await?;
+        rows.pop().ok_or(TrainingError::NotFound)
     }
     /// Advances or refuses a request under its current state and budget lock.
     pub async fn decide_learning_request(
@@ -421,7 +451,6 @@ impl Training {
         if !authorized {
             return Err(TrainingError::Unauthorized);
         }
-        let explanation = reason(explanation)?;
         let mut tx = self
             .mutations
             .begin(
@@ -429,6 +458,22 @@ impl Training {
                 scope.mutation_context("people.training.decide_learning_request"),
             )
             .await?;
+        let updated = self
+            .decide_learning_request_in(&mut tx, scope, company, id, action, explanation)
+            .await?;
+        tx.commit().await?;
+        Ok(updated)
+    }
+    pub(super) async fn decide_learning_request_in(
+        &self,
+        tx: &mut MutationTransaction<'_>,
+        scope: &Scope,
+        company: i64,
+        id: i64,
+        action: &str,
+        explanation: &str,
+    ) -> Result<LearningRequest> {
+        let explanation = reason(explanation)?;
         writable(tx.sql(), scope, company).await?;
         store::lock(tx.sql(), scope, company).await?;
         let row: LearningRequest =
@@ -436,12 +481,12 @@ impl Training {
         let (from, to, cap) = step(&row.status, action)?;
         self.authorize(tx.sql(), scope, company, cap).await?;
         if cap == REQUESTS_SUBMIT {
-            let me = self.learning_self(&tx, scope, company, cap).await?;
+            let me = self.learning_self(tx, scope, company, cap).await?;
             if me != row.employee_id {
                 return Err(TrainingError::NotOwner);
             }
         } else if cap == REQUESTS_RECOMMEND {
-            let me = self.learning_self(&tx, scope, company, cap).await?;
+            let me = self.learning_self(tx, scope, company, cap).await?;
             if !self
                 .learning_team(scope, company, me)
                 .await?
@@ -450,10 +495,10 @@ impl Training {
                 return Err(TrainingError::OutsideTeam);
             }
         } else {
-            self.learning_independent(&tx, scope, company, row.actor_user_id, row.employee_id, cap)
+            self.learning_independent(tx, scope, company, row.actor_user_id, row.employee_id, cap)
                 .await?;
         }
-        self.learning_current(&tx, scope, company, row.employee_id)
+        self.learning_current(tx, scope, company, row.employee_id)
             .await?;
         let budget = if to == "approved" {
             self.currency_enabled(tx.sql(), scope, company, &row.currency)
@@ -476,10 +521,8 @@ impl Training {
         } else {
             None
         };
-        let updated =
-            store::transition(&mut tx, scope, company, Table::Request, id, to, budget).await?;
-        request_decision(&mut tx, scope, company, id, action, from, to, &explanation).await?;
-        tx.commit().await?;
+        let updated = store::transition(tx, scope, company, Table::Request, id, to, budget).await?;
+        request_decision(tx, scope, company, id, action, from, to, &explanation).await?;
         Ok(updated)
     }
     /// Creates a manager-owned draft with 1–300 immutable items (`plans.submit`).
@@ -956,4 +999,8 @@ async fn plan_decision(
         json!({"plan_id":id,"action":action,"from_status":from,"to_status":to,"reason":reason}),
     )
     .await
+}
+
+pub(super) fn request_step(status: &str, action: &str) -> Result<&'static str> {
+    step(status, action).map(|(_, _, cap)| cap)
 }

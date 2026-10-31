@@ -46,7 +46,7 @@ inventory::submit! {
         layer: Layer::Domains,
         dependencies: &[
             "base/agent_api", "base/authz", "base/database", "base/module_registry", "base/party_ids",
-            "base/settings", "base/tenancy", "base/datetime", "base/queue", "base/menu", "base/ui", "core/company",
+            "base/settings", "base/system", "base/tenancy", "base/datetime", "base/queue", "base/menu", "base/ui", "core/company",
             "people/settings", "people/workforce", "people/reference_data",
         ],
         migrations: &[
@@ -72,7 +72,7 @@ inventory::submit! {
             id: crate::web::PAGES,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::web::Pages::new(
                 services.get::<Db>("base/database.pool")?.as_ref().clone(),
-                services.get(SERVICE)?,
+                services.get(SERVICE)?, services.get(bilibi_agent_api::page::SERVICE)?,
             ))))),
         }, Service {
             id: crate::policy_web::SERVICE,
@@ -135,8 +135,10 @@ inventory::submit! { Contribution::new(bilibi_queue::WORKERS, crate::worker::WOR
 inventory::submit! { Contribution::new(bilibi_queue::HANDLERS, crate::worker::WORKER, provenance!(), &bilibi_queue::HandlerBinding { service: crate::worker::SERVICE, capability: POLICIES_MANAGE }) }
 
 inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, crate::web::PAGES, provenance!(), &bilibi_module_registry::contributions::PageWrites {
-    service: crate::web::PAGES, contracts: &[],
-    pending: bilibi_module_registry::contributions::Pending::Every { reason: "Leave requests, cancellations and decisions write through the Leave facade; their operation contracts have not been reviewed." },
+    service: crate::web::PAGES, contracts: &[
+        ("submit_request","people.leave.request.submit"),("confirm_cancel","people.leave.request.cancel"),
+        ("confirm_record","people.leave.request.cancel"),("confirm_record","people.leave.request.approve"),("confirm_record","people.leave.request.reject"),
+    ], pending: bilibi_module_registry::contributions::Pending::None,
 }) }
 
 inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.my", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
@@ -146,6 +148,10 @@ inventory::submit! { Contribution::new(bilibi_module_registry::contributions::RO
 inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/leave.requests", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
     method: bilibi_module_registry::contributions::Method::Get, path: "/people/leave/requests", service: crate::web::PAGES, operation: "requests",
     access: bilibi_module_registry::contributions::Access::Capability(REQUESTS_APPROVE), framed: true,
+}) }
+
+inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES,"people/leave.record",provenance!(),&bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
+    method:bilibi_module_registry::contributions::Method::Get,path:"/people/leave/requests/{id}",service:crate::web::PAGES,operation:"record",access:bilibi_module_registry::contributions::Access::AnyOf(&[SELF_VIEW,REQUESTS_APPROVE]),framed:true,
 }) }
 
 bilibi_menu::contribute!(

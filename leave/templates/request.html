@@ -1,0 +1,13 @@
+{# Common home for Bilimbi Leave request facts and decisions. #}
+{% import "components.html" as ui %}
+{% import "feedback.html" as feedback %}
+{% import "workspace.html" as workspace %}
+<div data-shared-ui>
+{% call feedback::flash_group(messages=flash) %}{% endcall %}
+{% call workspace::announce(kind="people/leave",record_id=id) %}{% endcall %}
+{% call ui::page(id="leave-request",variant=bilibi_ui::PageVariant::Detail) %}
+{% call ui::back_link(href=back) %}{% endcall %}
+{% call ui::header() %}Leave request{% endcall %}
+{{ facts }}{{ actions }}{{ confirmation }}
+{% endcall %}
+</div>

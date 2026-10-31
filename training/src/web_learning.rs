@@ -37,7 +37,13 @@ inventory::submit! {
 }
 inventory::submit! {
     Contribution::new(PAGE_WRITES, PAGES, PROVENANCE, &PageWrites {
-        service: PAGES, contracts: &[], pending: Pending::Every { reason: "Learning requests, plans and budgets call the Training facade; operation contracts are not yet reviewed." },
+        service: PAGES, contracts: &[
+            ("save_entry","people.training.request.create"),
+            ("confirm_decision","people.training.request.submit"), ("confirm_decision","people.training.request.cancel"),
+            ("confirm_decision","people.training.request.recommend"), ("confirm_decision","people.training.request.review"),
+            ("confirm_decision","people.training.request.approve"), ("confirm_decision","people.training.request.reject_recommendation"),
+            ("confirm_decision","people.training.request.reject_review"), ("confirm_decision","people.training.request.reject_approval"),
+        ], pending: Pending::Every { reason: "Plan, budget and evaluation writes still use their authorized facades." },
     })
 }
 macro_rules! route {
@@ -50,35 +56,33 @@ macro_rules! route {
         }
     };
 }
-route!("my", "/people/training/my", LEARNING_VIEW);
-route!("team", "/people/training/team", REQUESTS_RECOMMEND);
 route!("plans", "/people/training/plans", PLANS_SUBMIT);
-route!("requests", "/people/training/requests", REQUESTS_VIEW);
+inventory::submit! { Contribution::new(ROUTES, "people/training.learning_requests", PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
+    method: Method::Get, path: "/people/training/requests", service: PAGES, operation: "requests",
+    access: Access::AnyOf(&[LEARNING_VIEW, REQUESTS_RECOMMEND, REQUESTS_VIEW]), framed: true,
+}) }
+inventory::submit! { Contribution::new(ROUTES, "people/training.learning_request", PROVENANCE, &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
+    method: Method::Get, path: "/people/training/requests/{id}", service: PAGES, operation: "requests",
+    access: Access::AnyOf(&[LEARNING_VIEW, REQUESTS_RECOMMEND, REQUESTS_VIEW]), framed: true,
+}) }
 route!("plan-reviews", "/people/training/plan-reviews", PLANS_VIEW);
 route!("budgets", "/people/training/budgets", BUDGETS_VIEW);
 bilibi_menu::contribute!(
     "people/training",
     MenuItem::page(
         "people.my_work.my_learning",
-        "My learning",
-        "/people/training/my"
-    )
-    .icon("users")
-    .under("people.my_work")
-    .requires(Requirement::Capability(LEARNING_VIEW))
-    .order(40)
-);
-bilibi_menu::contribute!(
-    "people/training",
-    MenuItem::page(
-        "people.development.learning_reviews",
-        "Learning requests & reviews",
+        "Learning requests",
         "/people/training/requests"
     )
-    .icon("clipboard-document-list")
-    .under("people.development")
-    .requires(Requirement::Capability(REQUESTS_VIEW))
-    .order(75)
+    .company_scoped()
+    .icon("users")
+    .under("people.my_work")
+    .requires(Requirement::AnyOf(&[
+        LEARNING_VIEW,
+        REQUESTS_RECOMMEND,
+        REQUESTS_VIEW
+    ]))
+    .order(40)
 );
 bilibi_menu::contribute!(
     "people/training",
@@ -129,10 +133,10 @@ impl Task {
     }
     fn title(self) -> &'static str {
         match self {
-            Self::My => "My learning",
-            Self::Team => "Team requests",
+            Self::My => "Learning requests",
+            Self::Team => "Learning requests",
             Self::Plans => "Team plans",
-            Self::Requests => "Learning requests & reviews",
+            Self::Requests => "Learning requests",
             Self::PlanReviews => "Plan reviews",
             Self::Budgets => "Learning policy and budgets",
         }
@@ -170,18 +174,34 @@ impl Task {
         }
     }
     fn path(self) -> String {
-        format!("/people/training/{}", self.key())
+        if self.kind() == "request" {
+            "/people/training/requests".into()
+        } else {
+            format!("/people/training/{}", self.key())
+        }
     }
 }
 
-pub(crate) struct Pages(pub Arc<Training>);
+pub(crate) struct Pages(
+    pub Arc<Training>,
+    pub Arc<bilibi_agent_api::page::PageContracts>,
+);
 impl Page<Scope, Error> for Pages {
     fn title(&self, operation: &str) -> Option<&'static str> {
         Task::parse(operation).ok().map(Task::title)
     }
     fn render<'a>(&'a self, req: PageRequest<'a, Scope>) -> PageFuture<'a, Error> {
         Box::pin(async move {
-            let mut state = Learning::new(self.0.clone(), Task::parse(req.operation)?, req.query)?;
+            let mut query = req.query.clone();
+            query.remove("id");
+            query.extend(req.path.clone());
+            let mut state = Learning::new(
+                self.0.clone(),
+                self.1.clone(),
+                Task::parse(req.operation)?,
+                &query,
+            )?;
+            state.workspace = req.framed;
             state.load(req.scope.ok_or(Error::Unauthorized)?).await?;
             Ok(PageBody {
                 html: state.render()?,
@@ -192,18 +212,29 @@ impl Page<Scope, Error> for Pages {
     }
     fn mount<'a>(&'a self, req: PageRequest<'a, Scope>) -> MountFuture<'a, Scope, Error> {
         Box::pin(async move {
-            Ok(Some(Box::new(Learning::new(
+            let mut query = req.query.clone();
+            query.remove("id");
+            query.extend(req.path.clone());
+            let mut state = Learning::new(
                 self.0.clone(),
+                self.1.clone(),
                 Task::parse(req.operation)?,
-                req.query,
-            )?) as Box<dyn LiveState<Scope, Error>>))
+                &query,
+            )?;
+            state.workspace = req.framed;
+            Ok(Some(Box::new(state) as Box<dyn LiveState<Scope, Error>>))
         })
     }
 }
 fn spec() -> DbResult<Arc<ListSpec>> {
     ListSpec {
         page_size_param: "perPage".into(),
-        filters: BTreeMap::from([("company_id".into(), Filter::string(""))]),
+        filters: BTreeMap::from([
+            ("company_id".into(), Filter::string("")),
+            ("audience".into(), Filter::string("")),
+            ("status".into(), Filter::string("")),
+            ("employee_id".into(), Filter::string("")),
+        ]),
         omit_blank: vec!["company_id".into()],
         ..ListSpec::default()
     }
@@ -250,6 +281,11 @@ struct Decision {
 }
 struct Learning {
     training: Arc<Training>,
+    contracts: Arc<bilibi_agent_api::page::PageContracts>,
+    record: Option<i64>,
+    workspace: bool,
+    linked: bool,
+    employees: BTreeMap<i64, String>,
     task: Task,
     list: ListState,
     columns: ListColumns,
@@ -275,18 +311,41 @@ struct Learning {
     evaluations: crate::web_evaluation::Reviews,
 }
 impl Learning {
-    fn new(training: Arc<Training>, task: Task, query: &HashMap<String, String>) -> DbResult<Self> {
+    fn new(
+        training: Arc<Training>,
+        contracts: Arc<bilibi_agent_api::page::PageContracts>,
+        task: Task,
+        query: &HashMap<String, String>,
+    ) -> DbResult<Self> {
+        if query.contains_key("id")
+            && params::positive_id(query.get("id").map(String::as_str)).is_none()
+        {
+            return Err(Error::NotFound);
+        }
         Ok(Self {
+            record: params::positive_id(query.get("id").map(String::as_str)),
+            workspace: false,
+            linked: false,
+            employees: BTreeMap::new(),
             training,
+            contracts,
             task,
             list: ListState::parse(query, spec()?).map_err(|_| Error::Internal)?,
             columns: columns(
                 "learning-records",
-                &[
-                    ("record", "Record"),
-                    ("status", "Status / budget"),
-                    ("decisions", "Decisions"),
-                ],
+                if task.kind() == "request" {
+                    &[
+                        ("record", "Request"),
+                        ("employee", "Employee"),
+                        ("status", "Status / budget"),
+                    ]
+                } else {
+                    &[
+                        ("record", "Record"),
+                        ("status", "Status / budget"),
+                        ("decisions", "Decisions"),
+                    ]
+                },
             )?,
             companies: vec![],
             company: None,
@@ -338,29 +397,52 @@ impl Learning {
     }
     async fn load(&mut self, scope: &Scope) -> DbResult<()> {
         let client = self.training.db.get().await?;
-        self.companies = authorization::company_choices(
-            &**client,
-            scope,
-            self.task.cap(),
-            params::positive_id(self.list.filters.get("company_id").map(String::as_str)),
-        )
-        .await
-        .unwrap_or_default();
+        self.companies.clear();
+        let caps = if self.task.kind() == "request" {
+            vec![LEARNING_VIEW, REQUESTS_RECOMMEND, REQUESTS_VIEW]
+        } else {
+            vec![self.task.cap()]
+        };
+        for cap in caps {
+            for company in authorization::company_choices(
+                &**client,
+                scope,
+                cap,
+                scope.current_company().map(|id| id.get()),
+            )
+            .await
+            .unwrap_or_default()
+            {
+                if !self.companies.iter().any(|c| c.id == company.id) {
+                    self.companies.push(company);
+                }
+            }
+        }
+        drop(client);
         let selected = self
             .list
             .filters
             .get("company_id")
             .filter(|s| !s.is_empty())
             .cloned();
-        self.company = if let Some(value) = selected.as_deref() {
+        self.company = if self.task.kind() == "request" {
+            scope
+                .current_company()
+                .map(|id| id.get())
+                .filter(|id| self.companies.iter().any(|c| c.id == *id))
+        } else if let Some(value) = selected.as_deref() {
             params::positive_id(Some(value)).filter(|id| self.companies.iter().any(|c| c.id == *id))
         } else {
-            self.companies.first().map(|c| c.id)
+            scope
+                .current_company()
+                .map(|id| id.get())
+                .filter(|id| self.companies.iter().any(|c| c.id == *id))
         };
         self.records.clear();
         self.histories.clear();
         self.flags.clear();
         self.tabs.clear();
+        self.linked = false;
         self.error = None;
         let Some(company) = self.company else {
             self.modal = false;
@@ -369,11 +451,44 @@ impl Learning {
             self.error = Some("Choose an active company.".into());
             return Ok(());
         };
+        if self.task.kind() == "request" {
+            let mine = self.training.allowed(scope, company, LEARNING_VIEW).await;
+            self.linked = self
+                .training
+                .workforce
+                .self_employee(scope, company)
+                .await
+                .is_ok();
+            let team = self
+                .training
+                .allowed(scope, company, REQUESTS_RECOMMEND)
+                .await;
+            let hr = self.training.allowed(scope, company, REQUESTS_VIEW).await;
+            let requested = self.list.filters["audience"].as_str();
+            self.task = match requested {
+                "mine" if mine && self.linked => Task::My,
+                "team" if team && self.linked => Task::Team,
+                "hr" if hr => Task::Requests,
+                _ if mine && self.linked => Task::My,
+                _ if team && self.linked => Task::Team,
+                _ if hr => Task::Requests,
+                _ => return Err(Error::Unauthorized),
+            };
+            self.list.filters.insert(
+                "audience".into(),
+                match self.task {
+                    Task::My => "mine",
+                    Task::Team => "team",
+                    _ => "hr",
+                }
+                .into(),
+            );
+        }
         self.evaluations
             .load(
                 &self.training,
                 scope,
-                if self.task == Task::My {
+                if self.task == Task::My && self.record.is_none() {
                     Some(company)
                 } else {
                     None
@@ -402,7 +517,7 @@ impl Learning {
                 .insert(cap, self.training.allowed(scope, company, cap).await);
         }
         for task in Task::ALL {
-            if self.can(task.cap()) {
+            if self.can(task.cap()) && !matches!(task, Task::My | Task::Team) {
                 self.tabs.push((
                     task.title().into(),
                     params::address(
@@ -442,6 +557,7 @@ impl Learning {
                 ));
             }
         }
+        let client = self.training.db.get().await?;
         self.clock = Some(
             bilibi_datetime::DisplayPolicy::new(self.training.settings.clone())
                 .display(
@@ -459,6 +575,10 @@ impl Learning {
             .map_err(|_| Error::Internal)?;
         drop(client);
         let result = match self.task.kind() {
+            "request" if self.record.is_some() => self
+                .resolve_record(scope, company, self.record.ok_or(Error::NotFound)?)
+                .await
+                .map(|row| vec![Record::Request(row)]),
             "request" if self.show_records() => self
                 .training
                 .learning_requests(scope, company, self.task.audience())
@@ -479,6 +599,49 @@ impl Learning {
         match result {
             Ok(records) => self.records = records,
             Err(e) => self.error = Some(e.to_string()),
+        }
+        self.employees.clear();
+        for record in &self.records {
+            if let Record::Request(r) = record {
+                self.employees
+                    .insert(r.employee_id, format!("Employee {}", r.employee_id));
+            }
+        }
+        let employee_ids: Vec<_> = self.employees.keys().copied().collect();
+        for ids in employee_ids.chunks(bilibi_people_workforce::LOOKUP_LIMIT) {
+            if let Ok(read) = self
+                .training
+                .workforce
+                .employees_at_any_status(scope, company, Some(ids))
+                .await
+            {
+                if let Ok(employees) = read.require_current() {
+                    for employee in employees {
+                        if let Ok(id) = employee.reference.stable_id.parse::<i64>() {
+                            self.employees.insert(
+                                id,
+                                format!("{} ({})", employee.display_name, employee.employee_number),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if self.task.kind() == "request" {
+            let employee =
+                params::positive_id(self.list.filters.get("employee_id").map(String::as_str));
+            let status = self.list.filters["status"].clone();
+            self.records.retain(|record| {
+                let Record::Request(r) = record else {
+                    return false;
+                };
+                if let Some(id) = self.record {
+                    r.id == id
+                } else {
+                    employee.is_none_or(|id| r.employee_id == id)
+                        && (status.is_empty() || r.status == status)
+                }
+            });
         }
         let page = self.list.paginate(&self.records);
         let visible: Vec<_> = page.entries.iter().map(Record::id).collect();
@@ -549,6 +712,73 @@ impl Learning {
         }
         Ok(())
     }
+    async fn resolve_record(
+        &mut self,
+        scope: &Scope,
+        company: i64,
+        id: i64,
+    ) -> crate::Result<LearningRequest> {
+        for (audience, task, permitted) in [
+            (
+                LearningAudience::SelfService,
+                Task::My,
+                self.linked && self.can(LEARNING_VIEW) && self.can(REQUESTS_SUBMIT),
+            ),
+            (
+                LearningAudience::Hr,
+                Task::Requests,
+                self.can(REQUESTS_VIEW),
+            ),
+            (
+                LearningAudience::Team,
+                Task::Team,
+                self.linked && self.can(REQUESTS_RECOMMEND),
+            ),
+        ] {
+            if !permitted {
+                continue;
+            }
+            match self
+                .training
+                .learning_request(scope, company, id, audience)
+                .await
+            {
+                Ok(row) => {
+                    let mut task = task;
+                    if task == Task::Requests
+                        && row.status == "pending_hod"
+                        && self.linked
+                        && self.can(REQUESTS_RECOMMEND)
+                        && self
+                            .training
+                            .learning_request(scope, company, id, LearningAudience::Team)
+                            .await
+                            .is_ok()
+                    {
+                        task = Task::Team;
+                    }
+                    self.task = task;
+                    self.list.filters.insert(
+                        "audience".into(),
+                        match task {
+                            Task::My => "mine",
+                            Task::Team => "team",
+                            _ => "hr",
+                        }
+                        .into(),
+                    );
+                    return Ok(row);
+                }
+                Err(
+                    TrainingError::NotFound
+                    | TrainingError::Unauthorized
+                    | TrainingError::EmployeeUnavailable,
+                ) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Err(TrainingError::NotFound)
+    }
     fn actions(&self, r: &Record) -> Vec<(&'static str, &'static str, &'static str)> {
         let candidates = match (self.task, r.status()) {
             (Task::My, "draft") => vec![
@@ -585,7 +815,7 @@ impl Learning {
             .filter(|(_, _, cap)| self.can(cap))
             .collect()
     }
-    async fn event(&mut self, scope: &Scope, payload: &Value) -> DbResult<()> {
+    async fn event(&mut self, scope: &Scope, credential: &str, payload: &Value) -> DbResult<()> {
         let event = payload.get("type").and_then(Value::as_str).unwrap_or("");
         if event == "clear-flash" {
             if self
@@ -622,7 +852,7 @@ impl Learning {
             self.list
                 .apply_filters(&params::form_values(payload, "filters"));
             self.load(scope).await?;
-            if old != self.company {
+            if old != self.company || self.task.kind() == "request" {
                 self.modal = false;
                 self.pending = None;
                 self.prior_id = None;
@@ -649,7 +879,7 @@ impl Learning {
             return Ok(());
         };
         match event {
-            "open_entry"|"add_item"|"save_entry"|"save_currencies"=> {
+            "open_entry"|"add_item"|"save_entry"|"save_plan_entry"|"save_budget_entry"|"save_currencies"=> {
                 let Some(cap)=self.task.create_cap() else { self.fail(NO_WRITE); return Ok(()); };
                 if !self.training.allowed(scope,company,cap).await { self.fail(NO_WRITE); return Ok(()); }
                 match event {
@@ -671,11 +901,11 @@ impl Learning {
                         let result=self.training.put_learning_currencies(scope,company,&codes).await;
                         self.finish(result,"Currencies saved.");
                     },
-                    "save_entry"=> {
+                    "save_entry"|"save_plan_entry"|"save_budget_entry"=> {
                         if !self.modal { self.fail("Choose a learning task first."); return Ok(()); }
                         // Do not use form_values: learning text allows 4,000 characters and plans up to 300 items.
                         self.draft=payload.as_object().into_iter().flat_map(|o|o.iter()).filter(|(k,_)|k.starts_with("entry[")||k.starts_with("items[")).filter_map(|(k,v)|v.as_str().filter(|s|s.len()<=16_000).map(|s|(k.clone(),s.to_owned()))).collect();
-                        let result=self.save_entry(scope,company).await;
+                        let result=self.save_entry(scope,credential,company).await;
                         if !self.finish(result,"Learning record created.") {
                             self.summary=ErrorSummary::new("learning-errors");
                             let target=if self.task==Task::Plans { "entry-objectives" } else if self.task==Task::Budgets { "entry-effective_from" } else { "entry-need" };
@@ -696,10 +926,10 @@ impl Learning {
                 if reason.trim().is_empty() || reason.len()>4000 { self.fail("Enter a reason for this decision."); return Ok(()); }
                 self.pending=Some(Decision { id:id.ok_or(Error::Invalid)?,action:action.into(),reason,capability:cap });
             },
-            "confirm_decision"=> {
+            "confirm_decision"|"confirm_plan_decision"=> {
                 let Some(pending)=self.pending.take() else { return Ok(()); };
                 if !self.training.allowed(scope,company,pending.capability).await { self.fail(NO_WRITE); return Ok(()); }
-                let result=if self.task.kind()=="request" { self.training.decide_learning_request(scope,company,pending.id,&pending.action,&pending.reason).await.map(|_|()) } else { self.training.decide_learning_plan(scope,company,pending.id,&pending.action,&pending.reason).await.map(|_|()) };
+                let result=if self.task.kind()=="request" { self.contracts.submit(&bilibi_agent_api::page::Call {scope,credential,service:PAGES,event:"confirm_decision",contract:crate::learning_agent::decision_key(&pending.action,pending.capability)},serde_json::json!({"company_id":company,"request_id":pending.id,"reason":pending.reason})).await.map(|_|()).map_err(crate::learning_agent::page_error) } else { self.training.decide_learning_plan(scope,company,pending.id,&pending.action,&pending.reason).await.map(|_|()) };
                 self.finish(result,"Decision recorded.");
             },
             _=>self.fail("That action is unavailable in the record's current state. Refresh and review it again."),
@@ -712,25 +942,33 @@ impl Learning {
             .cloned()
             .unwrap_or_default()
     }
-    async fn save_entry(&self, scope: &Scope, company: i64) -> crate::Result<()> {
+    async fn save_entry(&self, scope: &Scope, credential: &str, company: i64) -> crate::Result<()> {
         match self.task {
-            Task::My => self
-                .training
-                .create_learning_request(
-                    scope,
-                    company,
-                    &NewLearningRequest {
-                        course_id: None,
-                        need: self.value("need"),
-                        objective: self.value("objective"),
-                        expected_result: self.value("expected_result"),
-                        proposed_on: self.value("proposed_on"),
-                        estimated_cost: self.value("estimated_cost"),
-                        currency: self.value("currency"),
-                    },
-                )
-                .await
-                .map(|_| ()),
+            Task::My => {
+                let request = NewLearningRequest {
+                    course_id: None,
+                    need: self.value("need"),
+                    objective: self.value("objective"),
+                    expected_result: self.value("expected_result"),
+                    proposed_on: self.value("proposed_on"),
+                    estimated_cost: self.value("estimated_cost"),
+                    currency: self.value("currency"),
+                };
+                self.contracts
+                    .submit(
+                        &bilibi_agent_api::page::Call {
+                            scope,
+                            credential,
+                            service: PAGES,
+                            event: "save_entry",
+                            contract: "people.training.request.create",
+                        },
+                        serde_json::json!({"company_id":company,"request":request}),
+                    )
+                    .await
+                    .map(|_| ())
+                    .map_err(crate::learning_agent::page_error)
+            }
             Task::Budgets => {
                 let input = NewBudgetPolicy {
                     currency: self.value("currency"),
@@ -827,7 +1065,7 @@ impl Learning {
             ],
             _ => vec![],
         };
-        definitions
+        let fields: Vec<Field> = definitions
             .into_iter()
             .filter(|(key, _, _)| {
                 !(*key == "currency" && self.task == Task::Budgets && self.prior_id.is_some())
@@ -844,7 +1082,8 @@ impl Learning {
                 }
                 field.attr("maxlength", if key == "currency" { "3" } else { "4000" })
             })
-            .collect()
+            .collect();
+        fields
     }
     fn entry_dialog(&self) -> DbResult<Html> {
         if !self.modal || !self.can_create() {
@@ -876,6 +1115,11 @@ impl Learning {
             }
         }
         let body = render(&EntryView {
+            event: match self.task {
+                Task::Plans => "save_plan_entry",
+                Task::Budgets => "save_budget_entry",
+                _ => "save_entry",
+            },
             fields: self.fields(),
             items,
             summary: &self.summary,
@@ -977,15 +1221,11 @@ impl Learning {
             Record::Request(r) => Ok((
                 render(&RecordView {
                     heading: &r.need,
-                    lines: vec![
-                        r.objective.clone(),
-                        r.expected_result.clone(),
-                        format!("Employee {}", r.employee_id),
-                    ],
+                    lines: vec![r.objective.clone(), r.expected_result.clone()],
                     extra: Html::EMPTY,
                 })?,
                 render(&RecordView {
-                    heading: &r.status,
+                    heading: request_status(&r.status),
                     lines: vec![format!(
                         "{} {} · {}",
                         r.estimated_cost, r.currency, r.proposed_on
@@ -1125,11 +1365,41 @@ impl Learning {
                 .entries
                 .iter()
                 .map(|r| {
-                    let (content, status) = self.record_content(r)?;
+                    let (mut content, status) = self.record_content(r)?;
+                    if self.task.kind() == "request" {
+                        content = render(&RequestLink {
+                            workspace: self.workspace,
+                            id: r.id().to_string(),
+                            href: format!(
+                                "/people/training/requests/{}?audience={}",
+                                r.id(),
+                                self.list.filters["audience"]
+                            ),
+                            body: content,
+                        })?;
+                    }
                     let mut row = FlexRow::new(r.id().to_string())
                         .slot("record", content)
                         .slot("status", status)
-                        .slot("decisions", self.decisions(r)?);
+                        .slot(
+                            "employee",
+                            Html::text(&match r {
+                                Record::Request(request) => self
+                                    .employees
+                                    .get(&request.employee_id)
+                                    .cloned()
+                                    .unwrap_or_else(|| format!("Employee {}", request.employee_id)),
+                                _ => String::new(),
+                            }),
+                        )
+                        .slot(
+                            "decisions",
+                            if self.task.kind() == "request" {
+                                Html::EMPTY
+                            } else {
+                                self.decisions(r)?
+                            },
+                        );
                     row.dom_id = Some(format!("learning-{}", r.id()));
                     Ok(row)
                 })
@@ -1151,6 +1421,48 @@ impl Learning {
                 &[25, 50, 100, 300],
             ))?;
         }
+        if self.record.is_some() {
+            let record = self.records.first().ok_or(Error::NotFound)?;
+            let Record::Request(request) = record else {
+                return Err(Error::NotFound);
+            };
+            let fields = [
+                ("Need", request.need.clone()),
+                ("Objective", request.objective.clone()),
+                ("Expected result", request.expected_result.clone()),
+                (
+                    "Employee",
+                    self.employees
+                        .get(&request.employee_id)
+                        .cloned()
+                        .unwrap_or_else(|| request.employee_id.to_string()),
+                ),
+                ("Status", request_status(&request.status).into()),
+                ("Proposed date", request.proposed_on.clone()),
+                (
+                    "Estimated cost",
+                    format!("{} {}", request.estimated_cost, request.currency),
+                ),
+                (
+                    "Approved cost",
+                    request.approved_cost.clone().unwrap_or_else(|| "—".into()),
+                ),
+            ];
+            let mut content = render(&bilibi_ui::Facts {
+                id: "learning-request-facts",
+                items: fields
+                    .into_iter()
+                    .map(|(title, value)| bilibi_ui::Fact {
+                        title,
+                        value: Html::text(&value),
+                        ..Default::default()
+                    })
+                    .collect(),
+            })?;
+            content.push(&self.decisions(record)?);
+            table_html = content;
+            pagination = Html::EMPTY;
+        }
         let tabs = render(&Tabs {
             id: "learning-tasks",
             label: "Learning tasks",
@@ -1161,10 +1473,61 @@ impl Learning {
                 .collect(),
             ..Tabs::default()
         })?;
-        let toolbar = render(&bilibi_ui::FilterToolbar {
-            id: "learning-filters",
-            event: "select_company",
-            controls: vec![bilibi_ui::ToolbarControl::select(
+        let mut controls = vec![];
+        if self.task.kind() == "request" {
+            let mut audiences = vec![];
+            if self.linked && self.can(LEARNING_VIEW) {
+                audiences.push(Choice::new("Mine", "mine"));
+            }
+            if self.linked && self.can(REQUESTS_RECOMMEND) {
+                audiences.push(Choice::new("Team", "team"));
+            }
+            if self.can(REQUESTS_VIEW) {
+                audiences.push(Choice::new("Company", "hr"));
+            }
+            controls.push(bilibi_ui::ToolbarControl::select(
+                "learning-audience",
+                "audience",
+                "Audience",
+                &self.list.filters["audience"],
+                audiences,
+            ));
+            controls.push(bilibi_ui::ToolbarControl::select(
+                "learning-employee",
+                "employee_id",
+                "Employee",
+                &self.list.filters["employee_id"],
+                std::iter::once(Choice::new("All employees", ""))
+                    .chain(
+                        self.employees
+                            .iter()
+                            .map(|(id, name)| Choice::new(name, id.to_string())),
+                    )
+                    .collect(),
+            ));
+            controls.push(bilibi_ui::ToolbarControl::select(
+                "learning-status",
+                "status",
+                "Status",
+                &self.list.filters["status"],
+                std::iter::once(Choice::new("All statuses", ""))
+                    .chain(
+                        [
+                            "draft",
+                            "pending_hod",
+                            "pending_hr",
+                            "pending_approval",
+                            "approved",
+                            "rejected",
+                            "cancelled",
+                        ]
+                        .iter()
+                        .map(|s| Choice::new(request_status(s), *s)),
+                    )
+                    .collect(),
+            ));
+        } else {
+            controls.push(bilibi_ui::ToolbarControl::select(
                 "learning-company",
                 "company_id",
                 "Company",
@@ -1173,10 +1536,13 @@ impl Learning {
                     .iter()
                     .map(|c| Choice::new(&c.name, c.id.to_string()))
                     .collect(),
-            )],
-            class: "",
-            target: "",
-        })?;
+            ));
+        }
+        let toolbar = if self.record.is_none() {
+            render(&bilibi_ui::FilterToolbar::new("learning-filters", controls))?
+        } else {
+            Html::EMPTY
+        };
         let writable =
             self.can_create() || self.records.iter().any(|r| !self.actions(r).is_empty());
         let currencies = if self.task == Task::Budgets && self.can(BUDGETS_MANAGE) {
@@ -1194,18 +1560,7 @@ impl Learning {
             Html::EMPTY
         };
         let confirmation = if let Some(p) = &self.pending {
-            let dialog = render(&ConfirmDialog {
-                id: "learning-decision-confirm",
-                consequence: &format!("Record {} for this learning record?", p.action),
-                detail: &format!(
-                    "{} The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.",
-                    self.instance_notice
-                ),
-                confirm: "Record decision",
-                working: "Recording…",
-                confirm_event: "confirm_decision",
-                cancel_event: "cancel_decision",
-            })?;
+            let dialog=render(&ConfirmDialog { id:"learning-decision-confirm",consequence:&format!("Record {} for this learning record?",p.action),detail:&format!("{} The decision and your reason will remain in history. A terminal request cannot be reopened; an approved plan needs a reasoned amendment.", self.instance_notice),confirm:"Record decision",working:"Recording…",confirm_event:if self.task.kind()=="request" { "confirm_decision" } else { "confirm_plan_decision" },cancel_event:"cancel_decision" })?;
             // The banner belongs inside the review dialog, beside its consequence.
             // ConfirmDialog has no body slot, so use the shared instance banner immediately before it.
             join([self.banner.clone(), dialog])
@@ -1213,9 +1568,14 @@ impl Learning {
             Html::EMPTY
         };
         let view = LearningView {
-            title: self.task.title(),
+            title: if self.record.is_some() {
+                "Learning request"
+            } else {
+                self.task.title()
+            },
+            record: self.record.map(|id| id.to_string()).unwrap_or_default(),
             flash: self.flash_map(),
-            header_actions: if self.can_create() {
+            header_actions: if self.can_create() && self.record.is_none() {
                 button("open_entry", &format!("Add {}", self.task.kind()), "")?
             } else {
                 Html::EMPTY
@@ -1237,7 +1597,11 @@ impl Learning {
             pagination,
             entry: self.entry_dialog()?,
             confirmation,
-            evaluations: self.evaluations.render(self.flash_map())?,
+            evaluations: if self.record.is_none() {
+                self.evaluations.render(self.flash_map())?
+            } else {
+                Html::EMPTY
+            },
         };
         view.render().map_err(|_| Error::Internal)
     }
@@ -1257,7 +1621,7 @@ impl LiveState<Scope, Error> for Learning {
                     self.pending = None;
                     self.prior_id = None;
                 }
-                LiveInput::Event(payload) => self.event(req.scope, payload).await?,
+                LiveInput::Event(payload) => self.event(req.scope, req.credential, payload).await?,
             }
             self.load(req.scope).await?;
             let mut query = self.list.to_params();
@@ -1311,6 +1675,7 @@ fn submit(label: &str) -> DbResult<Html> {
 #[template(path = "learning.html")]
 struct LearningView<'a> {
     title: &'a str,
+    record: String,
     flash: FlashMap<'a>,
     header_actions: Html,
     tabs: Html,
@@ -1336,6 +1701,7 @@ struct FieldsView<'a> {
 #[derive(Template)]
 #[template(path = "learning_entry.html")]
 struct EntryView<'a> {
+    event: &'static str,
     fields: Vec<Field>,
     items: Vec<(String, Vec<Field>)>,
     summary: &'a ErrorSummary,
@@ -1349,4 +1715,29 @@ struct RecordView<'a> {
     heading: &'a str,
     lines: Vec<String>,
     extra: Html,
+}
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"lists.html\" as lists %}{% call lists::record_link(workspace=workspace,kind=\"people/training\",record_id=id,href=href) %}{{ body }}{% endcall %}",
+    ext = "html"
+)]
+struct RequestLink {
+    workspace: bool,
+    id: String,
+    href: String,
+    body: Html,
+}
+
+fn request_status(status: &str) -> &str {
+    match status {
+        "draft" => "Draft",
+        "pending_hod" => "Awaiting recommendation",
+        "pending_hr" => "Awaiting review",
+        "pending_approval" => "Awaiting approval",
+        "approved" => "Approved",
+        "rejected" => "Rejected",
+        "cancelled" => "Cancelled",
+        other => other,
+    }
 }

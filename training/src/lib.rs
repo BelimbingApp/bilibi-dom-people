@@ -37,6 +37,7 @@ mod contributions;
 mod documents;
 mod download;
 mod insights;
+mod learning_agent;
 mod participation;
 mod passport;
 mod passport_store;

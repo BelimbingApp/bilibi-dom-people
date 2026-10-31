@@ -811,7 +811,7 @@ impl Effectiveness {
             && !self.reminder_access
             && self.error.is_none()
         {
-            body.push(&render(&EmptyState::missing("No review tasks available","Ask an operator to grant HOD review or HR summary access. Employees answer their own evaluations under My learning."))?);
+            body.push(&render(&EmptyState::missing("No review tasks available","Ask an operator to grant HOD review or HR summary access. Employees answer their own evaluations under Learning requests → Mine."))?);
         }
         body.push(&self.policy_dialog()?);
         if let Some(pending) = &self.pending {

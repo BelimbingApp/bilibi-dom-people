@@ -71,6 +71,23 @@ impl Claims {
                 scope.mutation_context("people.claims.create_handoff_batch"),
             )
             .await?;
+        let result = self
+            .create_handoff_batch_in(&mut tx, scope, company_id, &currency)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub(super) async fn create_handoff_batch_in(
+        &self,
+        tx: &mut crate::Tx<'_>,
+        scope: &Scope,
+        company_id: i64,
+        currency: &str,
+    ) -> Result<HandoffBatch> {
+        let currency = currency.trim().to_ascii_uppercase();
+        if !crate::currency_shaped(&currency) {
+            return Err(ClaimsError::InvalidCurrency);
+        }
         writable(tx.sql(), scope, company_id).await?;
         authorization::authorize(tx.sql(), scope, company_id, REIMBURSE).await?;
         let rows=tx.sql().query(&format!("SELECT {} FROM people_claim_submissions r WHERE r.tenant_id=$1 AND r.company_id=$2 AND r.status='approved' AND r.handoff_batch_id IS NULL AND r.currency=$3 ORDER BY r.id FOR UPDATE",requests::COLUMNS), &[&scope.tenant(),&company_id,&currency]).await.map_err(Error::from)?;
@@ -110,7 +127,6 @@ impl Claims {
             }
             Ok((batch,changes))
         })).await?;
-        tx.commit().await?;
         Ok(batch)
     }
     pub async fn handoff_batches(
@@ -161,6 +177,20 @@ impl Claims {
                 scope.mutation_context("people.claims.reimburse_batch"),
             )
             .await?;
+        let result = self
+            .reimburse_batch_in(&mut tx, scope, company_id, batch_id, input)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub(super) async fn reimburse_batch_in(
+        &self,
+        tx: &mut crate::Tx<'_>,
+        scope: &Scope,
+        company_id: i64,
+        batch_id: i64,
+        input: &Reimbursement,
+    ) -> Result<Vec<Request>> {
         writable(tx.sql(), scope, company_id).await?;
         authorization::authorize(tx.sql(), scope, company_id, REIMBURSE).await?;
         if tx.sql().query_opt("SELECT id FROM people_claim_handoff_batches WHERE tenant_id=$1 AND company_id=$2 AND id=$3", &[&scope.tenant(),&company_id,&batch_id]).await.map_err(Error::from)?.is_none() {return Err(ClaimsError::NotFound);}
@@ -175,7 +205,7 @@ impl Claims {
         let mut prepared = Vec::with_capacity(claims.len());
         // Prove every employment before taking any Claims row locks.
         for claim in &claims {
-            self.refuse_own(&tx, scope, company_id, claim, REIMBURSE)
+            self.refuse_own(tx, scope, company_id, claim, REIMBURSE)
                 .await?;
         }
         for claim in claims {
@@ -187,13 +217,11 @@ impl Claims {
         let mut done = Vec::with_capacity(prepared.len());
         for (old, new) in prepared {
             let saved =
-                requests::transition(&mut tx, scope.tenant(), company_id, old, new, scope.user())
+                requests::transition(tx, scope.tenant(), company_id, old, new, scope.user())
                     .await?;
-            self.publish_claim(&mut tx, scope, company_id, &saved)
-                .await?;
+            self.publish_claim(tx, scope, company_id, &saved).await?;
             done.push(saved);
         }
-        tx.commit().await?;
         Ok(done)
     }
 }

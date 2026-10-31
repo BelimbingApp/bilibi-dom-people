@@ -2,8 +2,8 @@
 //! `Bilimbi.People.Claims.Contributions`): the module descriptor with its three
 //! migrations and the facade service, the four `people.claims.*`
 //! capabilities with the verb `reimburse` and the `tenant_owner` grants, and
-//! the `people.claims.currencies` company setting. The three menu leaves
-//! (My claims, Claim operations, Claim policies) land with their pages.
+//! the `people.claims.currencies` company setting. Claims and Claim policies
+//! are the workflow and configuration menu leaves.
 use crate::{Claims, MAX_CURRENCIES, MODULE, SERVICE};
 use bilibi_authz::{CapabilityDefinition as C, RoleDefinition, VocabularyContribution, VOCABULARY};
 use bilibi_database::{Db, MutationBoundary};
@@ -23,7 +23,7 @@ pub const SUBMIT: &str = "people.claims.submit";
 /// Edits a company's currencies, catalog, policies and assignments
 /// (`/people/claims/setup`).
 pub const MANAGE: &str = "people.claims.manage";
-/// Decides claims and reads the operator queue (`/people/claims/operations`).
+/// Decides claims and reads team claims (`/people/claims`).
 pub const APPROVE: &str = "people.claims.approve";
 /// Pays claims, hands them off and exports a batch.
 pub const REIMBURSE: &str = "people.claims.reimburse";
@@ -49,7 +49,7 @@ inventory::submit! {
         id: MODULE,
         layer: Layer::Domains,
         dependencies: &[
-            "base/authz", "base/menu", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
+            "base/agent_api", "base/authz", "base/menu", "base/database", "base/datetime", "base/events", "base/ui", "base/module_registry",
             "base/party_ids", "base/settings", "base/system", "base/tenancy", "core/company",
             bilibi_people_settings::MODULE, bilibi_people_workforce::MODULE,
         ],
@@ -70,13 +70,15 @@ inventory::submit! {
         services: &[Service {
             id: SERVICE,
             factory: |services| {
-                Ok(Arc::new(Claims {
+                let facade = Arc::new(Claims {
                     db: services.get::<Db>("base/database.pool")?.as_ref().clone(),
                     mutations: services.get::<MutationBoundary>("base/database.mutations")?,
                     settings: services.get("base/settings.store")?,
                     events: services.get(bilibi_events::SERVICE)?,
                     workforce: services.get(bilibi_people_workforce::SERVICE)?,
-                }))
+                });
+                crate::agent::bind(facade.clone())?;
+                Ok(facade)
             },
         }, crate::downloads::SERVICE_DEFINITION, Service {
             id: crate::setup_web::SERVICE,
@@ -84,17 +86,10 @@ inventory::submit! {
                 crate::setup_web::Pages::new(services.get(SERVICE)?)
             )))),
         }, Service {
-            id: "people/claims.operations_pages",
+            id: crate::operations_web::SERVICE,
             factory: |services| Ok(Arc::new(bilibi_ui::page::PageService::<bilibi_tenancy::Scope, bilibi_database::Error>(Arc::new(crate::operations_web::Pages::new(
-                services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?,
+                services.get::<Db>("base/database.pool")?.as_ref().clone(), services.get(SERVICE)?, services.get(bilibi_agent_api::page::SERVICE)?,
             ))))),
-        }, Service {
-            id: crate::web::SERVICE,
-            factory: |services| {
-                Ok(Arc::new(PageService::<Scope, bilibi_database::Error>(Arc::new(
-                    crate::web::Pages::new(services.get(SERVICE)?)
-                ))))
-            },
         }],
     }
 }
@@ -141,48 +136,28 @@ inventory::submit! { Contribution::new(DEFINITIONS, CURRENCIES_KEY, provenance!(
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_APPROVED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 inventory::submit! { Contribution::new(bilibi_events::EVENTS, crate::REQUEST_REIMBURSED, provenance!(), &bilibi_events::EventType { version: 1 }) }
 
-// Bilimbi Claims.Web.OperationsLive and its Time and expenses menu leaf.
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::ROUTES, "people/claims.operations", provenance!(), &bilibi_module_registry::contributions::Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Tenant,
-    method: bilibi_module_registry::contributions::Method::Get,
-    path: "/people/claims/operations", service: "people/claims.operations_pages", operation: "operations",
-    access: bilibi_module_registry::contributions::Access::Capability(APPROVE), framed: true,
+// One list and one record home for staff and authorized reviewers.
+inventory::submit! { Contribution::new(ROUTES, "people/claims.list", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
+    method: Method::Get, path: "/people/claims", service: crate::operations_web::SERVICE, operation: "list",
+    access: Access::AnyOf(&[SUBMIT, APPROVE]), framed: true,
 }) }
-inventory::submit! { Contribution::new(bilibi_module_registry::contributions::PAGE_WRITES, "people/claims.operations_pages", provenance!(), &bilibi_module_registry::contributions::PageWrites {
-    service: "people/claims.operations_pages", contracts: &[], pending: bilibi_module_registry::contributions::Pending::Every {
-        reason: "Claim operations use the authorized Claims facade; decision and reimbursement contracts are not yet reviewed.",
-    },
+inventory::submit! { Contribution::new(ROUTES, "people/claims.record", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
+    method: Method::Get, path: "/people/claims/{id}", service: crate::operations_web::SERVICE, operation: "record",
+    access: Access::AnyOf(&[SUBMIT, APPROVE]), framed: true,
+}) }
+inventory::submit! { Contribution::new(PAGE_WRITES, crate::operations_web::SERVICE, provenance!(), &PageWrites {
+    service: crate::operations_web::SERVICE, contracts: &[
+        ("submit_claim","people.claims.request.submit"), ("confirm_withdraw","people.claims.request.withdraw"),
+        ("confirm","people.claims.request.approve"), ("confirm","people.claims.request.reject"), ("confirm","people.claims.request.reimburse"),
+        ("confirm","people.claims.handoff.create"), ("confirm","people.claims.handoff.reimburse"),
+    ], pending: Pending::None,
 }) }
 bilibi_menu::contribute!(
     "people/claims",
-    bilibi_menu::MenuItem::page(
-        "people.time_and_expenses.claim_operations",
-        "Claim operations",
-        "/people/claims/operations"
-    )
-    .under("people.time_and_expenses")
-    .requires(bilibi_menu::Requirement::Capability(APPROVE))
-    .order(30)
-);
-
-// Bilimbi Claims.Web.MyClaimsLive and claims/priv/web_routes.exs.
-inventory::submit! {
-    Contribution::new(ROUTES, "people/claims.my_claims", provenance!(), &Route { company_scope: bilibi_module_registry::contributions::CompanyScope::Company,
-        method: Method::Get, path: "/people/claims", service: crate::web::SERVICE,
-        operation: "my_claims", access: Access::Capability(SUBMIT), framed: true,
-    })
-}
-inventory::submit! {
-    Contribution::new(PAGE_WRITES, crate::web::SERVICE, provenance!(), &PageWrites {
-        service: crate::web::SERVICE, contracts: &[],
-        pending: Pending::Every { reason: "Self-service submission and withdrawal use the Claims facade; operation contracts have not been reviewed for these writes." },
-    })
-}
-bilibi_menu::contribute!(
-    "people/claims",
-    MenuItem::page("people.my_work.claims", "My claims", "/people/claims")
+    MenuItem::page("people.my_work.claims", "Claims", "/people/claims")
         .company_scoped()
         .under("people.my_work")
-        .requires(Requirement::Capability(SUBMIT))
+        .requires(Requirement::AnyOf(&[SUBMIT, APPROVE]))
         .order(30)
 );
 
