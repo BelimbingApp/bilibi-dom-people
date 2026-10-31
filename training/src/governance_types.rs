@@ -29,6 +29,7 @@ pub struct NewBudgetPolicy {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewLearningRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub course_id: Option<i64>,
     pub need: String,
     pub objective: String,

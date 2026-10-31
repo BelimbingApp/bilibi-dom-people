@@ -137,7 +137,7 @@ async fn login_scope(services: &Services, email: &str) -> Result<Scope> {
     let client = db.get().await?;
     users.sessions.check(&**client, &login.token).await
 }
-async fn run(url: &str) -> Result<()> {
+async fn services(url: &str) -> Result<Services> {
     bilibi_base::link();
     bilibi_core::link();
     bilibi_domains::link();
@@ -151,6 +151,10 @@ async fn run(url: &str) -> Result<()> {
     services
         .get::<bilibi_base::step_up::StepUp>(bilibi_base::step_up::SERVICE)?
         .set_enforced(false);
+    Ok(services)
+}
+async fn run(url: &str) -> Result<()> {
+    let services = services(url).await?;
     let admin = login_scope(&services, "ai@agent.my").await?;
     let companies = services.get::<bilibi_company::CompanyService>(bilibi_company::SERVICE)?;
     let company = match companies
@@ -516,3 +520,86 @@ async fn run(url: &str) -> Result<()> {
     Ok(())
 }
 walkthrough_command!("one-door", |url, _argument| async move { run(url).await });
+
+// Uses the launched one-door company and accounts; never installs shared sample data.
+async fn learning_courses(url: &str, check_browser: bool) -> Result<()> {
+    use bilibi_people_training::{
+        LearningAudience, NewCourse, NewLearningRequest, Training, COURSES_VIEW,
+    };
+    let services = services(url).await?;
+    let admin = login_scope(&services, "ai@agent.my").await?;
+    let staff = login_scope(&services, "onedoor-employee@example.test").await?;
+    let company = staff.current_company().ok_or(Error::Invalid)?.get();
+    let training = services.get::<Training>(bilibi_people_training::SERVICE)?;
+    let course = match training
+        .courses(&admin, company)
+        .await
+        .map_err(fail)?
+        .into_iter()
+        .find(|c| c.code == "request-proof")
+    {
+        Some(course) => course,
+        None => training
+            .create_course(
+                &admin,
+                company,
+                &NewCourse {
+                    code: "request-proof".into(),
+                    name: "Request proof course".into(),
+                    description: None,
+                },
+            )
+            .await
+            .map_err(fail)?,
+    };
+    if !check_browser {
+        services
+            .get::<Grants>("base/authz.grants")?
+            .set_direct(&admin, staff.user(), COURSES_VIEW, Some(true))
+            .await?;
+        for (need, course_id) in [
+            ("Agent no course", None),
+            ("Agent linked course", Some(course.id)),
+        ] {
+            let request = NewLearningRequest {
+                course_id,
+                need: need.into(),
+                objective: "Prove optional course input".into(),
+                expected_result: "Save the selected course association".into(),
+                proposed_on: "2026-11-20".into(),
+                estimated_cost: "10".into(),
+                currency: "USD".into(),
+            };
+            operation(
+                &services,
+                "onedoor-employee@example.test",
+                "people.training.request.create",
+                json!({"company_id": company, "request": request}),
+            )
+            .await?;
+        }
+    }
+    let rows = training
+        .learning_requests(&staff, company, LearningAudience::SelfService)
+        .await
+        .map_err(fail)?;
+    let prefix = if check_browser { "Browser" } else { "Agent" };
+    for (suffix, expected) in [("no course", None), ("linked course", Some(course.id))] {
+        let need = format!("{prefix} {suffix}");
+        let request = rows
+            .iter()
+            .find(|r| r.need == need)
+            .ok_or_else(|| fail(format!("missing {need}")))?;
+        if request.course_id != expected {
+            return Err(fail(format!("wrong course association on {need}")));
+        }
+        println!(
+            "{prefix} creation passed: request {} course {:?}",
+            request.id, request.course_id
+        );
+    }
+    Ok(())
+}
+walkthrough_command!("one-door-courses", |url, argument| async move {
+    learning_courses(url, argument == Some("check")).await
+});
